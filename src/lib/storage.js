@@ -1,4 +1,23 @@
 const PREFIX = 'kebunkas_'
+const BUSINESS_DATA_VERSION_KEY = `${PREFIX}business_data_version`
+const EMPTY_BUSINESS_DATA_VERSION = 'empty-start-v1'
+const BUSINESS_DATA_KEYS = [
+  'suppliers', 'transactions', 'dailyCash', 'topups', 'auditLogs',
+  'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
+  'operationalExpenses', 'payrolls', 'privateFarms',
+]
+
+// Reset sample/previous operational records once for this release. Login
+// accounts and the current session are deliberately preserved.
+export function resetBusinessDataForFreshStart() {
+  try {
+    if (window.localStorage.getItem(BUSINESS_DATA_VERSION_KEY) === EMPTY_BUSINESS_DATA_VERSION) return
+    BUSINESS_DATA_KEYS.forEach((key) => window.localStorage.removeItem(PREFIX + key))
+    window.localStorage.setItem(BUSINESS_DATA_VERSION_KEY, EMPTY_BUSINESS_DATA_VERSION)
+  } catch (err) {
+    console.error('Gagal mengosongkan data operasional:', err)
+  }
+}
 
 export function loadItem(key, fallback) {
   try {

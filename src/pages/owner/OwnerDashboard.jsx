@@ -28,7 +28,7 @@ export default function OwnerDashboard() {
     const days = Math.floor((toDateKey(now) > toDateKey(start) ? (new Date(toDateKey(now)) - new Date(toDateKey(start))) : 0) / 86_400_000) + 1
     return Array.from({ length: days }, (_, index) => {
       const key = toDateKey(addDays(start, index)); const day = transactions.filter((t) => t.status !== 'voided' && t.date === key)
-      return { key, label: formatShortDate(key), volume: sum(day, 'weightKg'), total: sum(day, 'total') }
+      return { key, label: formatShortDate(key), volume: day.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0), total: sum(day, 'total') }
     })
   }, [transactions, chartRange])
   const unpaidToday = stats.today.filter((transaction) => transaction.paymentStatus === 'unpaid')
@@ -36,9 +36,9 @@ export default function OwnerDashboard() {
   return <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
     <div className="mb-6"><h1 className="text-2xl font-display">Ringkasan</h1><p className="text-sm text-ink-500 mt-1">{formatShortDate(today)}</p></div>
     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <StatCard label="Pembelian hari ini" numericValue={sum(stats.today, 'weightKg')} formatValue={kgText} delay={0} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/hari-ini')} />
-      <StatCard label="Pembelian minggu ini" numericValue={sum(stats.week, 'weightKg')} formatValue={kgText} delay={120} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/minggu-ini')} />
-      <StatCard label="Pembelian bulan ini" numericValue={sum(stats.month, 'weightKg')} formatValue={kgText} delay={240} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
+      <StatCard label="Pembelian bersih hari ini" numericValue={stats.today.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={0} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/hari-ini')} />
+      <StatCard label="Pembelian bersih minggu ini" numericValue={stats.week.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={120} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/minggu-ini')} />
+      <StatCard label="Pembelian bersih bulan ini" numericValue={stats.month.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={240} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
       <StatCard label="Sisa kas hari ini" numericValue={cashToday.remaining} formatValue={formatRupiah} delay={360} tone={cashToday.remaining < 0 ? 'danger' : 'gold'} sub={`dari ${formatRupiah(cashToday.initialAmount + cashToday.totalTopup)}`} />
     </div>
     {unpaidToday.length > 0 && <button type="button" onClick={() => navigate('/owner/laporan')} className="mb-6 flex w-full flex-col items-start justify-between gap-3 rounded-lg border border-gold-500/35 bg-gold-400/10 px-4 py-4 text-left transition hover:bg-gold-400/15 sm:flex-row sm:items-center sm:px-5"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-500/15 text-gold-600"><Clock3 size={18} /></span><div><p className="font-medium text-plantation-900">Ada {unpaidToday.length} pembelian yang belum dibayar hari ini</p><p className="text-sm text-ink-500 mt-0.5">Perlu tindak lanjut pembayaran kepada pemasok.</p></div></div><span className="font-display text-lg text-gold-600 sm:shrink-0">{formatRupiah(unpaidTotal)}</span></button>}

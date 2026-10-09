@@ -51,12 +51,13 @@ function computePdfRange(days) {
 }
 
 function downloadCsv(rows) {
-  const header = ['Tanggal', 'CV', 'Status pembayaran', 'Berat (kg)', 'Harga/kg', 'Total', 'No. Nota', 'Catatan']
+  const header = ['Tanggal', 'CV', 'Status pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total', 'No. Nota', 'Catatan']
   const lines = rows.map((t) => [
     formatCsvDate(t.date),
     t.cv || 'Belum dipilih',
     t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-    t.weightKg,
+    t.grossKg ?? t.weightKg ?? 0,
+    t.netKg ?? t.weightKg ?? 0,
     t.pricePerKg,
     t.total,
     t.notaNumber || '',
@@ -82,7 +83,8 @@ function downloadPdf(rows, supplierMap, range) {
     t.cv || 'Belum dipilih',
     t.name || supplierMap[t.supplierId]?.name || '—',
     (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-    `${Number(t.weightKg).toLocaleString('id-ID')} kg`,
+    `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
+    `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
     formatRupiah(t.pricePerKg),
     formatRupiah(t.total),
     t.note || '—',
@@ -92,12 +94,12 @@ function downloadPdf(rows, supplierMap, range) {
   pdf.text(dateRange, 14, 14)
   autoTable(pdf, {
     startY: 19,
-    head: [['No.', 'Tanggal', 'CV', 'Nama', 'Status', 'Berat', 'Harga/kg', 'Total', 'Catatan']],
-    body: body.length ? body : [['', '', '', 'Tidak ada transaksi pada rentang ini.', '', '', '', '', '']],
+    head: [['No.', 'Tanggal', 'CV', 'Nama', 'Status', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total', 'Catatan']],
+    body: body.length ? body : [['', '', '', 'Tidak ada transaksi pada rentang ini.', '', '', '', '', '', '']],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2, valign: 'middle' },
     headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 9 }, 1: { cellWidth: 23 }, 2: { cellWidth: 27 }, 3: { cellWidth: 29 }, 4: { cellWidth: 22 }, 5: { cellWidth: 22 }, 6: { cellWidth: 24 }, 7: { cellWidth: 27 }, 8: { cellWidth: 'auto' } },
+    columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 21 }, 2: { cellWidth: 24 }, 3: { cellWidth: 25 }, 4: { cellWidth: 20 }, 5: { cellWidth: 19 }, 6: { cellWidth: 19 }, 7: { cellWidth: 21 }, 8: { cellWidth: 24 }, 9: { cellWidth: 'auto' } },
     margin: { left: 14, right: 14 },
   })
   pdf.save(`laporan-pembelian-${range[0]}_${range[1]}.pdf`)
@@ -124,7 +126,7 @@ export default function Reports() {
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const summary = useMemo(() => {
-    const totalWeight = filtered.reduce((s, t) => s + Number(t.weightKg || 0), 0)
+    const totalWeight = filtered.reduce((s, t) => s + Number(t.netKg ?? t.weightKg ?? 0), 0)
     const totalValue = filtered.reduce((s, t) => s + Number(t.total || 0), 0)
     const avgPrice = totalWeight > 0 ? totalValue / totalWeight : 0
     return { totalWeight, totalValue, avgPrice, count: filtered.length }
@@ -232,7 +234,7 @@ export default function Reports() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Jumlah transaksi" value={summary.count.toLocaleString('id-ID')} delay={0} />
-        <StatCard label="Total berat" value={`${summary.totalWeight.toLocaleString('id-ID')} kg`} delay={100} />
+        <StatCard label="Total berat bersih" value={`${summary.totalWeight.toLocaleString('id-ID')} kg`} delay={100} />
         <StatCard label="Total pembelian" value={formatRupiah(summary.totalValue)} tone="gold" delay={200} />
         <StatCard label="Rata-rata harga/kg" value={formatRupiah(summary.avgPrice)} delay={300} />
       </div>
@@ -247,8 +249,9 @@ export default function Reports() {
                 <th className="table-head">CV</th>
                 <th className="table-head">Nama</th>
                 <th className="table-head">Status</th>
-                <th className="table-head">Berat</th>
-                <th className="table-head">Harga/kg</th>
+                <th className="table-head">Berat kotor</th>
+                <th className="table-head">Berat bersih</th>
+                <th className="table-head">Harga/kg bersih</th>
                 <th className="table-head">Total</th>
                 <th className="table-head">Catatan</th>
               </tr>
@@ -256,7 +259,7 @@ export default function Reports() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="table-cell text-center text-ink-500 py-10">
+                  <td colSpan={10} className="table-cell text-center text-ink-500 py-10">
                     Tidak ada transaksi pada rentang ini.
                   </td>
                 </tr>
@@ -268,7 +271,8 @@ export default function Reports() {
                     <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td>
                     <td className="table-cell">{t.name || supplierMap[t.supplierId]?.name || '—'}</td>
                     <td className="table-cell"><PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} /></td>
-                    <td className="table-cell">{t.weightKg} kg</td>
+                    <td className="table-cell">{Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>
+                    <td className="table-cell">{Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>
                     <td className="table-cell">{formatRupiah(t.pricePerKg)}</td>
                     <td className="table-cell font-medium">{formatRupiah(t.total)}</td>
                     <td className="table-cell text-ink-500">{t.note || '—'}</td>

@@ -1,17 +1,17 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { loadItem, saveItem } from '../lib/storage'
-import { SEED_SUPPLIERS, SEED_TRANSACTIONS, SEED_DAILY_CASH, SEED_TOPUPS } from '../lib/seed'
+import { loadItem, resetBusinessDataForFreshStart, saveItem } from '../lib/storage'
 import { todayKey } from '../lib/dateUtils'
 
 const DataContext = createContext(null)
 
-const DEFAULT_INITIAL_CASH = 100_000_000
+const DEFAULT_INITIAL_CASH = 0
 
 export function DataProvider({ children }) {
-  const [suppliers, setSuppliers] = useState(() => loadItem('suppliers', SEED_SUPPLIERS))
-  const [transactions, setTransactions] = useState(() => loadItem('transactions', SEED_TRANSACTIONS))
-  const [dailyCash, setDailyCash] = useState(() => loadItem('dailyCash', SEED_DAILY_CASH))
-  const [topups, setTopups] = useState(() => loadItem('topups', SEED_TOPUPS))
+  resetBusinessDataForFreshStart()
+  const [suppliers, setSuppliers] = useState(() => loadItem('suppliers', []))
+  const [transactions, setTransactions] = useState(() => loadItem('transactions', []))
+  const [dailyCash, setDailyCash] = useState(() => loadItem('dailyCash', []))
+  const [topups, setTopups] = useState(() => loadItem('topups', []))
   const [auditLogs, setAuditLogs] = useState(() => loadItem('auditLogs', []))
   const [cancellationRequests, setCancellationRequests] = useState(() => loadItem('cancellationRequests', []))
   const [cashUnlockRequests, setCashUnlockRequests] = useState(() => loadItem('cashUnlockRequests', []))
@@ -129,12 +129,14 @@ useEffect(() => {
 
   // ---- Transaksi ----
   function addTransaction(tx) {
-    const total = Math.round(Number(tx.weightKg) * Number(tx.pricePerKg))
+    const grossKg = Number(tx.grossKg ?? tx.weightKg) || 0
+    const netKg = Number(tx.netKg ?? tx.weightKg) || 0
+    const total = Math.round(netKg * Number(tx.pricePerKg))
     const countToday = transactions.filter((item) => item.date === tx.date).length + 1
     const generatedNota = `PB-${tx.date.replaceAll('-', '')}-${String(countToday).padStart(3, '0')}`
-    const record = { id: `t-${Date.now()}`, status: 'open', total, ...tx, notaNumber: generatedNota }
+    const record = { id: `t-${Date.now()}`, status: 'open', ...tx, grossKg, netKg, weightKg: netKg, total, notaNumber: generatedNota }
     setTransactions((prev) => [record, ...prev])
-    addAuditLog({ action: 'Mencatat pembelian', actorId: tx.adminId, transactionId: record.id, detail: `${record.notaNumber}: ${Number(record.weightKg).toLocaleString('id-ID')} kg` })
+    addAuditLog({ action: 'Mencatat pembelian', actorId: tx.adminId, transactionId: record.id, detail: `${record.notaNumber}: kotor ${grossKg.toLocaleString('id-ID')} kg, bersih ${netKg.toLocaleString('id-ID')} kg` })
     return record
   }
 
@@ -143,7 +145,10 @@ useEffect(() => {
       prev.map((t) => {
         if (t.id !== id) return t
         const merged = { ...t, ...patch }
-        merged.total = Math.round(Number(merged.weightKg) * Number(merged.pricePerKg))
+        merged.netKg = Number(merged.netKg ?? merged.weightKg) || 0
+        merged.grossKg = Number(merged.grossKg ?? merged.weightKg) || 0
+        merged.weightKg = merged.netKg
+        merged.total = Math.round(merged.netKg * Number(merged.pricePerKg))
         return merged
       })
     )

@@ -54,7 +54,8 @@ export default function App() {
             <Route index element={<OwnerDashboard />} />
             <Route path="operasional" element={<Operations />} />
             <Route path="kebun-pribadi" element={<PrivateFarms />} />
-            <Route path="laporan" element={<Reports />} />
+            <Route path="laporan" element={<Navigate to="/owner/laporan/buah" replace />} />
+            <Route path="laporan/:kind" element={<Reports />} />
             <Route path="pembelian/:period" element={<PurchaseDetails />} />
             <Route path="admin" element={<ManageAdmins />} />
             <Route path="kontrol-transaksi" element={<TransactionControls />} />

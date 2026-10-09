@@ -1,5 +1,5 @@
 import React from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -11,7 +11,7 @@ const ADMIN_LINKS = [
 
 const OWNER_LINKS = [
   { to: '/owner', label: 'Ringkasan', icon: LayoutGrid, end: true },
-  { to: '/owner/laporan', label: 'Laporan', icon: ClipboardList },
+  { to: '/owner/laporan/buah', label: 'Laporan', icon: ClipboardList, children: [{ to: '/owner/laporan/buah', label: 'Buah' }, { to: '/owner/laporan/brondolan', label: 'Brondolan' }] },
   { to: '/owner/operasional', label: 'Operasional Kebun', icon: CalendarDays },
   { to: '/owner/kebun-pribadi', label: 'Kebun Pribadi', icon: Sprout },
   { to: '/owner/kontrol-transaksi', label: 'Kontrol Transaksi', icon: ShieldCheck },
@@ -20,7 +20,9 @@ const OWNER_LINKS = [
 
 export default function Sidebar({ role, collapsed, onToggle }) {
   const { currentUser, logout } = useAuth()
+  const location = useLocation()
   const links = role === 'owner' ? OWNER_LINKS : ADMIN_LINKS
+  const reportsOpen = location.pathname.startsWith('/owner/laporan')
 
   return (
     <aside className={`app-sidebar hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 z-30 text-paper-100 transition-[width] duration-200 ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'}`}>
@@ -32,23 +34,27 @@ export default function Sidebar({ role, collapsed, onToggle }) {
       </div>
 
       <nav className={`flex-1 py-5 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}>
-        {links.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            title={collapsed ? label : undefined}
-            className={({ isActive }) =>
-              `flex items-center rounded-md py-2.5 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
-                isActive
-                  ? 'bg-gold-500/15 text-gold-400 font-medium'
-                  : 'text-paper-100/70 hover:bg-paper-50/5 hover:text-paper-50'
-              }`
-            }
-          >
-            <Icon size={17} strokeWidth={2} />
-            {!collapsed && label}
-          </NavLink>
+        {links.map(({ to, label, icon: Icon, end, children }) => (
+          <React.Fragment key={to}>
+            <NavLink
+              to={to}
+              end={end}
+              title={collapsed ? label : undefined}
+              className={({ isActive }) =>
+                `flex items-center rounded-md py-2.5 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
+                  isActive || (children && reportsOpen)
+                    ? 'bg-gold-500/15 text-gold-400 font-medium'
+                    : 'text-paper-100/70 hover:bg-paper-50/5 hover:text-paper-50'
+                }`
+              }
+            >
+              <Icon size={17} strokeWidth={2} />
+              {!collapsed && label}
+            </NavLink>
+            {children && reportsOpen && !collapsed && <div className="ml-9 mt-1 space-y-1 border-l border-paper-50/15 pl-3">
+              {children.map((child) => <NavLink key={child.to} to={child.to} className={({ isActive }) => `block rounded-md px-3 py-2 text-sm transition-colors ${isActive ? 'bg-gold-500/10 font-medium text-gold-300' : 'text-paper-100/65 hover:bg-paper-50/5 hover:text-paper-50'}`}>{child.label}</NavLink>)}
+            </div>}
+          </React.Fragment>
         ))}
       </nav>
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { CheckCircle2, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -107,10 +108,11 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
 }
 
 export default function Reports() {
+  const { kind } = useParams()
+  const reportKind = kind === 'brondolan' ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
   const { transactions, supplierMap, updateTransaction } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))
-  const [reportKind, setReportKind] = useState('buah')
   const [activeQuick, setActiveQuick] = useState('Bulan ini')
   const [page, setPage] = useState(1)
   const [paymentStatus, setPaymentStatus] = useState('all')
@@ -153,7 +155,7 @@ export default function Reports() {
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-display">Laporan</h1>
+          <h1 className="text-2xl font-display">Laporan {reportKind === 'brondolan' ? 'Brondolan' : 'Buah'}</h1>
           <p className="text-sm text-ink-500 mt-1">
             {formatShortDate(range[0])} — {formatShortDate(range[1])}
           </p>
@@ -189,14 +191,7 @@ export default function Reports() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div>
-            <label className="label">Jenis laporan</label>
-            <select className="input" value={reportKind} onChange={(event) => { setReportKind(event.target.value); setCvFilter('all'); setPage(1) }}>
-              <option value="buah">Buah</option>
-              <option value="brondolan">Brondolan</option>
-            </select>
-          </div>
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="label">Dari tanggal</label>
             <input

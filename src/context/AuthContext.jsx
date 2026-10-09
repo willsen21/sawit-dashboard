@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react'
+import React, { createContext, useContext, useLayoutEffect, useState } from 'react'
 import { loadItem, saveItem } from '../lib/storage'
 import { SEED_USERS } from '../lib/seed'
 
@@ -15,19 +15,6 @@ export function AuthProvider({ children }) {
   useLayoutEffect(() => {
     saveItem('session', currentUser)
   }, [currentUser])
-
-  useEffect(() => {
-    const syncAuthStorage = (event) => {
-      if (event.key === 'kebunkas_users' && event.newValue) {
-        try { setUsers(JSON.parse(event.newValue)) } catch (error) { console.error('Gagal menyinkronkan akun antar-tab:', error) }
-      }
-      if (event.key === 'kebunkas_session' && event.newValue) {
-        try { setCurrentUser(JSON.parse(event.newValue)) } catch (error) { console.error('Gagal menyinkronkan sesi antar-tab:', error) }
-      }
-    }
-    window.addEventListener('storage', syncAuthStorage)
-    return () => window.removeEventListener('storage', syncAuthStorage)
-  }, [])
 
   function login(username, password) {
     const found = users.find(

@@ -39,8 +39,10 @@ export default function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
-            <Route path="catat-pembelian" element={<PurchaseForm />} />
-            <Route path="pembelian-hari-ini" element={<PurchaseHistory />} />
+            <Route path="catat-pembelian" element={<Navigate to="/admin/catat-pembelian/buah" replace />} />
+            <Route path="catat-pembelian/:kind" element={<PurchaseForm />} />
+            <Route path="pembelian-hari-ini" element={<Navigate to="/admin/pembelian/buah" replace />} />
+            <Route path="pembelian/:kind" element={<PurchaseHistory />} />
           </Route>
 
           <Route

@@ -5,8 +5,8 @@ import { useAuth } from '../context/AuthContext'
 
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Kas Hari Ini', icon: Wallet, end: true },
-  { to: '/admin/catat-pembelian', label: 'Catat Pembelian', icon: ReceiptText },
-  { to: '/admin/pembelian-hari-ini', label: 'Pembelian Hari Ini', icon: ClipboardList },
+  { to: '/admin/catat-pembelian/buah', label: 'Catat Pembelian', icon: ReceiptText, children: [{ to: '/admin/catat-pembelian/buah', label: 'Buah' }, { to: '/admin/catat-pembelian/brondolan', label: 'Brondolan' }] },
+  { to: '/admin/pembelian/buah', label: 'Riwayat Pembelian', icon: ClipboardList, children: [{ to: '/admin/pembelian/buah', label: 'Buah' }, { to: '/admin/pembelian/brondolan', label: 'Brondolan' }] },
 ]
 
 const OWNER_LINKS = [
@@ -22,7 +22,7 @@ export default function Sidebar({ role, collapsed, onToggle }) {
   const { currentUser, logout } = useAuth()
   const location = useLocation()
   const links = role === 'owner' ? OWNER_LINKS : ADMIN_LINKS
-  const reportsOpen = location.pathname.startsWith('/owner/laporan')
+  const nestedMenuOpen = (path) => path.startsWith('/owner/laporan') || path.startsWith('/admin/catat-pembelian') || path.startsWith('/admin/pembelian/')
 
   return (
     <aside className={`app-sidebar hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 z-30 text-paper-100 transition-[width] duration-200 ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'}`}>
@@ -42,7 +42,7 @@ export default function Sidebar({ role, collapsed, onToggle }) {
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 `flex items-center rounded-md py-2.5 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
-                  isActive || (children && reportsOpen)
+                  (children ? nestedMenuOpen(location.pathname) && location.pathname.startsWith(to.slice(0, to.lastIndexOf('/'))) : isActive)
                     ? 'bg-gold-500/15 text-gold-400 font-medium'
                     : 'text-paper-100/70 hover:bg-paper-50/5 hover:text-paper-50'
                 }`
@@ -51,7 +51,7 @@ export default function Sidebar({ role, collapsed, onToggle }) {
               <Icon size={17} strokeWidth={2} />
               {!collapsed && label}
             </NavLink>
-            {children && reportsOpen && !collapsed && <div className="ml-9 mt-1 space-y-1 border-l border-paper-50/15 pl-3">
+            {children && nestedMenuOpen(location.pathname) && location.pathname.startsWith(to.slice(0, to.lastIndexOf('/'))) && !collapsed && <div className="ml-9 mt-1 space-y-1 border-l border-paper-50/15 pl-3">
               {children.map((child) => <NavLink key={child.to} to={child.to} className={({ isActive }) => `block rounded-md px-3 py-2 text-sm transition-colors ${isActive ? 'bg-gold-500/10 font-medium text-gold-300' : 'text-paper-100/65 hover:bg-paper-50/5 hover:text-paper-50'}`}>{child.label}</NavLink>)}
             </div>}
           </React.Fragment>

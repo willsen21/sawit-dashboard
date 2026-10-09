@@ -11,6 +11,7 @@ export function DataProvider({ children }) {
   const [transactions, setTransactions] = useState(() => loadItem('transactions', []))
   const [dailyCash, setDailyCash] = useState(() => loadItem('dailyCash', []))
   const [topups, setTopups] = useState(() => loadItem('topups', []))
+  const [cashLoans, setCashLoans] = useState(() => loadItem('cashLoans', []))
   const [auditLogs, setAuditLogs] = useState(() => loadItem('auditLogs', []))
   const [cancellationRequests, setCancellationRequests] = useState(() => loadItem('cancellationRequests', []))
   const [cashUnlockRequests, setCashUnlockRequests] = useState(() => loadItem('cashUnlockRequests', []))
@@ -31,6 +32,9 @@ useLayoutEffect(() => {
 useLayoutEffect(() => {
   saveItem('topups', topups)
 }, [topups])
+useLayoutEffect(() => {
+  saveItem('cashLoans', cashLoans)
+}, [cashLoans])
 useLayoutEffect(() => {
   saveItem('auditLogs', auditLogs)
 }, [auditLogs])
@@ -59,6 +63,7 @@ useLayoutEffect(() => {
       transactions: setTransactions,
       dailyCash: setDailyCash,
       topups: setTopups,
+      cashLoans: setCashLoans,
       auditLogs: setAuditLogs,
       cancellationRequests: setCancellationRequests,
       cashUnlockRequests: setCashUnlockRequests,
@@ -152,6 +157,18 @@ useLayoutEffect(() => {
     setTopups((prev) => [...prev, topup])
     addAuditLog({ action: 'Menambah top-up kas', actorId: adminId, detail: `${date}: Rp${Number(amount).toLocaleString('id-ID')}` })
     return topup
+  }
+
+  function addCashLoan({ date, name, amount, reason, adminId }) {
+    const summary = getCashSummary(date)
+    const numericAmount = Number(amount) || 0
+    if (!name?.trim() || !reason?.trim() || numericAmount <= 0) return { ok: false, message: 'Nama, jumlah, dan alasan pinjaman wajib diisi.' }
+    if (summary.status === 'locked') return { ok: false, message: 'Kas hari ini sedang ditutup.' }
+    if (numericAmount > summary.remaining) return { ok: false, message: `Sisa kas tidak cukup. Kas tersedia: Rp${summary.remaining.toLocaleString('id-ID')}.` }
+    const loan = { id: `loan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, name: name.trim(), amount: numericAmount, reason: reason.trim(), adminId, createdAt: new Date().toISOString() }
+    setCashLoans((prev) => [loan, ...prev])
+    addAuditLog({ action: 'Mencatat pinjaman kas', actorId: adminId, detail: `${loan.name}: Rp${loan.amount.toLocaleString('id-ID')} · ${loan.reason}` })
+    return { ok: true, loan }
   }
 
   // ---- Transaksi ----
@@ -260,15 +277,19 @@ useLayoutEffect(() => {
     const totalTopup = todaysTopups.reduce((sum, t) => sum + Number(t.amount), 0)
     const todaysTx = transactions.filter((t) => t.date === dateKey && t.status !== 'voided')
     const totalUsed = todaysTx.reduce((sum, t) => sum + Number(t.total), 0)
-    const remaining = initialAmount + totalTopup - totalUsed
+    const todaysLoans = cashLoans.filter((loan) => loan.date === dateKey)
+    const totalLoans = todaysLoans.reduce((sum, loan) => sum + Number(loan.amount), 0)
+    const remaining = initialAmount + totalTopup - totalUsed - totalLoans
     return {
       exists: !!cash,
       status: cash?.status || 'open',
       initialAmount,
       totalTopup,
       totalUsed,
+      totalLoans,
       remaining,
       topups: todaysTopups,
+      loans: todaysLoans,
       transactionCount: todaysTx.length,
     }
   }
@@ -312,7 +333,9 @@ useLayoutEffect(() => {
     addPayroll,
     markPayrollPaid,
     topups,
+    cashLoans,
     addTopup,
+    addCashLoan,
     getCashSummary,
     DEFAULT_INITIAL_CASH,
     today: todayKey(),

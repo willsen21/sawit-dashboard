@@ -10,7 +10,7 @@ const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 
-function keepCloudMigrationRecord(collection, item) {
+function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
   if (collection === 'privateFarms') {
     return {
@@ -18,15 +18,16 @@ function keepCloudMigrationRecord(collection, item) {
       records: (Array.isArray(item.records) ? item.records : []).filter((record) => !record?.date || record.date >= CLOUD_DATA_CUTOFF),
     }
   }
+  if (collection === 'payrolls' && typeof item.period === 'string') {
+    return item.period.slice(0, 7) >= CLOUD_DATA_CUTOFF.slice(0, 7) ? item : false
+  }
 
   const recordDate = typeof item.date === 'string'
     ? item.date
     : typeof item.createdAt === 'string'
       ? item.createdAt.slice(0, 10)
-      : typeof item.period === 'string'
-        ? `${item.period.slice(0, 7)}-01`
-        : ''
-  return !recordDate || recordDate >= CLOUD_DATA_CUTOFF
+      : ''
+  return !recordDate || recordDate >= CLOUD_DATA_CUTOFF ? item : false
 }
 
 export function DataProvider({ children }) {
@@ -131,7 +132,7 @@ useLayoutEffect(() => {
         const additions = []
         for (const name of COLLECTION_NAMES) {
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
-          const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudMigrationRecord(name, item)).filter(Boolean)
+          const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
           if (missing.length) {
             grouped[name] = [...grouped[name], ...missing]
@@ -146,7 +147,16 @@ useLayoutEffect(() => {
       }
 
       if (!active) return
-      cloudBaseline.current = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, new Map(grouped[name].map((item) => [String(item.id), item]))]))
+      const rawCloudData = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, [...grouped[name]]]))
+      for (const name of COLLECTION_NAMES) {
+        grouped[name] = grouped[name].map((item) => keepCloudRecord(name, item)).filter(Boolean)
+      }
+      cloudBaseline.current = Object.fromEntries(COLLECTION_NAMES.map((name) => {
+        // Owners can clean old rows from Supabase on sync. Admins only hide them
+        // locally because their RLS permissions correctly prevent deletion.
+        const baselineItems = currentUser.role === 'owner' ? rawCloudData[name] : grouped[name]
+        return [name, new Map(baselineItems.map((item) => [String(item.id), item]))]
+      }))
       for (const name of COLLECTION_NAMES) collectionSetters[name](grouped[name])
       setCloudReady(true)
 

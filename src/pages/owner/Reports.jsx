@@ -50,11 +50,12 @@ function computePdfRange(days) {
   return [toDateKey(addDays(now, -(Number(days) - 1))), toDateKey(now)]
 }
 
-function downloadCsv(rows) {
-  const header = ['Tanggal', 'CV', 'Status pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total', 'No. Nota', 'Catatan']
+function downloadCsv(rows, reportKind) {
+  const isBrondolan = reportKind === 'brondolan'
+  const header = ['Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Status pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total', 'No. Nota', 'Catatan']
   const lines = rows.map((t) => [
     formatCsvDate(t.date),
-    t.cv || 'Belum dipilih',
+    ...(!isBrondolan ? [t.cv || 'Belum dipilih'] : []),
     t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
     t.grossKg ?? t.weightKg ?? 0,
     t.netKg ?? t.weightKg ?? 0,
@@ -69,18 +70,19 @@ function downloadCsv(rows) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `laporan-pembelian-sawit.csv`
+  a.download = `laporan-${reportKind}-sawit.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
 
-function downloadPdf(rows, supplierMap, range) {
+function downloadPdf(rows, supplierMap, range, reportKind) {
+  const isBrondolan = reportKind === 'brondolan'
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const dateRange = `${formatShortDate(range[0])} — ${formatShortDate(range[1])}`
   const body = rows.map((t, index) => [
     index + 1,
     formatShortDate(t.date),
-    t.cv || 'Belum dipilih',
+    ...(!isBrondolan ? [t.cv || 'Belum dipilih'] : []),
     t.name || supplierMap[t.supplierId]?.name || '—',
     (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
     `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
@@ -94,21 +96,21 @@ function downloadPdf(rows, supplierMap, range) {
   pdf.text(dateRange, 14, 14)
   autoTable(pdf, {
     startY: 19,
-    head: [['No.', 'Tanggal', 'CV', 'Nama', 'Status', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total', 'Catatan']],
-    body: body.length ? body : [['', '', '', 'Tidak ada transaksi pada rentang ini.', '', '', '', '', '', '']],
+    head: [['No.', 'Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Nama', 'Status', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total', 'Catatan']],
+    body: body.length ? body : [Array(isBrondolan ? 9 : 10).fill('').map((value, index) => index === (isBrondolan ? 2 : 3) ? 'Tidak ada transaksi pada rentang ini.' : value)],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2, valign: 'middle' },
     headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 21 }, 2: { cellWidth: 24 }, 3: { cellWidth: 25 }, 4: { cellWidth: 20 }, 5: { cellWidth: 19 }, 6: { cellWidth: 19 }, 7: { cellWidth: 21 }, 8: { cellWidth: 24 }, 9: { cellWidth: 'auto' } },
     margin: { left: 14, right: 14 },
   })
-  pdf.save(`laporan-pembelian-${range[0]}_${range[1]}.pdf`)
+  pdf.save(`laporan-${reportKind}-${range[0]}_${range[1]}.pdf`)
 }
 
 export default function Reports() {
   const { currentUser } = useAuth()
   const { transactions, supplierMap, updateTransaction } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))
+  const [reportKind, setReportKind] = useState('buah')
   const [activeQuick, setActiveQuick] = useState('Bulan ini')
   const [page, setPage] = useState(1)
   const [paymentStatus, setPaymentStatus] = useState('all')
@@ -119,9 +121,9 @@ export default function Reports() {
 
   const filtered = useMemo(() => {
     return transactions
-      .filter((t) => t.status !== 'voided' && t.date >= range[0] && t.date <= range[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
+      .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= range[0] && t.date <= range[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
       .sort((a, b) => (a.date === b.date ? (a.time < b.time ? 1 : -1) : a.date < b.date ? 1 : -1))
-  }, [transactions, range, paymentStatus, cvFilter])
+  }, [transactions, reportKind, range, paymentStatus, cvFilter])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -141,9 +143,9 @@ export default function Reports() {
   function downloadSelectedPdf() {
     const pdfRange = computePdfRange(pdfRangeDays)
     const pdfRows = transactions
-      .filter((t) => t.status !== 'voided' && t.date >= pdfRange[0] && t.date <= pdfRange[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
+      .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= pdfRange[0] && t.date <= pdfRange[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
       .sort((a, b) => (a.date === b.date ? (a.time < b.time ? 1 : -1) : a.date < b.date ? 1 : -1))
-    downloadPdf(pdfRows, supplierMap, pdfRange)
+    downloadPdf(pdfRows, supplierMap, pdfRange, reportKind)
     setShowPdfOptions(false)
   }
 
@@ -157,7 +159,7 @@ export default function Reports() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost" onClick={() => downloadCsv(filtered)}>
+          <button className="btn-ghost" onClick={() => downloadCsv(filtered, reportKind)}>
             <Download size={16} /> Ekspor CSV
           </button>
           <button className="btn-primary" onClick={() => setShowPdfOptions(true)}>
@@ -187,7 +189,14 @@ export default function Reports() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div>
+            <label className="label">Jenis laporan</label>
+            <select className="input" value={reportKind} onChange={(event) => { setReportKind(event.target.value); setCvFilter('all'); setPage(1) }}>
+              <option value="buah">Buah</option>
+              <option value="brondolan">Brondolan</option>
+            </select>
+          </div>
           <div>
             <label className="label">Dari tanggal</label>
             <input
@@ -209,13 +218,13 @@ export default function Reports() {
               <option value="unpaid">Belum bayar</option>
             </select>
           </div>
-          <div>
+          {reportKind === 'buah' && <div>
             <label className="label">CV</label>
             <select className="input" value={cvFilter} onChange={(e) => { setCvFilter(e.target.value); setPage(1) }}>
               <option value="all">Semua CV</option><option value="unassigned">CV belum tercatat</option>
               {CVS.map((cv) => <option key={cv} value={cv}>{cv}</option>)}
             </select>
-          </div>
+          </div>}
           <div>
             <label className="label">Sampai tanggal</label>
             <input
@@ -246,7 +255,7 @@ export default function Reports() {
               <tr>
                 <th className="table-head">No.</th>
                 <th className="table-head">Tanggal</th>
-                <th className="table-head">CV</th>
+                {reportKind === 'buah' && <th className="table-head">CV</th>}
                 <th className="table-head">Nama</th>
                 <th className="table-head">Status</th>
                 <th className="table-head">Berat kotor</th>
@@ -259,7 +268,7 @@ export default function Reports() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="table-cell text-center text-ink-500 py-10">
+                  <td colSpan={reportKind === 'buah' ? 10 : 9} className="table-cell text-center text-ink-500 py-10">
                     Tidak ada transaksi pada rentang ini.
                   </td>
                 </tr>
@@ -268,7 +277,7 @@ export default function Reports() {
                   <tr key={t.id}>
                     <td className="table-cell text-ink-500">{(page - 1) * PAGE_SIZE + index + 1}</td>
                     <td className="table-cell">{formatShortDate(t.date)}</td>
-                    <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td>
+                    {reportKind === 'buah' && <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td>}
                     <td className="table-cell">{t.name || supplierMap[t.supplierId]?.name || '—'}</td>
                     <td className="table-cell"><PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} /></td>
                     <td className="table-cell">{Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { loadItem, resetBusinessDataForFreshStart, saveItem } from '../lib/storage'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { loadItem, saveItem } from '../lib/storage'
 import { todayKey } from '../lib/dateUtils'
 
 const DataContext = createContext(null)
@@ -7,7 +7,6 @@ const DataContext = createContext(null)
 const DEFAULT_INITIAL_CASH = 0
 
 export function DataProvider({ children }) {
-  resetBusinessDataForFreshStart()
   const [suppliers, setSuppliers] = useState(() => loadItem('suppliers', []))
   const [transactions, setTransactions] = useState(() => loadItem('transactions', []))
   const [dailyCash, setDailyCash] = useState(() => loadItem('dailyCash', []))
@@ -20,39 +19,67 @@ export function DataProvider({ children }) {
   const [payrolls, setPayrolls] = useState(() => loadItem('payrolls', []))
   const [privateFarms, setPrivateFarms] = useState(() => loadItem('privateFarms', []))
 
-  useEffect(() => {
+  useLayoutEffect(() => {
   saveItem('suppliers', suppliers)
 }, [suppliers])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('transactions', transactions)
 }, [transactions])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('dailyCash', dailyCash)
 }, [dailyCash])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('topups', topups)
 }, [topups])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('auditLogs', auditLogs)
 }, [auditLogs])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('cancellationRequests', cancellationRequests)
 }, [cancellationRequests])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('cashUnlockRequests', cashUnlockRequests)
 }, [cashUnlockRequests])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('harvestSchedules', harvestSchedules)
 }, [harvestSchedules])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('operationalExpenses', operationalExpenses)
 }, [operationalExpenses])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('payrolls', payrolls)
 }, [payrolls])
-useEffect(() => {
+useLayoutEffect(() => {
   saveItem('privateFarms', privateFarms)
 }, [privateFarms])
+
+  useEffect(() => {
+    const setters = {
+      suppliers: setSuppliers,
+      transactions: setTransactions,
+      dailyCash: setDailyCash,
+      topups: setTopups,
+      auditLogs: setAuditLogs,
+      cancellationRequests: setCancellationRequests,
+      cashUnlockRequests: setCashUnlockRequests,
+      harvestSchedules: setHarvestSchedules,
+      operationalExpenses: setOperationalExpenses,
+      payrolls: setPayrolls,
+      privateFarms: setPrivateFarms,
+    }
+    const syncStorageChange = (event) => {
+      if (!event.key?.startsWith('kebunkas_') || event.newValue === null) return
+      const setter = setters[event.key.slice('kebunkas_'.length)]
+      if (!setter) return
+      try {
+        setter(JSON.parse(event.newValue))
+      } catch (error) {
+        console.error('Gagal menyinkronkan perubahan antar-tab:', error)
+      }
+    }
+    window.addEventListener('storage', syncStorageChange)
+    return () => window.removeEventListener('storage', syncStorageChange)
+  }, [])
 
   function addAuditLog({ action, actorId, transactionId = null, detail }) {
     setAuditLogs((prev) => [{

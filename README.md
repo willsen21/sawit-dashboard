@@ -36,7 +36,7 @@ Aplikasi memakai URL berbasis hash supaya halaman seperti Laporan tetap bisa dib
 
 - Login, akun, transaksi, kas, dan kebun masih disimpan di `localStorage` browser. Pengguna di perangkat/browser berbeda tidak berbagi data dan tidak tersinkron.
 - Login saat ini berjalan di sisi browser. Password demo dan data awal ada di kode aplikasi, sehingga fitur login ini **bukan perlindungan keamanan** untuk situs publik.
-- Data operasional dimulai kosong dan disimpan di penyimpanan browser masing-masing. Data tidak otomatis dibagikan ke perangkat atau pengguna lain.
+- Data operasional disimpan di penyimpanan browser. Data tetap ada setelah halaman dimuat ulang pada browser dan alamat situs yang sama, dan tab situs yang sama akan menerima perubahan terbaru. Data tidak otomatis dibagikan ke perangkat/browser lain.
 - Gunakan GitHub Pages hanya untuk pratinjau. Jangan masukkan data transaksi atau informasi sensitif ke situs publik.
 - Agar tim dapat login dengan aman dan memakai data yang sama dari banyak perangkat, aplikasi perlu backend dengan autentikasi dan database sebelum dipakai operasional.
 

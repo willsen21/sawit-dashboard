@@ -10,6 +10,7 @@ import PurchaseForm from './pages/admin/PurchaseForm'
 import PurchaseHistory from './pages/admin/PurchaseHistory'
 import OwnerDashboard from './pages/owner/OwnerDashboard'
 import Reports from './pages/owner/Reports'
+import CashLoanReport from './pages/owner/CashLoanReport'
 import ManageAdmins from './pages/owner/ManageAdmins'
 import PurchaseDetails from './pages/owner/PurchaseDetails'
 import TransactionControls from './pages/owner/TransactionControls'
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="operasional" element={<Operations />} />
             <Route path="kebun-pribadi" element={<PrivateFarms />} />
             <Route path="laporan" element={<Navigate to="/owner/laporan/buah" replace />} />
+            <Route path="laporan/pinjaman" element={<CashLoanReport />} />
             <Route path="laporan/:kind" element={<Reports />} />
             <Route path="pembelian/:period" element={<PurchaseDetails />} />
             <Route path="admin" element={<ManageAdmins />} />

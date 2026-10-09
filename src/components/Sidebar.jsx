@@ -11,7 +11,7 @@ const ADMIN_LINKS = [
 
 const OWNER_LINKS = [
   { to: '/owner', label: 'Ringkasan', icon: LayoutGrid, end: true },
-  { to: '/owner/laporan/buah', label: 'Laporan', icon: ClipboardList, children: [{ to: '/owner/laporan/buah', label: 'Buah' }, { to: '/owner/laporan/brondolan', label: 'Brondolan' }] },
+  { to: '/owner/laporan/buah', label: 'Laporan', icon: ClipboardList, children: [{ to: '/owner/laporan/buah', label: 'Buah' }, { to: '/owner/laporan/brondolan', label: 'Brondolan' }, { to: '/owner/laporan/pinjaman', label: 'Pinjaman Kas' }] },
   { to: '/owner/operasional', label: 'Operasional Kebun', icon: CalendarDays },
   { to: '/owner/kebun-pribadi', label: 'Kebun Pribadi', icon: Sprout },
   { to: '/owner/kontrol-transaksi', label: 'Kontrol Transaksi', icon: ShieldCheck },

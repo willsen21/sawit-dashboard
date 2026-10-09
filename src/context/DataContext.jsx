@@ -8,6 +8,26 @@ const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms']
+const CLOUD_DATA_CUTOFF = '2026-10-10'
+
+function keepCloudMigrationRecord(collection, item) {
+  if (!item || typeof item !== 'object') return false
+  if (collection === 'privateFarms') {
+    return {
+      ...item,
+      records: (Array.isArray(item.records) ? item.records : []).filter((record) => !record?.date || record.date >= CLOUD_DATA_CUTOFF),
+    }
+  }
+
+  const recordDate = typeof item.date === 'string'
+    ? item.date
+    : typeof item.createdAt === 'string'
+      ? item.createdAt.slice(0, 10)
+      : typeof item.period === 'string'
+        ? `${item.period.slice(0, 7)}-01`
+        : ''
+  return !recordDate || recordDate >= CLOUD_DATA_CUTOFF
+}
 
 export function DataProvider({ children }) {
   const { currentUser, authReady } = useAuth()
@@ -111,7 +131,7 @@ useLayoutEffect(() => {
         const additions = []
         for (const name of COLLECTION_NAMES) {
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
-          const localItems = collectionValuesRef.current[name] || []
+          const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudMigrationRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
           if (missing.length) {
             grouped[name] = [...grouped[name], ...missing]

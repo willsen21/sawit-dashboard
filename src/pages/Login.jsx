@@ -4,21 +4,22 @@ import { Eye, EyeOff, Leaf } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { currentUser, login } = useAuth()
+  const { currentUser, login, authReady, cloudMode } = useAuth()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
 
+  if (!authReady) return <div className="flex min-h-screen items-center justify-center text-sm text-ink-500">Memeriksa sesi...</div>
   if (currentUser) {
     return <Navigate to={currentUser.role === 'owner' ? '/owner' : '/admin'} replace />
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    const result = login(username, password)
+    const result = await login(username, password)
     if (!result.ok) {
       setError(result.message)
       return
@@ -59,12 +60,13 @@ export default function Login() {
 
           <div className="space-y-4">
             <div>
-              <label className="label">Username</label>
+              <label className="label">{cloudMode ? 'Email' : 'Username'}</label>
               <input
+                type={cloudMode ? 'email' : 'text'}
                 className="input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="mis. admin1 / papa"
+                placeholder={cloudMode ? 'nama@contoh.com' : 'mis. admin1 / papa'}
                 autoFocus
               />
             </div>

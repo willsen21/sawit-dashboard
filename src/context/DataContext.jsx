@@ -1,12 +1,16 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { loadItem, saveItem } from '../lib/storage'
 import { todayKey } from '../lib/dateUtils'
+import { useAuth } from './AuthContext'
+import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
+const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms']
 
 export function DataProvider({ children }) {
+  const { currentUser, authReady } = useAuth()
   const [suppliers, setSuppliers] = useState(() => loadItem('suppliers', []))
   const [transactions, setTransactions] = useState(() => loadItem('transactions', []))
   const [dailyCash, setDailyCash] = useState(() => loadItem('dailyCash', []))
@@ -19,6 +23,19 @@ export function DataProvider({ children }) {
   const [operationalExpenses, setOperationalExpenses] = useState(() => loadItem('operationalExpenses', []))
   const [payrolls, setPayrolls] = useState(() => loadItem('payrolls', []))
   const [privateFarms, setPrivateFarms] = useState(() => loadItem('privateFarms', []))
+  const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
+  const [cloudError, setCloudError] = useState('')
+  const cloudBaseline = useRef({})
+  const collectionSetters = {
+    suppliers: setSuppliers, transactions: setTransactions, dailyCash: setDailyCash,
+    topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
+    cancellationRequests: setCancellationRequests, cashUnlockRequests: setCashUnlockRequests,
+    harvestSchedules: setHarvestSchedules, operationalExpenses: setOperationalExpenses,
+    payrolls: setPayrolls, privateFarms: setPrivateFarms,
+  }
+  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms }
+  const collectionValuesRef = useRef(collectionValues)
+  collectionValuesRef.current = collectionValues
 
   useLayoutEffect(() => {
   saveItem('suppliers', suppliers)
@@ -58,23 +75,10 @@ useLayoutEffect(() => {
 }, [privateFarms])
 
   useEffect(() => {
-    const setters = {
-      suppliers: setSuppliers,
-      transactions: setTransactions,
-      dailyCash: setDailyCash,
-      topups: setTopups,
-      cashLoans: setCashLoans,
-      auditLogs: setAuditLogs,
-      cancellationRequests: setCancellationRequests,
-      cashUnlockRequests: setCashUnlockRequests,
-      harvestSchedules: setHarvestSchedules,
-      operationalExpenses: setOperationalExpenses,
-      payrolls: setPayrolls,
-      privateFarms: setPrivateFarms,
-    }
     const syncStorageChange = (event) => {
+      if (isSupabaseConfigured) return
       if (!event.key?.startsWith('kebunkas_') || event.newValue === null) return
-      const setter = setters[event.key.slice('kebunkas_'.length)]
+      const setter = collectionSetters[event.key.slice('kebunkas_'.length)]
       if (!setter) return
       try {
         setter(JSON.parse(event.newValue))
@@ -85,6 +89,108 @@ useLayoutEffect(() => {
     window.addEventListener('storage', syncStorageChange)
     return () => window.removeEventListener('storage', syncStorageChange)
   }, [])
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    if (!authReady) return
+    if (!currentUser) { setCloudReady(false); return }
+    let active = true
+    let channel
+    setCloudReady(false)
+    setCloudError('')
+
+    async function hydrateCloudData() {
+      const { data, error } = await supabase.from('app_records').select('collection, record_id, data')
+      if (error) throw error
+      const grouped = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, []]))
+      for (const row of data || []) if (grouped[row.collection]) grouped[row.collection].push(row.data)
+
+      // Merge the legacy local cache once on the first owner login; cloud records win on duplicate IDs.
+      const localMigrationDone = window.localStorage.getItem('kebunkas_cloud_migration_done') === 'true'
+      if (currentUser.role === 'owner' && !localMigrationDone) {
+        const additions = []
+        for (const name of COLLECTION_NAMES) {
+          const knownIds = new Set(grouped[name].map((item) => String(item.id)))
+          const localItems = collectionValuesRef.current[name] || []
+          const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
+          if (missing.length) {
+            grouped[name] = [...grouped[name], ...missing]
+            additions.push(...missing.map((item) => ({ collection: name, record_id: String(item.id), data: item })))
+          }
+        }
+        if (additions.length) {
+          const { error: migrateError } = await supabase.from('app_records').upsert(additions, { onConflict: 'collection,record_id' })
+          if (migrateError) throw migrateError
+        }
+        window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
+      }
+
+      if (!active) return
+      cloudBaseline.current = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, new Map(grouped[name].map((item) => [String(item.id), item]))]))
+      for (const name of COLLECTION_NAMES) collectionSetters[name](grouped[name])
+      setCloudReady(true)
+
+      channel = supabase.channel(`kebunkas-records-${currentUser.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'app_records' }, (payload) => {
+          const row = payload.new?.collection ? payload.new : payload.old
+          if (!row?.collection || !collectionSetters[row.collection]) return
+          const collection = row.collection
+          const id = String((payload.new?.record_id || payload.old?.record_id || ''))
+          if (!id) return
+          const baseline = new Map(cloudBaseline.current[collection] || [])
+          const current = new Map(baseline)
+          if (payload.eventType === 'DELETE') { baseline.delete(id); current.delete(id) }
+          else { baseline.set(id, payload.new.data); current.set(id, payload.new.data) }
+          cloudBaseline.current = { ...cloudBaseline.current, [collection]: baseline }
+          collectionSetters[collection]([...current.values()])
+        })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setCloudError('Koneksi sinkronisasi terputus. Muat ulang halaman untuk menyambungkan kembali.')
+        })
+    }
+
+    hydrateCloudData().catch((error) => {
+      console.error('Gagal memuat data Supabase:', error)
+      if (active) { setCloudError('Data cloud belum dapat dimuat. Periksa konfigurasi dan jalankan supabase/schema.sql.'); setCloudReady(false) }
+    })
+    return () => { active = false; if (channel) supabase.removeChannel(channel) }
+  }, [authReady, currentUser?.id, currentUser?.role])
+
+  function syncCollectionToCloud(collection, items) {
+    if (!isSupabaseConfigured || !cloudReady || !currentUser || !Array.isArray(items)) return
+    const previous = cloudBaseline.current[collection] || new Map()
+    const next = new Map(items.filter((item) => item?.id).map((item) => [String(item.id), item]))
+    const changed = [...next.entries()].filter(([id, item]) => JSON.stringify(previous.get(id)) !== JSON.stringify(item))
+    const removed = [...previous.keys()].filter((id) => !next.has(id))
+    if (!changed.length && !removed.length) return
+    // Optimistic per-record baseline keeps unrelated edits on different devices from replacing an entire collection.
+    cloudBaseline.current = { ...cloudBaseline.current, [collection]: next }
+    const rows = changed.map(([id, item]) => ({ collection, record_id: id, data: item }))
+    Promise.all([
+      rows.length ? supabase.from('app_records').upsert(rows, { onConflict: 'collection,record_id' }) : Promise.resolve({ error: null }),
+      removed.length ? supabase.from('app_records').delete().eq('collection', collection).in('record_id', removed) : Promise.resolve({ error: null }),
+    ]).then((results) => {
+      const failure = results.find((result) => result.error)?.error
+      if (failure) {
+        console.error(`Gagal menyimpan ${collection} ke Supabase:`, failure)
+        cloudBaseline.current = { ...cloudBaseline.current, [collection]: previous }
+        setCloudError('Sebagian perubahan belum tersimpan ke cloud. Periksa koneksi sebelum berpindah perangkat.')
+      } else setCloudError('')
+    })
+  }
+
+  useEffect(() => { syncCollectionToCloud('suppliers', suppliers) }, [suppliers, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('transactions', transactions) }, [transactions, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('dailyCash', dailyCash) }, [dailyCash, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('topups', topups) }, [topups, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('cashLoans', cashLoans) }, [cashLoans, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('auditLogs', auditLogs) }, [auditLogs, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('cancellationRequests', cancellationRequests) }, [cancellationRequests, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('cashUnlockRequests', cashUnlockRequests) }, [cashUnlockRequests, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('harvestSchedules', harvestSchedules) }, [harvestSchedules, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('operationalExpenses', operationalExpenses) }, [operationalExpenses, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('payrolls', payrolls) }, [payrolls, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('privateFarms', privateFarms) }, [privateFarms, cloudReady, currentUser?.id])
 
   function addAuditLog({ action, actorId, transactionId = null, detail }) {
     setAuditLogs((prev) => [{
@@ -339,6 +445,8 @@ useLayoutEffect(() => {
     getCashSummary,
     DEFAULT_INITIAL_CASH,
     today: todayKey(),
+    cloudReady,
+    cloudError,
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

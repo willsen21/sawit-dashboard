@@ -4,11 +4,16 @@ import { useAuth } from '../../context/AuthContext'
 import Modal from '../../components/Modal'
 
 export default function ManageAdmins() {
-  const { admins, addAdmin, toggleAdminActive, resetAdminPassword } = useAuth()
+  const { admins, addAdmin, toggleAdminActive, resetAdminPassword, cloudMode } = useAuth()
   const [form, setForm] = useState({ name: '', username: '', password: '' })
   const [error, setError] = useState('')
   const [resetTarget, setResetTarget] = useState(null)
   const [newPassword, setNewPassword] = useState('')
+
+  async function handleToggle(id) {
+    const result = await toggleAdminActive(id)
+    if (result && !result.ok) setError(result.message)
+  }
 
   function handleAdd(e) {
     e.preventDefault()
@@ -37,7 +42,7 @@ export default function ManageAdmins() {
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-10">
       <header className="mb-6 flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-600">Pengaturan akses</p><h1 className="mt-1 font-display text-2xl">Kelola Admin</h1><p className="mt-1 max-w-2xl text-sm text-ink-500">Buat akun operator dan atur aksesnya untuk pencatatan harian.</p></div><span className="hidden h-12 w-12 items-center justify-center rounded-xl bg-plantation-700/10 text-plantation-700 sm:flex"><ShieldCheck size={23} /></span></header>
 
-      <form onSubmit={handleAdd} className="card mb-6 grid gap-4 p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+      {cloudMode ? <section className="card mb-6 border-l-4 border-gold-500 p-5"><h2 className="font-medium text-ink-800">Menambahkan akun admin</h2><p className="mt-2 text-sm leading-relaxed text-ink-600">Untuk menjaga password tetap terlindungi, buat akun admin melalui Supabase → Authentication → Users, lalu tambahkan profilnya di tabel `profiles`. Langkah lengkap ada di <b>supabase/README.md</b>. Akun akan muncul di daftar ini setelah halaman dimuat ulang.</p></section> : <form onSubmit={handleAdd} className="card mb-6 grid gap-4 p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
         <div className="min-w-0">
           <label className="label">Nama</label>
           <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="mis. Budi Santoso" />
@@ -54,11 +59,12 @@ export default function ManageAdmins() {
           <Plus size={16} /> Tambah admin
         </button>
         {error && <p className="text-sm text-red-700 md:col-span-2 xl:col-span-4">{error}</p>}
-      </form>
+      </form>}
+      {error && <p role="alert" className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-lg text-plantation-950">Daftar akun</h2><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{admins.length} admin</span></div>
       <div className="grid gap-3 sm:hidden">
-        {admins.map((a) => <article key={a.id} className="card p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium text-ink-800">{a.name}</p><p className="mt-1 truncate font-mono text-xs text-ink-500">@{a.username}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${a.active ? 'bg-plantation-700/10 text-plantation-700' : 'bg-red-50 text-red-700'}`}>{a.active ? 'Aktif' : 'Nonaktif'}</span></div><div className="mt-4 grid grid-cols-2 gap-2 border-t border-ink-900/8 pt-3"><button type="button" onClick={() => { setResetTarget(a); setNewPassword('') }} className="btn-ghost !px-2 !py-2 text-xs"><KeyRound size={14} />Reset sandi</button><button type="button" onClick={() => toggleAdminActive(a.id)} className="btn-ghost !px-2 !py-2 text-xs">{a.active ? <PowerOff size={14} /> : <Power size={14} />}{a.active ? 'Nonaktifkan' : 'Aktifkan'}</button></div></article>)}
+        {admins.map((a) => <article key={a.id} className="card p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium text-ink-800">{a.name}</p><p className="mt-1 truncate font-mono text-xs text-ink-500">{cloudMode ? a.email : `@${a.username}`}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${a.active ? 'bg-plantation-700/10 text-plantation-700' : 'bg-red-50 text-red-700'}`}>{a.active ? 'Aktif' : 'Nonaktif'}</span></div><div className={`mt-4 grid ${cloudMode ? 'grid-cols-1' : 'grid-cols-2'} gap-2 border-t border-ink-900/8 pt-3`}>{!cloudMode && <button type="button" onClick={() => { setResetTarget(a); setNewPassword('') }} className="btn-ghost !px-2 !py-2 text-xs"><KeyRound size={14} />Reset sandi</button>}<button type="button" onClick={() => handleToggle(a.id)} className="btn-ghost !px-2 !py-2 text-xs">{a.active ? <PowerOff size={14} /> : <Power size={14} />}{a.active ? 'Nonaktifkan' : 'Aktifkan'}</button></div></article>)}
         {admins.length === 0 && <div className="card p-6 text-center text-sm text-ink-500">Belum ada akun admin.</div>}
       </div>
       <div className="card hidden overflow-hidden sm:block">
@@ -66,7 +72,7 @@ export default function ManageAdmins() {
           <thead>
             <tr>
               <th className="table-head">Nama</th>
-              <th className="table-head">Username</th>
+              <th className="table-head">{cloudMode ? 'Email' : 'Username'}</th>
               <th className="table-head">Status</th>
               <th className="table-head"></th>
             </tr>
@@ -75,7 +81,7 @@ export default function ManageAdmins() {
             {admins.map((a) => (
               <tr key={a.id}>
                 <td className="table-cell font-medium">{a.name}</td>
-                <td className="table-cell font-mono text-[13px]">{a.username}</td>
+                <td className="table-cell font-mono text-[13px]">{cloudMode ? a.email : a.username}</td>
                 <td className="table-cell">
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ${
@@ -87,7 +93,7 @@ export default function ManageAdmins() {
                 </td>
                 <td className="table-cell">
                   <div className="flex items-center gap-3">
-                    <button type="button"
+                    {!cloudMode && <button type="button"
                       onClick={() => {
                         setResetTarget(a)
                         setNewPassword('')
@@ -96,9 +102,9 @@ export default function ManageAdmins() {
                       title="Reset kata sandi"
                     >
                       <KeyRound size={15} />
-                    </button>
+                    </button>}
                     <button type="button"
-                      onClick={() => toggleAdminActive(a.id)}
+                      onClick={() => handleToggle(a.id)}
                       className="text-ink-500 hover:text-red-700"
                       title={a.active ? 'Nonaktifkan' : 'Aktifkan'}
                     >

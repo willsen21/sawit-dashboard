@@ -32,13 +32,17 @@ Proyek ini sudah memiliki workflow GitHub Actions untuk membangun dan menerbitka
 
 Aplikasi memakai URL berbasis hash supaya halaman seperti Laporan tetap bisa dibuka langsung pada hosting statis GitHub Pages.
 
-## Batasan penting untuk pratinjau
+## Supabase: login dan data bersama
 
-- Login, akun, transaksi, kas, dan kebun masih disimpan di `localStorage` browser. Pengguna di perangkat/browser berbeda tidak berbagi data dan tidak tersinkron.
-- Login saat ini berjalan di sisi browser. Password demo dan data awal ada di kode aplikasi, sehingga fitur login ini **bukan perlindungan keamanan** untuk situs publik.
-- Data operasional disimpan di penyimpanan browser. Data tetap ada setelah halaman dimuat ulang pada browser dan alamat situs yang sama, dan tab situs yang sama akan menerima perubahan terbaru. Data tidak otomatis dibagikan ke perangkat/browser lain.
-- Gunakan GitHub Pages hanya untuk pratinjau. Jangan masukkan data transaksi atau informasi sensitif ke situs publik.
-- Agar tim dapat login dengan aman dan memakai data yang sama dari banyak perangkat, aplikasi perlu backend dengan autentikasi dan database sebelum dipakai operasional.
+Aplikasi dapat memakai Supabase Auth dan PostgreSQL agar owner/admin melihat data yang sama dari berbagai perangkat. Panduan setup ada di [supabase/README.md](supabase/README.md), dan skema dengan Row Level Security ada di `supabase/schema.sql`.
+
+- Untuk lokal, salin `.env.example` menjadi `.env.local`, isi Project URL dan publishable key, lalu jalankan ulang `npm run dev`.
+- Untuk GitHub Pages, tambahkan Actions Variables bernama `VITE_SUPABASE_URL` dan `VITE_SUPABASE_PUBLISHABLE_KEY` di repository Settings.
+- Buat Auth users serta profil owner/admin di Supabase sebelum login cloud. Akun demo hanya tersedia pada mode lokal.
+- Ketika owner pertama kali masuk ke database yang masih kosong, data localStorage pada browser tersebut akan dimigrasikan. Jangan hapus data browser sebelum migrasi berhasil.
+- Publishable key boleh berada di browser jika RLS tetap aktif. Jangan pernah menggunakan secret key atau `service_role` di aplikasi frontend.
+
+Tanpa konfigurasi Supabase, build production menolak login demo. Data lokal yang lama tetap tersimpan sebagai cache di browser.
 
 ## Fitur utama
 

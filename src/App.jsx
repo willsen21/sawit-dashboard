@@ -17,7 +17,8 @@ import Operations from './pages/owner/Operations'
 import PrivateFarms from './pages/owner/PrivateFarms'
 
 function RootRedirect() {
-  const { currentUser } = useAuth()
+  const { currentUser, authReady } = useAuth()
+  if (!authReady) return <div className="flex min-h-screen items-center justify-center text-sm text-ink-500">Memeriksa sesi...</div>
   if (!currentUser) return <Navigate to="/login" replace />
   return <Navigate to={currentUser.role === 'owner' ? '/owner' : '/admin'} replace />
 }

@@ -397,6 +397,35 @@ useLayoutEffect(() => {
     return { ok: true }
   }
 
+  function deleteTransaction(id, actorId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus catatan pembelian.' }
+    const transaction = transactions.find((item) => item.id === id)
+    if (!transaction || transaction.status === 'voided') return { ok: false, message: 'Catatan tidak ditemukan atau sudah dihapus.' }
+    setTransactions((prev) => prev.map((item) => item.id === id ? { ...item, status: 'voided', voidedAt: new Date().toISOString(), voidedBy: actorId } : item))
+    addAuditLog({ action: 'Menghapus catatan pembelian', actorId, transactionId: id, detail: `${transaction.name || 'Pembelian'} · ${transaction.date}` })
+    return { ok: true }
+  }
+
+  function editCashLoan(id, patch, actorId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengedit pinjaman kas.' }
+    const loan = cashLoans.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Pinjaman tidak ditemukan.' }
+    const amount = Number(patch.amount)
+    if (!patch.date || !patch.name?.trim() || !patch.reason?.trim() || !Number.isFinite(amount) || amount <= 0) return { ok: false, message: 'Tanggal, nama, alasan, dan nominal pinjaman harus diisi dengan benar.' }
+    setCashLoans((prev) => prev.map((item) => item.id === id ? { ...item, date: patch.date, name: patch.name.trim(), amount, reason: patch.reason.trim(), editedAt: new Date().toISOString(), editedBy: actorId } : item))
+    addAuditLog({ action: 'Mengedit pinjaman kas', actorId, detail: `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} → ${patch.name.trim()}: Rp${amount.toLocaleString('id-ID')}` })
+    return { ok: true }
+  }
+
+  function deleteCashLoan(id, actorId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus pinjaman kas.' }
+    const loan = cashLoans.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Pinjaman tidak ditemukan.' }
+    setCashLoans((prev) => prev.filter((item) => item.id !== id))
+    addAuditLog({ action: 'Menghapus pinjaman kas', actorId, detail: `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} · ${loan.date}` })
+    return { ok: true }
+  }
+
   function requestCancellation({ transactionId, reason, requestedBy }) {
     const exists = cancellationRequests.some((request) => request.transactionId === transactionId && request.status === 'pending')
     if (exists) return { ok: false, message: 'Permintaan pembatalan untuk transaksi ini masih menunggu persetujuan.' }
@@ -534,6 +563,7 @@ useLayoutEffect(() => {
     addTransaction,
     updateTransaction,
     editTransaction,
+    deleteTransaction,
     requestCancellation,
     resolveCancellation,
     cancellationRequests,
@@ -562,6 +592,8 @@ useLayoutEffect(() => {
     cashLoans,
     addTopup,
     addCashLoan,
+    editCashLoan,
+    deleteCashLoan,
     requestCashLoanDeletion,
     requestCashInitialEdit,
     getCashSummary,

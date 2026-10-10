@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { CheckCircle2, Download, Pencil, Save } from 'lucide-react'
+import { CheckCircle2, Download, Pencil, Save, Trash2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useData } from '../../context/DataContext'
@@ -122,7 +122,7 @@ export default function Reports() {
   const { kind } = useParams()
   const reportKind = kind === 'brondolan' ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
-  const { transactions, cashLoans, supplierMap, updateTransaction, editTransaction } = useData()
+  const { transactions, cashLoans, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))
   const [activeQuick, setActiveQuick] = useState('Bulan ini')
   const [page, setPage] = useState(1)
@@ -132,6 +132,11 @@ export default function Reports() {
   const [editTarget, setEditTarget] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const [editError, setEditError] = useState('')
+  const [loanEditTarget, setLoanEditTarget] = useState(null)
+  const [loanEditForm, setLoanEditForm] = useState(null)
+  const [loanEditError, setLoanEditError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
   const [showPdfOptions, setShowPdfOptions] = useState(false)
   const [pdfRangeDays, setPdfRangeDays] = useState('7')
 
@@ -205,6 +210,30 @@ export default function Reports() {
     setEditTarget(null)
     setEditForm(null)
     setEditError('')
+  }
+
+  function openLoanEdit(loan) {
+    setLoanEditTarget(loan)
+    setLoanEditForm({ date: loan.date, name: loan.name || '', amount: String(loan.amount ?? ''), reason: loan.reason || '' })
+    setLoanEditError('')
+  }
+
+  function saveLoanEdit(event) {
+    event.preventDefault()
+    const result = editCashLoan(loanEditTarget.id, loanEditForm, currentUser.id)
+    if (!result?.ok) return setLoanEditError(result?.message || 'Perubahan pinjaman gagal disimpan.')
+    setLoanEditTarget(null)
+    setLoanEditForm(null)
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return
+    const result = deleteTarget.type === 'loan'
+      ? deleteCashLoan(deleteTarget.record.id, currentUser.id)
+      : deleteTransaction(deleteTarget.record.id, currentUser.id)
+    if (!result?.ok) return setDeleteError(result?.message || 'Data gagal dihapus.')
+    setDeleteTarget(null)
+    setDeleteError('')
   }
 
   function downloadSelectedPdf() {
@@ -353,7 +382,7 @@ export default function Reports() {
                     <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(t.pricePerKg)}</td>
                     <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{formatRupiah(type === 'loan' ? t.amount : t.total)}</td>
                     <td className="table-cell text-ink-500">{type === 'loan' ? t.reason || '—' : t.note || '—'}</td>
-                    {currentUser?.role === 'owner' && <td className="table-cell">{type === 'loan' ? '—' : <button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button>}</td>}
+                    {currentUser?.role === 'owner' && <td className="table-cell"><div className="flex items-center gap-1">{type === 'loan' ? <button type="button" onClick={() => openLoanEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit pinjaman" aria-label={`Edit pinjaman ${t.name || ''}`}><Pencil size={16} /></button> : <button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button>}<button type="button" onClick={() => { setDeleteTarget({ type, record: t }); setDeleteError('') }} className="rounded-md p-2 text-ink-500 transition hover:bg-red-50 hover:text-red-700" title={type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus pembelian'} aria-label={`Hapus ${type === 'loan' ? 'pinjaman' : 'pembelian'} ${t.name || ''}`}><Trash2 size={16} /></button></div></td>}
                   </tr>
                 ))
               )}
@@ -385,6 +414,12 @@ export default function Reports() {
           {editError && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{editError}</p>}
           <div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => { setEditTarget(null); setEditForm(null); setEditError('') }}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan perubahan</button></div>
         </form>}
+      </Modal>
+      <Modal open={!!loanEditTarget} onClose={() => { setLoanEditTarget(null); setLoanEditForm(null); setLoanEditError('') }} title="Edit pinjaman kas">
+        {loanEditForm && <form onSubmit={saveLoanEdit} className="space-y-4"><p className="text-sm text-ink-600">Perubahan pinjaman akan langsung tersimpan dan memperbarui saldo kas pada tanggal terkait.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal"><input type="date" className="input" value={loanEditForm.date} onChange={(event) => setLoanEditForm({ ...loanEditForm, date: event.target.value })} /></Field><Field label="Nama peminjam"><input className="input" value={loanEditForm.name} onChange={(event) => setLoanEditForm({ ...loanEditForm, name: event.target.value })} /></Field><Field label="Nominal (Rp)"><input type="number" min="1" step="1" className="input" value={loanEditForm.amount} onChange={(event) => setLoanEditForm({ ...loanEditForm, amount: event.target.value })} /></Field><Field label="Alasan / catatan"><input className="input" value={loanEditForm.reason} onChange={(event) => setLoanEditForm({ ...loanEditForm, reason: event.target.value })} /></Field></div>{loanEditError && <p role="alert" className="text-sm text-red-700">{loanEditError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setLoanEditTarget(null)}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan</button></div></form>}
+      </Modal>
+      <Modal open={!!deleteTarget} onClose={() => { setDeleteTarget(null); setDeleteError('') }} title={deleteTarget?.type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus catatan pembelian'}>
+        {deleteTarget && <div className="space-y-4"><p className="text-sm leading-relaxed text-ink-700">Yakin menghapus {deleteTarget.type === 'loan' ? 'pinjaman kas' : 'catatan pembelian'} <b>{deleteTarget.record.name || 'ini'}</b> tanggal <b>{formatShortDate(deleteTarget.record.date)}</b>? {deleteTarget.type === 'loan' ? 'Saldo kas akan dihitung ulang.' : 'Catatan akan dibatalkan dan tidak ditampilkan di laporan.'}</p>{deleteError && <p role="alert" className="text-sm text-red-700">{deleteError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setDeleteTarget(null)}>Batal</button><button type="button" className="btn-danger" onClick={confirmDelete}><Trash2 size={16} /> Hapus</button></div></div>}
       </Modal>
       <Modal open={showPdfOptions} onClose={() => setShowPdfOptions(false)} title="Unduh laporan PDF">
         <div className="space-y-5">

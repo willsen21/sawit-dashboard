@@ -491,7 +491,7 @@ useLayoutEffect(() => {
     const todaysTopups = topups.filter((t) => t.date === dateKey)
     const totalTopup = todaysTopups.reduce((sum, t) => sum + Number(t.amount), 0)
     const todaysTx = transactions.filter((t) => t.date === dateKey && t.status !== 'voided')
-    const totalUsed = todaysTx.reduce((sum, t) => sum + Number(t.total), 0)
+    const totalUsed = todaysTx.reduce((sum, t) => sum + (t.paymentMethod === 'transfer' ? 0 : Number(t.total)), 0)
     const todaysLoans = cashLoans.filter((loan) => loan.date === dateKey)
     const totalLoans = todaysLoans.reduce((sum, loan) => sum + Number(loan.amount), 0)
     const remaining = initialAmount + totalTopup - totalUsed - totalLoans

@@ -53,11 +53,12 @@ function computePdfRange(days) {
 
 function downloadCsv(rows, reportKind) {
   const isBrondolan = reportKind === 'brondolan'
-  const header = ['Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Status pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total', 'No. Nota', 'Catatan']
+  const header = ['Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Status pembayaran', 'Metode pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total', 'No. Nota', 'Catatan']
   const lines = rows.map((t) => [
     formatCsvDate(t.date),
     ...(!isBrondolan ? [t.cv || 'Belum dipilih'] : []),
     t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
+    t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
     t.grossKg ?? t.weightKg ?? 0,
     t.netKg ?? t.weightKg ?? 0,
     t.pricePerKg,
@@ -86,6 +87,7 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
     ...(!isBrondolan ? [t.cv || 'Belum dipilih'] : []),
     t.name || supplierMap[t.supplierId]?.name || '—',
     (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
+    t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
     `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
     `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
     formatRupiah(t.pricePerKg),
@@ -97,8 +99,8 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
   pdf.text(dateRange, 14, 14)
   autoTable(pdf, {
     startY: 19,
-    head: [['No.', 'Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Nama', 'Status', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total', 'Catatan']],
-    body: body.length ? body : [Array(isBrondolan ? 9 : 10).fill('').map((value, index) => index === (isBrondolan ? 2 : 3) ? 'Tidak ada transaksi pada rentang ini.' : value)],
+    head: [['No.', 'Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Nama', 'Status', 'Metode', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total', 'Catatan']],
+    body: body.length ? body : [Array(isBrondolan ? 10 : 11).fill('').map((value, index) => index === (isBrondolan ? 2 : 3) ? 'Tidak ada transaksi pada rentang ini.' : value)],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2, valign: 'middle' },
     headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
@@ -253,6 +255,7 @@ export default function Reports() {
                 {reportKind === 'buah' && <th className="table-head">CV</th>}
                 <th className="table-head">Nama</th>
                 <th className="table-head">Status</th>
+                <th className="table-head">Metode pembayaran</th>
                 <th className="table-head">Berat kotor</th>
                 <th className="table-head">Berat bersih</th>
                 <th className="table-head">Harga/kg bersih</th>
@@ -263,7 +266,7 @@ export default function Reports() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={reportKind === 'buah' ? 10 : 9} className="table-cell text-center text-ink-500 py-10">
+                  <td colSpan={reportKind === 'buah' ? 11 : 10} className="table-cell text-center text-ink-500 py-10">
                     Tidak ada transaksi pada rentang ini.
                   </td>
                 </tr>
@@ -275,6 +278,7 @@ export default function Reports() {
                     {reportKind === 'buah' && <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td>}
                     <td className="table-cell">{t.name || supplierMap[t.supplierId]?.name || '—'}</td>
                     <td className="table-cell"><PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} /></td>
+                    <td className="table-cell">{t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun'}</td>
                     <td className="table-cell">{Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>
                     <td className="table-cell">{Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>
                     <td className="table-cell">{formatRupiah(t.pricePerKg)}</td>

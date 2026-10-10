@@ -35,6 +35,12 @@ Publishable key memang digunakan browser. Jangan pernah menambahkan `sb_secret_.
 
 Sebelum deploy, tambahkan GitHub Actions repository variables `VITE_SUPABASE_URL` dan `VITE_SUPABASE_PUBLISHABLE_KEY` melalui **Settings → Secrets and variables → Actions → Variables**. Build GitHub Pages kemudian menggunakan dua nilai tersebut.
 
+## 4. Persetujuan kas awal oleh owner
+
+Setelah versi aplikasi yang mendukung pengajuan perubahan kas dipasang, jalankan `supabase/admin-cash-edit-owner-approval.sql` satu kali melalui **SQL Editor → New query**. SQL ini mencegah akun admin mengubah nominal kas awal secara langsung, tetapi tetap mengizinkan admin menutup atau membuka status harian. Pengajuan kas awal maupun perubahan nominal baru berlaku setelah owner menyetujuinya di menu **Kontrol Transaksi**.
+
+Form pembelian menyediakan tanggal hari ini atau tanggal sebelumnya. Jika kas untuk tanggal pilihan belum ada, admin mengajukan kas awal untuk tanggal itu dan menunggu persetujuan owner; jika kasnya ditutup, admin mengajukan pembukaan kas. Transaksi baru yang dicatat dengan tanggal lampau tetap disimpan sebagai data baru.
+
 ## Catatan
 
 - Saat owner pertama kali login, data lama dari localStorage pada perangkat itu digabungkan sekali ke cloud. Baris cloud dengan ID yang sama akan dipertahankan. Lakukan login pertama di perangkat yang menyimpan data lama yang ingin dipindahkan; jangan hapus data browser sebelum proses ini selesai.

@@ -15,7 +15,11 @@ function keepCloudRecord(collection, item) {
   if (collection === 'privateFarms') {
     return {
       ...item,
-      records: (Array.isArray(item.records) ? item.records : []).filter((record) => !record?.date || record.date >= CLOUD_DATA_CUTOFF),
+      records: (Array.isArray(item.records) ? item.records : []).filter((record) => {
+        const oldDate = record?.date && record.date < CLOUD_DATA_CUTOFF
+        const oldCreation = !record?.createdAt || record.createdAt.slice(0, 10) < CLOUD_DATA_CUTOFF
+        return !oldDate || !oldCreation
+      }),
     }
   }
   if (collection === 'payrolls' && typeof item.period === 'string') {
@@ -27,7 +31,8 @@ function keepCloudRecord(collection, item) {
     : typeof item.createdAt === 'string'
       ? item.createdAt.slice(0, 10)
       : ''
-  return !recordDate || recordDate >= CLOUD_DATA_CUTOFF ? item : false
+  const oldCreation = !item.createdAt || item.createdAt.slice(0, 10) < CLOUD_DATA_CUTOFF
+  return !recordDate || recordDate >= CLOUD_DATA_CUTOFF || !oldCreation ? item : false
 }
 
 export function DataProvider({ children }) {
@@ -250,14 +255,16 @@ useLayoutEffect(() => {
   }
 
   function setInitialCash(dateKey, adminId, amount) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengatur kas awal secara langsung.' }
     setDailyCash((prev) => {
       const existing = prev.find((d) => d.date === dateKey)
       if (existing) {
-        return prev.map((d) => (d.date === dateKey ? { ...d, initialAmount: amount } : d))
+        return prev.map((d) => (d.date === dateKey ? { ...d, initialAmount: amount, createdAt: new Date().toISOString() } : d))
       }
-      return [...prev, { id: `dc-${dateKey}`, date: dateKey, adminId, initialAmount: amount, status: 'open' }]
+      return [...prev, { id: `dc-${dateKey}`, date: dateKey, adminId, initialAmount: amount, status: 'open', createdAt: new Date().toISOString() }]
     })
     addAuditLog({ action: 'Mengatur kas awal', actorId: adminId, detail: `${dateKey}: Rp${Number(amount).toLocaleString('id-ID')}` })
+    return { ok: true }
   }
 
   function lockDay(dateKey, actorId) {
@@ -327,6 +334,31 @@ useLayoutEffect(() => {
     return { ok: true }
   }
 
+  function requestCashInitialEdit({ date, amount, reason, requestedBy }) {
+    if (currentUser?.role !== 'admin') return { ok: false, message: 'Pengajuan perubahan kas hanya tersedia untuk admin.' }
+    const cash = dailyCash.find((item) => item.date === date)
+    const newAmount = Number(amount)
+    if (!Number.isFinite(newAmount) || newAmount < 0) return { ok: false, message: 'Kas awal harus 0 atau lebih.' }
+    if (!reason?.trim()) return { ok: false, message: 'Alasan perubahan wajib diisi.' }
+    const exists = cancellationRequests.some((request) => request.kind === 'cashInitialEdit' && request.date === date && request.status === 'pending')
+    if (exists) return { ok: false, message: 'Permintaan perubahan kas untuk tanggal ini masih menunggu owner.' }
+    const request = {
+      id: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'cashInitialEdit',
+      date,
+      oldAmount: cash ? Number(cash.initialAmount) || 0 : null,
+      newAmount,
+      createIfMissing: !cash,
+      reason: reason.trim(),
+      requestedBy,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    }
+    setCancellationRequests((prev) => [request, ...prev])
+    addAuditLog({ action: 'Mengajukan perubahan kas awal', actorId: requestedBy, detail: `${date}: ${cash ? `Rp${request.oldAmount.toLocaleString('id-ID')}` : 'belum diatur'} → Rp${newAmount.toLocaleString('id-ID')} · ${reason.trim()}` })
+    return { ok: true }
+  }
+
   // ---- Transaksi ----
   function addTransaction(tx) {
     const grossKg = Number(tx.grossKg ?? tx.weightKg) || 0
@@ -334,7 +366,7 @@ useLayoutEffect(() => {
     const total = Math.round(netKg * Number(tx.pricePerKg))
     const countToday = transactions.filter((item) => item.date === tx.date).length + 1
     const generatedNota = `PB-${tx.date.replaceAll('-', '')}-${String(countToday).padStart(3, '0')}`
-    const record = { id: `t-${Date.now()}`, status: 'open', ...tx, grossKg, netKg, weightKg: netKg, total, notaNumber: generatedNota }
+    const record = { id: `t-${Date.now()}`, status: 'open', ...tx, grossKg, netKg, weightKg: netKg, total, notaNumber: generatedNota, createdAt: new Date().toISOString() }
     setTransactions((prev) => [record, ...prev])
     addAuditLog({ action: 'Mencatat pembelian', actorId: tx.adminId, transactionId: record.id, detail: `${record.notaNumber}: kotor ${grossKg.toLocaleString('id-ID')} kg, bersih ${netKg.toLocaleString('id-ID')} kg` })
     return record
@@ -365,8 +397,9 @@ useLayoutEffect(() => {
   }
 
   function resolveCancellation(requestId, decision, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat memutuskan permintaan.' }
     const request = cancellationRequests.find((item) => item.id === requestId)
-    if (!request || request.status !== 'pending') return
+    if (!request || request.status !== 'pending') return { ok: false, message: 'Permintaan sudah diproses atau tidak ditemukan.' }
     const approved = decision === 'approved'
     setCancellationRequests((prev) => prev.map((item) => item.id === requestId ? { ...item, status: approved ? 'approved' : 'rejected', resolvedBy: ownerId, resolvedAt: new Date().toISOString() } : item))
     if (request.kind === 'cashLoanDeletion') {
@@ -377,12 +410,28 @@ useLayoutEffect(() => {
         actorId: ownerId,
         detail: `${loan ? `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} · ` : ''}${request.reason}`,
       })
-      return
+      return { ok: true }
+    }
+    if (request.kind === 'cashInitialEdit') {
+      if (approved) {
+        setDailyCash((prev) => {
+          const existing = prev.find((cash) => cash.date === request.date)
+          if (existing) return prev.map((cash) => cash.date === request.date ? { ...cash, initialAmount: Number(request.newAmount) || 0, createdAt: new Date().toISOString() } : cash)
+          return [...prev, { id: `dc-${request.date}`, date: request.date, adminId: request.requestedBy, initialAmount: Number(request.newAmount) || 0, status: 'open', createdAt: new Date().toISOString() }]
+        })
+      }
+      addAuditLog({
+        action: approved ? 'Menyetujui perubahan kas awal' : 'Menolak perubahan kas awal',
+        actorId: ownerId,
+        detail: `${request.date}: ${request.oldAmount === null ? 'belum diatur' : `Rp${Number(request.oldAmount).toLocaleString('id-ID')}`} → Rp${Number(request.newAmount).toLocaleString('id-ID')} · ${request.reason}`,
+      })
+      return { ok: true }
     }
     if (approved) {
       setTransactions((prev) => prev.map((transaction) => transaction.id === request.transactionId ? { ...transaction, status: 'voided', voidedAt: new Date().toISOString(), voidedBy: ownerId } : transaction))
     }
     addAuditLog({ action: approved ? 'Menyetujui pembatalan transaksi' : 'Menolak pembatalan transaksi', actorId: ownerId, transactionId: request.transactionId, detail: request.reason })
+    return { ok: true }
   }
 
   // ---- Operasional kebun (khusus owner) ----
@@ -503,6 +552,7 @@ useLayoutEffect(() => {
     addTopup,
     addCashLoan,
     requestCashLoanDeletion,
+    requestCashInitialEdit,
     getCashSummary,
     DEFAULT_INITIAL_CASH,
     today: todayKey(),

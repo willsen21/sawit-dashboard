@@ -125,6 +125,20 @@ set search_path = ''
 as $$
 begin
   if (select public.current_kebunkas_role()) = 'admin'
+     and tg_op = 'INSERT'
+     and new.collection = 'dailyCash' then
+    raise exception 'Admin tidak dapat membuat kas awal langsung; kas awal harus disetujui owner.';
+  end if;
+
+  if (select public.current_kebunkas_role()) = 'admin'
+     and tg_op = 'UPDATE'
+     and old.collection = 'dailyCash'
+     and (old.data - 'status') is distinct from (new.data - 'status') then
+    raise exception 'Admin tidak dapat mengubah nominal kas awal; perubahan harus disetujui owner.';
+  end if;
+
+  if (select public.current_kebunkas_role()) = 'admin'
+     and tg_op = 'UPDATE'
      and old.collection = 'transactions'
      and (
        (old.data - 'paymentStatus' - 'grossKg' - 'netKg') is distinct from
@@ -142,7 +156,7 @@ $$;
 
 drop trigger if exists guard_kebunkas_admin_record_updates on public.app_records;
 create trigger guard_kebunkas_admin_record_updates
-before update on public.app_records
+before insert or update on public.app_records
 for each row execute function public.guard_kebunkas_admin_record_updates();
 revoke all on function public.guard_kebunkas_admin_record_updates() from public, anon, authenticated;
 

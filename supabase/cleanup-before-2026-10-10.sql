@@ -1,4 +1,5 @@
--- Kebun Kas cleanup boundary: remove dated records before 10 Oct 2026.
+-- Kebun Kas cleanup boundary: remove legacy records dated before 10 Oct 2026.
+-- Backdated records created on or after 10 Oct 2026 are preserved.
 -- Run the PREVIEW query first and inspect the counts. Then select and run the
 -- CLEANUP block separately. Data dated 10 Oct 2026 or later is preserved.
 -- Master supplier/farm records are preserved; only dated farm harvest records
@@ -11,7 +12,8 @@ with counts as (
   from public.app_records
   where
     (collection in ('transactions', 'dailyCash', 'topups', 'cashLoans', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses')
-      and data->>'date' < '2026-10-10')
+      and data->>'date' < '2026-10-10'
+      and (nullif(data->>'createdAt', '') is null or (data->>'createdAt')::timestamptz < timestamptz '2026-10-10 00:00:00+07'))
     or (collection in ('auditLogs', 'cancellationRequests')
       and nullif(data->>'createdAt', '') is not null
       and (data->>'createdAt')::timestamptz < timestamptz '2026-10-10 00:00:00+07')
@@ -26,6 +28,7 @@ with counts as (
   ) as record(value)
   where ar.collection = 'privateFarms'
     and record.value->>'date' < '2026-10-10'
+    and (nullif(record.value->>'createdAt', '') is null or (record.value->>'createdAt')::timestamptz < timestamptz '2026-10-10 00:00:00+07')
 )
 select collection, rows_to_delete from counts
 union all
@@ -38,7 +41,8 @@ begin;
 delete from public.app_records
 where
   (collection in ('transactions', 'dailyCash', 'topups', 'cashLoans', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses')
-    and data->>'date' < '2026-10-10')
+    and data->>'date' < '2026-10-10'
+    and (nullif(data->>'createdAt', '') is null or (data->>'createdAt')::timestamptz < timestamptz '2026-10-10 00:00:00+07'))
   or (collection in ('auditLogs', 'cancellationRequests')
     and nullif(data->>'createdAt', '') is not null
     and (data->>'createdAt')::timestamptz < timestamptz '2026-10-10 00:00:00+07')
@@ -53,7 +57,9 @@ set data = jsonb_set(
     from jsonb_array_elements(
       case when jsonb_typeof(ar.data->'records') = 'array' then ar.data->'records' else '[]'::jsonb end
     ) with ordinality as record(value, ordinality)
-    where record.value->>'date' is null or record.value->>'date' >= '2026-10-10'
+    where record.value->>'date' is null
+      or record.value->>'date' >= '2026-10-10'
+      or (nullif(record.value->>'createdAt', '') is not null and (record.value->>'createdAt')::timestamptz >= timestamptz '2026-10-10 00:00:00+07')
   ), '[]'::jsonb),
   true
 ),
@@ -64,6 +70,7 @@ where ar.collection = 'privateFarms'
     select 1
     from jsonb_array_elements(ar.data->'records') as record(value)
     where record.value->>'date' < '2026-10-10'
+      and (nullif(record.value->>'createdAt', '') is null or (record.value->>'createdAt')::timestamptz < timestamptz '2026-10-10 00:00:00+07')
   );
 
 commit;

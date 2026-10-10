@@ -114,6 +114,11 @@ create policy "owner and admin delete allowed records"
 on public.app_records for delete to authenticated
 using (
   (select public.current_kebunkas_role()) = 'owner'
+  or (
+    (select public.current_kebunkas_role()) = 'admin'
+    and collection = 'cashLoans'
+    and data->>'adminId' = (select auth.uid())::text
+  )
 );
 
 -- Admins can confirm a payment, but cannot rewrite transaction amounts or approve their own cancellation requests.

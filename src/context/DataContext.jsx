@@ -307,6 +307,17 @@ useLayoutEffect(() => {
     return { ok: true, loan }
   }
 
+  function deleteCashLoan(id, actorId) {
+    const loan = cashLoans.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Pinjaman tidak ditemukan.' }
+    if (currentUser?.role === 'admin' && loan.adminId !== actorId) {
+      return { ok: false, message: 'Admin hanya dapat menghapus pinjaman yang dicatat sendiri.' }
+    }
+    setCashLoans((prev) => prev.filter((item) => item.id !== id))
+    addAuditLog({ action: 'Menghapus pinjaman kas', actorId, detail: `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} · ${loan.reason}` })
+    return { ok: true }
+  }
+
   // ---- Transaksi ----
   function addTransaction(tx) {
     const grossKg = Number(tx.grossKg ?? tx.weightKg) || 0
@@ -472,6 +483,7 @@ useLayoutEffect(() => {
     cashLoans,
     addTopup,
     addCashLoan,
+    deleteCashLoan,
     getCashSummary,
     DEFAULT_INITIAL_CASH,
     today: todayKey(),

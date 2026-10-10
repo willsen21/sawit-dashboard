@@ -54,19 +54,24 @@ function computePdfRange(days) {
 
 function downloadCsv(rows, reportKind) {
   const isBrondolan = reportKind === 'brondolan'
-  const header = ['Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Status pembayaran', 'Metode pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total', 'No. Nota', 'Catatan']
-  const lines = rows.map((t) => [
-    formatCsvDate(t.date),
-    ...(!isBrondolan ? [t.cv || 'Belum dipilih'] : []),
-    t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-    t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
-    t.grossKg ?? t.weightKg ?? 0,
-    t.netKg ?? t.weightKg ?? 0,
-    t.pricePerKg,
-    t.total,
-    t.notaNumber || '',
-    (t.note || '').replaceAll(',', ';'),
-  ])
+  const header = ['Tanggal', ...(isBrondolan ? ['Jenis catatan'] : ['CV']), 'Nama', 'Status pembayaran', 'Metode pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total / nominal', 'No. Nota', 'Catatan / alasan']
+  const lines = rows.map(({ type = 'purchase', record }) => {
+    const t = record
+    const isLoan = type === 'loan'
+    return [
+      formatCsvDate(t.date),
+      isBrondolan ? (isLoan ? 'Pinjaman Kas' : 'Brondolan') : (t.cv || 'Belum dipilih'),
+      t.name || '',
+      isLoan ? '—' : t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
+      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
+      isLoan ? '—' : t.grossKg ?? t.weightKg ?? 0,
+      isLoan ? '—' : t.netKg ?? t.weightKg ?? 0,
+      isLoan ? '—' : t.pricePerKg,
+      isLoan ? t.amount : t.total,
+      isLoan ? '' : t.notaNumber || '',
+      (isLoan ? t.reason || '' : t.note || '').replaceAll(',', ';'),
+    ]
+  })
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const csv = '\uFEFF' + [header, ...lines].map((row) => row.map(quote).join(';')).join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -82,26 +87,29 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
   const isBrondolan = reportKind === 'brondolan'
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const dateRange = `${formatShortDate(range[0])} — ${formatShortDate(range[1])}`
-  const body = rows.map((t, index) => [
-    index + 1,
-    formatShortDate(t.date),
-    ...(!isBrondolan ? [t.cv || 'Belum dipilih'] : []),
-    t.name || supplierMap[t.supplierId]?.name || '—',
-    (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-    t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
-    `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
-    `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
-    formatRupiah(t.pricePerKg),
-    formatRupiah(t.total),
-    t.note || '—',
-  ])
+  const body = rows.map(({ type = 'purchase', record: t }, index) => {
+    const isLoan = type === 'loan'
+    return [
+      index + 1,
+      formatShortDate(t.date),
+      isBrondolan ? (isLoan ? 'Pinjaman Kas' : 'Brondolan') : (t.cv || 'Belum dipilih'),
+      t.name || supplierMap[t.supplierId]?.name || '—',
+      isLoan ? '—' : (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
+      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
+      isLoan ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
+      isLoan ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
+      isLoan ? '—' : formatRupiah(t.pricePerKg),
+      formatRupiah(isLoan ? t.amount : t.total),
+      isLoan ? t.reason || '—' : t.note || '—',
+    ]
+  })
 
   pdf.setFontSize(11)
   pdf.text(dateRange, 14, 14)
   autoTable(pdf, {
     startY: 19,
-    head: [['No.', 'Tanggal', ...(!isBrondolan ? ['CV'] : []), 'Nama', 'Status', 'Metode', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total', 'Catatan']],
-    body: body.length ? body : [Array(isBrondolan ? 10 : 11).fill('').map((value, index) => index === (isBrondolan ? 2 : 3) ? 'Tidak ada transaksi pada rentang ini.' : value)],
+    head: [['No.', 'Tanggal', isBrondolan ? 'Jenis catatan' : 'CV', 'Nama', 'Status', 'Metode', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total / nominal', 'Catatan / alasan']],
+    body: body.length ? body : [Array(11).fill('').map((value, index) => index === 3 ? 'Tidak ada transaksi pada rentang ini.' : value)],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2, valign: 'middle' },
     headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
@@ -114,7 +122,7 @@ export default function Reports() {
   const { kind } = useParams()
   const reportKind = kind === 'brondolan' ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
-  const { transactions, supplierMap, updateTransaction, editTransaction } = useData()
+  const { transactions, cashLoans, supplierMap, updateTransaction, editTransaction } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))
   const [activeQuick, setActiveQuick] = useState('Bulan ini')
   const [page, setPage] = useState(1)
@@ -132,8 +140,15 @@ export default function Reports() {
       .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= range[0] && t.date <= range[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
       .sort((a, b) => (a.date === b.date ? (a.time < b.time ? 1 : -1) : a.date < b.date ? 1 : -1))
   }, [transactions, reportKind, range, paymentStatus, cvFilter])
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const displayRows = useMemo(() => {
+    const purchaseRows = filtered.map((record) => ({ type: 'purchase', record, sortTime: record.time || '00:00' }))
+    const loanRows = reportKind === 'brondolan'
+      ? cashLoans.filter((loan) => loan.date >= range[0] && loan.date <= range[1]).map((record) => ({ type: 'loan', record, sortTime: record.createdAt?.slice(11, 16) || '00:00' }))
+      : []
+    return [...purchaseRows, ...loanRows].sort((a, b) => b.record.date.localeCompare(a.record.date) || b.sortTime.localeCompare(a.sortTime))
+  }, [filtered, cashLoans, reportKind, range])
+  const pageCount = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE))
+  const paginated = displayRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const summary = useMemo(() => {
     const totalWeight = filtered.reduce((s, t) => s + Number(t.netKg ?? t.weightKg ?? 0), 0)
@@ -194,10 +209,14 @@ export default function Reports() {
 
   function downloadSelectedPdf() {
     const pdfRange = computePdfRange(pdfRangeDays)
-    const pdfRows = transactions
+    const purchaseRows = transactions
       .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= pdfRange[0] && t.date <= pdfRange[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
       .sort((a, b) => (a.date === b.date ? (a.time < b.time ? 1 : -1) : a.date < b.date ? 1 : -1))
-    downloadPdf(pdfRows, supplierMap, pdfRange, reportKind)
+      .map((record) => ({ type: 'purchase', record }))
+    const loanRows = reportKind === 'brondolan'
+      ? cashLoans.filter((loan) => loan.date >= pdfRange[0] && loan.date <= pdfRange[1]).map((record) => ({ type: 'loan', record }))
+      : []
+    downloadPdf([...purchaseRows, ...loanRows].sort((a, b) => b.record.date.localeCompare(a.record.date) || String(b.record.createdAt || b.record.time || '').localeCompare(String(a.record.createdAt || a.record.time || ''))), supplierMap, pdfRange, reportKind)
     setShowPdfOptions(false)
   }
 
@@ -209,9 +228,10 @@ export default function Reports() {
           <p className="text-sm text-ink-500 mt-1">
             {formatShortDate(range[0])} — {formatShortDate(range[1])}
           </p>
+          {reportKind === 'brondolan' && <p className="mt-1 text-xs text-ink-500">Pinjaman kas tampil di tabel sebagai kas keluar; ringkasan total pembelian hanya menghitung brondolan.</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost" onClick={() => downloadCsv(filtered, reportKind)}>
+          <button className="btn-ghost" onClick={() => downloadCsv(displayRows, reportKind)}>
             <Download size={16} /> Ekspor CSV
           </button>
           <button className="btn-primary" onClick={() => setShowPdfOptions(true)}>
@@ -300,7 +320,7 @@ export default function Reports() {
               <tr>
                 <th className="table-head">No.</th>
                 <th className="table-head">Tanggal</th>
-                {reportKind === 'buah' && <th className="table-head">CV</th>}
+                {reportKind === 'buah' ? <th className="table-head">CV</th> : <th className="table-head">Jenis catatan</th>}
                 <th className="table-head">Nama</th>
                 <th className="table-head">Status</th>
                 <th className="table-head">Metode pembayaran</th>
@@ -313,34 +333,34 @@ export default function Reports() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={(reportKind === 'buah' ? 11 : 10) + (currentUser?.role === 'owner' ? 1 : 0)} className="table-cell text-center text-ink-500 py-10">
+                  <td colSpan={11 + (currentUser?.role === 'owner' ? 1 : 0)} className="table-cell text-center text-ink-500 py-10">
                     Tidak ada transaksi pada rentang ini.
                   </td>
                 </tr>
               ) : (
-                paginated.map((t, index) => (
-                  <tr key={t.id}>
+                paginated.map(({ type, record: t }, index) => (
+                  <tr key={`${type}-${t.id}`} className={type === 'loan' ? 'bg-gold-400/5' : ''}>
                     <td className="table-cell text-ink-500">{(page - 1) * PAGE_SIZE + index + 1}</td>
                     <td className="table-cell">{formatShortDate(t.date)}</td>
-                    {reportKind === 'buah' && <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td>}
+                    {reportKind === 'buah' ? <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td> : <td className="table-cell font-medium">{type === 'loan' ? <span className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-700">Pinjaman Kas</span> : 'Brondolan'}</td>}
                     <td className="table-cell">{t.name || supplierMap[t.supplierId]?.name || '—'}</td>
-                    <td className="table-cell"><PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} /></td>
-                    <td className="table-cell">{t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun'}</td>
-                    <td className="table-cell">{Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>
-                    <td className="table-cell">{Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg</td>
-                    <td className="table-cell">{formatRupiah(t.pricePerKg)}</td>
-                    <td className="table-cell font-medium">{formatRupiah(t.total)}</td>
-                    <td className="table-cell text-ink-500">{t.note || '—'}</td>
-                    {currentUser?.role === 'owner' && <td className="table-cell"><button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button></td>}
+                    <td className="table-cell">{type === 'loan' ? '—' : <PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} />}</td>
+                    <td className="table-cell">{type === 'loan' ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun'}</td>
+                    <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
+                    <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
+                    <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(t.pricePerKg)}</td>
+                    <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{formatRupiah(type === 'loan' ? t.amount : t.total)}</td>
+                    <td className="table-cell text-ink-500">{type === 'loan' ? t.reason || '—' : t.note || '—'}</td>
+                    {currentUser?.role === 'owner' && <td className="table-cell">{type === 'loan' ? '—' : <button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button>}</td>}
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-        {filtered.length > PAGE_SIZE && <Pagination page={page} pages={pageCount} setPage={setPage} />}
+        {displayRows.length > PAGE_SIZE && <Pagination page={page} pages={pageCount} setPage={setPage} />}
       </div>
       <Modal open={!!paymentTarget} onClose={() => setPaymentTarget(null)} title="Konfirmasi pembayaran">
         <div className="space-y-4">

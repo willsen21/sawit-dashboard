@@ -373,6 +373,7 @@ useLayoutEffect(() => {
   }
 
   function updateTransaction(id, patch, actorId = 'system') {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah catatan pembelian.' }
     setTransactions((prev) =>
       prev.map((t) => {
         if (t.id !== id) return t
@@ -385,6 +386,15 @@ useLayoutEffect(() => {
       })
     )
     addAuditLog({ action: 'Memperbarui transaksi', actorId, transactionId: id, detail: Object.keys(patch).join(', ') })
+    return { ok: true }
+  }
+
+  function editTransaction(id, patch, actorId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengedit catatan pembelian.' }
+    const transaction = transactions.find((item) => item.id === id)
+    if (!transaction || transaction.status === 'voided') return { ok: false, message: 'Catatan tidak ditemukan atau sudah dibatalkan.' }
+    updateTransaction(id, patch, actorId)
+    return { ok: true }
   }
 
   function requestCancellation({ transactionId, reason, requestedBy }) {
@@ -523,6 +533,7 @@ useLayoutEffect(() => {
     transactions,
     addTransaction,
     updateTransaction,
+    editTransaction,
     requestCancellation,
     resolveCancellation,
     cancellationRequests,

@@ -41,6 +41,10 @@ Setelah versi aplikasi yang mendukung pengajuan perubahan kas dipasang, jalankan
 
 Form pembelian menyediakan tanggal hari ini atau tanggal sebelumnya. Jika kas untuk tanggal pilihan belum ada, admin mengajukan kas awal untuk tanggal itu dan menunggu persetujuan owner; jika kasnya ditutup, admin mengajukan pembukaan kas. Transaksi baru yang dicatat dengan tanggal lampau tetap disimpan sebagai data baru.
 
+## 5. Edit catatan pembelian hanya oleh owner
+
+Untuk proyek yang sudah menjalankan skema sebelumnya, jalankan `supabase/owner-only-transaction-edits.sql` satu kali melalui **SQL Editor → New query**. Ini menambahkan pengamanan database agar admin tidak dapat mengubah transaksi yang sudah tersimpan. Admin tetap dapat mencatat transaksi baru dan mengajukan pembatalan melalui alur yang tersedia. Owner dapat mengedit catatan dari tabel **Laporan**; total dihitung ulang dari berat bersih dan harga per kg.
+
 ## Catatan
 
 - Saat owner pertama kali login, data lama dari localStorage pada perangkat itu digabungkan sekali ke cloud. Baris cloud dengan ID yang sama akan dipertahankan. Lakukan login pertama di perangkat yang menyimpan data lama yang ingin dipindahkan; jangan hapus data browser sebelum proses ini selesai.

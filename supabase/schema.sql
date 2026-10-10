@@ -116,7 +116,7 @@ using (
   (select public.current_kebunkas_role()) = 'owner'
 );
 
--- Admins can confirm a payment, but cannot rewrite transaction amounts or approve their own cancellation requests.
+-- Admins can create purchase records, but all changes to existing records are owner-managed.
 create or replace function public.guard_kebunkas_admin_record_updates()
 returns trigger
 language plpgsql
@@ -140,15 +140,8 @@ begin
   if (select public.current_kebunkas_role()) = 'admin'
      and tg_op = 'UPDATE'
      and old.collection = 'transactions'
-     and (
-       (old.data - 'paymentStatus' - 'grossKg' - 'netKg') is distinct from
-         (new.data - 'paymentStatus' - 'grossKg' - 'netKg')
-       or coalesce(old.data->>'grossKg', old.data->>'weightKg') is distinct from
-         coalesce(new.data->>'grossKg', new.data->>'weightKg')
-       or coalesce(old.data->>'netKg', old.data->>'weightKg') is distinct from
-         coalesce(new.data->>'netKg', new.data->>'weightKg')
-     ) then
-    raise exception 'Admin hanya boleh memperbarui status pembayaran transaksi.';
+     and old.data is distinct from new.data then
+    raise exception 'Admin tidak dapat mengedit catatan pembelian; hanya owner yang dapat mengubah data transaksi.';
   end if;
   return new;
 end;

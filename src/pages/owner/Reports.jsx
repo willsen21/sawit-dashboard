@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { CheckCircle2, Download } from 'lucide-react'
+import { CheckCircle2, Download, Pencil, Save } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useData } from '../../context/DataContext'
@@ -18,6 +18,7 @@ import { PAGE_SIZE, Pagination } from './PurchaseDetails'
 import StatCard from '../../components/StatCard'
 
 const CVS = ['Sinar Mandiri', 'Jaya Agung']
+const parseNumber = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
 const QUICK_RANGES = ['Hari ini', 'Minggu ini', 'Bulan ini', 'Tahun ini', '30 hari terakhir']
 const PDF_RANGES = [
   { value: '7', label: '1 minggu terakhir' },
@@ -113,13 +114,16 @@ export default function Reports() {
   const { kind } = useParams()
   const reportKind = kind === 'brondolan' ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
-  const { transactions, supplierMap, updateTransaction } = useData()
+  const { transactions, supplierMap, updateTransaction, editTransaction } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))
   const [activeQuick, setActiveQuick] = useState('Bulan ini')
   const [page, setPage] = useState(1)
   const [paymentStatus, setPaymentStatus] = useState('all')
   const [cvFilter, setCvFilter] = useState('all')
   const [paymentTarget, setPaymentTarget] = useState(null)
+  const [editTarget, setEditTarget] = useState(null)
+  const [editForm, setEditForm] = useState(null)
+  const [editError, setEditError] = useState('')
   const [showPdfOptions, setShowPdfOptions] = useState(false)
   const [pdfRangeDays, setPdfRangeDays] = useState('7')
 
@@ -142,6 +146,50 @@ export default function Reports() {
     if (!paymentTarget) return
     updateTransaction(paymentTarget.id, { paymentStatus: 'paid' }, currentUser.id)
     setPaymentTarget(null)
+  }
+
+  function openEdit(transaction) {
+    setEditTarget(transaction)
+    setEditForm({
+      date: transaction.date,
+      name: transaction.name || supplierMap[transaction.supplierId]?.name || '',
+      cv: transaction.cv || CVS[0],
+      paymentStatus: transaction.paymentStatus || 'paid',
+      paymentMethod: transaction.paymentMethod || 'cash',
+      grossKg: String(transaction.grossKg ?? transaction.weightKg ?? ''),
+      netKg: String(transaction.netKg ?? transaction.weightKg ?? ''),
+      pricePerKg: String(transaction.pricePerKg ?? ''),
+      note: transaction.note || '',
+    })
+    setEditError('')
+  }
+
+  function saveEdit(event) {
+    event.preventDefault()
+    if (!editTarget || !editForm) return
+    const grossKg = parseNumber(editForm.grossKg)
+    const netKg = parseNumber(editForm.netKg)
+    const pricePerKg = parseNumber(editForm.pricePerKg)
+    if (!editForm.name.trim()) return setEditError('Nama penjual wajib diisi.')
+    if (!editForm.date) return setEditError('Tanggal transaksi wajib diisi.')
+    if (grossKg <= 0 || netKg <= 0) return setEditError('Berat kotor dan berat bersih harus lebih dari 0.')
+    if (netKg > grossKg) return setEditError('Berat bersih tidak boleh lebih besar dari berat kotor.')
+    if (pricePerKg <= 0) return setEditError('Harga per kg harus lebih dari 0.')
+    const result = editTransaction(editTarget.id, {
+      date: editForm.date,
+      name: editForm.name.trim(),
+      ...(reportKind === 'buah' ? { cv: editForm.cv } : {}),
+      paymentStatus: editForm.paymentStatus,
+      paymentMethod: editForm.paymentMethod,
+      grossKg,
+      netKg,
+      pricePerKg,
+      note: editForm.note.trim(),
+    }, currentUser.id)
+    if (!result?.ok) return setEditError(result?.message || 'Perubahan tidak berhasil disimpan.')
+    setEditTarget(null)
+    setEditForm(null)
+    setEditError('')
   }
 
   function downloadSelectedPdf() {
@@ -261,12 +309,13 @@ export default function Reports() {
                 <th className="table-head">Harga/kg bersih</th>
                 <th className="table-head">Total</th>
                 <th className="table-head">Catatan</th>
+                {currentUser?.role === 'owner' && <th className="table-head">Aksi</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={reportKind === 'buah' ? 11 : 10} className="table-cell text-center text-ink-500 py-10">
+                  <td colSpan={(reportKind === 'buah' ? 11 : 10) + (currentUser?.role === 'owner' ? 1 : 0)} className="table-cell text-center text-ink-500 py-10">
                     Tidak ada transaksi pada rentang ini.
                   </td>
                 </tr>
@@ -284,6 +333,7 @@ export default function Reports() {
                     <td className="table-cell">{formatRupiah(t.pricePerKg)}</td>
                     <td className="table-cell font-medium">{formatRupiah(t.total)}</td>
                     <td className="table-cell text-ink-500">{t.note || '—'}</td>
+                    {currentUser?.role === 'owner' && <td className="table-cell"><button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button></td>}
                   </tr>
                 ))
               )}
@@ -297,6 +347,24 @@ export default function Reports() {
           <p className="text-sm leading-relaxed text-ink-700">Apakah pembelian dari <b>{paymentTarget?.name || supplierMap[paymentTarget?.supplierId]?.name || 'pemasok ini'}</b> sebesar <b>{formatRupiah(paymentTarget?.total)}</b> sudah dibayar?</p>
           <div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setPaymentTarget(null)}>Cancel</button><button type="button" className="btn-primary" onClick={confirmPayment}><CheckCircle2 size={16} /> Sudah dibayar</button></div>
         </div>
+      </Modal>
+      <Modal open={!!editTarget} onClose={() => { setEditTarget(null); setEditForm(null); setEditError('') }} title="Edit catatan pembelian">
+        {editForm && <form onSubmit={saveEdit} className="space-y-4">
+          <p className="text-sm text-ink-600">Perubahan hanya dapat disimpan oleh owner. Total akan dihitung ulang dari berat bersih × harga/kg.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Tanggal"><input type="date" max={todayKey()} className="input" value={editForm.date} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></Field>
+            <Field label="Nama penjual"><input className="input" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></Field>
+            {reportKind === 'buah' && <Field label="CV"><select className="input" value={editForm.cv} onChange={(event) => setEditForm({ ...editForm, cv: event.target.value })}><option value="">Belum dipilih</option>{CVS.map((cv) => <option key={cv}>{cv}</option>)}</select></Field>}
+            <Field label="Status pembayaran"><select className="input" value={editForm.paymentStatus} onChange={(event) => setEditForm({ ...editForm, paymentStatus: event.target.value })}><option value="paid">Sudah bayar</option><option value="unpaid">Belum bayar</option></select></Field>
+            <Field label="Metode pembayaran"><select className="input" value={editForm.paymentMethod} onChange={(event) => setEditForm({ ...editForm, paymentMethod: event.target.value })}><option value="cash">Kas Kebun</option><option value="transfer">Transfer</option></select></Field>
+            <Field label="Berat kotor (kg)"><input type="number" min="0" step="0.01" className="input" value={editForm.grossKg} onChange={(event) => setEditForm({ ...editForm, grossKg: event.target.value })} /></Field>
+            <Field label="Berat bersih (kg)"><input type="number" min="0" step="0.01" className="input" value={editForm.netKg} onChange={(event) => setEditForm({ ...editForm, netKg: event.target.value })} /></Field>
+            <Field label="Harga per kg bersih (Rp)"><input type="number" min="0" step="1" className="input" value={editForm.pricePerKg} onChange={(event) => setEditForm({ ...editForm, pricePerKg: event.target.value })} /></Field>
+            <Field label="Catatan"><input className="input" value={editForm.note} onChange={(event) => setEditForm({ ...editForm, note: event.target.value })} /></Field>
+          </div>
+          {editError && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{editError}</p>}
+          <div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => { setEditTarget(null); setEditForm(null); setEditError('') }}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan perubahan</button></div>
+        </form>}
       </Modal>
       <Modal open={showPdfOptions} onClose={() => setShowPdfOptions(false)} title="Unduh laporan PDF">
         <div className="space-y-5">
@@ -315,3 +383,4 @@ export default function Reports() {
 }
 
 function PaymentBadge({ status, onConfirm }) { return status === 'unpaid' ? <button type="button" onClick={onConfirm} className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-600 transition hover:bg-gold-400/30" title="Klik untuk konfirmasi pembayaran">Belum bayar</button> : <span className="rounded-full bg-plantation-700/10 px-2 py-1 text-xs font-medium text-plantation-700">Sudah bayar</span> }
+function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }

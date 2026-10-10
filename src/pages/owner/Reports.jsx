@@ -152,9 +152,9 @@ export default function Reports() {
 
   const summary = useMemo(() => {
     const totalWeight = filtered.reduce((s, t) => s + Number(t.netKg ?? t.weightKg ?? 0), 0)
+    const totalGrossWeight = filtered.reduce((s, t) => s + Number(t.grossKg ?? t.weightKg ?? 0), 0)
     const totalValue = filtered.reduce((s, t) => s + Number(t.total || 0), 0)
-    const avgPrice = totalWeight > 0 ? totalValue / totalWeight : 0
-    return { totalWeight, totalValue, avgPrice, count: filtered.length }
+    return { totalWeight, totalGrossWeight, totalValue, count: filtered.length }
   }, [filtered])
 
   function confirmPayment() {
@@ -310,7 +310,7 @@ export default function Reports() {
         <StatCard label="Jumlah transaksi" value={summary.count.toLocaleString('id-ID')} delay={0} />
         <StatCard label="Total berat bersih" value={`${summary.totalWeight.toLocaleString('id-ID')} kg`} delay={100} />
         <StatCard label="Total pembelian" value={formatRupiah(summary.totalValue)} tone="gold" delay={200} />
-        <StatCard label="Rata-rata harga/kg" value={formatRupiah(summary.avgPrice)} delay={300} />
+        <StatCard label="Total berat kotor" value={`${summary.totalGrossWeight.toLocaleString('id-ID')} kg`} delay={300} />
       </div>
 
       <div className="card overflow-hidden">

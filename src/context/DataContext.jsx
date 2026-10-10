@@ -307,14 +307,23 @@ useLayoutEffect(() => {
     return { ok: true, loan }
   }
 
-  function deleteCashLoan(id, actorId) {
-    const loan = cashLoans.find((item) => item.id === id)
+  function requestCashLoanDeletion({ cashLoanId, reason, requestedBy }) {
+    const loan = cashLoans.find((item) => item.id === cashLoanId)
     if (!loan) return { ok: false, message: 'Pinjaman tidak ditemukan.' }
-    if (currentUser?.role === 'admin' && loan.adminId !== actorId) {
-      return { ok: false, message: 'Admin hanya dapat menghapus pinjaman yang dicatat sendiri.' }
+    const exists = cancellationRequests.some((request) => request.kind === 'cashLoanDeletion' && request.cashLoanId === cashLoanId && request.status === 'pending')
+    if (exists) return { ok: false, message: 'Permintaan penghapusan pinjaman ini masih menunggu persetujuan owner.' }
+    if (!reason?.trim()) return { ok: false, message: 'Alasan penghapusan wajib diisi.' }
+    const request = {
+      id: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'cashLoanDeletion',
+      cashLoanId,
+      reason: reason.trim(),
+      requestedBy,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
     }
-    setCashLoans((prev) => prev.filter((item) => item.id !== id))
-    addAuditLog({ action: 'Menghapus pinjaman kas', actorId, detail: `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} · ${loan.reason}` })
+    setCancellationRequests((prev) => [request, ...prev])
+    addAuditLog({ action: 'Mengajukan penghapusan pinjaman kas', actorId: requestedBy, detail: `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} · ${reason.trim()}` })
     return { ok: true }
   }
 
@@ -360,6 +369,16 @@ useLayoutEffect(() => {
     if (!request || request.status !== 'pending') return
     const approved = decision === 'approved'
     setCancellationRequests((prev) => prev.map((item) => item.id === requestId ? { ...item, status: approved ? 'approved' : 'rejected', resolvedBy: ownerId, resolvedAt: new Date().toISOString() } : item))
+    if (request.kind === 'cashLoanDeletion') {
+      const loan = cashLoans.find((item) => item.id === request.cashLoanId)
+      if (approved && loan) setCashLoans((prev) => prev.filter((item) => item.id !== request.cashLoanId))
+      addAuditLog({
+        action: approved ? 'Menyetujui penghapusan pinjaman kas' : 'Menolak penghapusan pinjaman kas',
+        actorId: ownerId,
+        detail: `${loan ? `${loan.name}: Rp${Number(loan.amount).toLocaleString('id-ID')} · ` : ''}${request.reason}`,
+      })
+      return
+    }
     if (approved) {
       setTransactions((prev) => prev.map((transaction) => transaction.id === request.transactionId ? { ...transaction, status: 'voided', voidedAt: new Date().toISOString(), voidedBy: ownerId } : transaction))
     }
@@ -483,7 +502,7 @@ useLayoutEffect(() => {
     cashLoans,
     addTopup,
     addCashLoan,
-    deleteCashLoan,
+    requestCashLoanDeletion,
     getCashSummary,
     DEFAULT_INITIAL_CASH,
     today: todayKey(),

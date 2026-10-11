@@ -302,17 +302,14 @@ useLayoutEffect(() => {
     return topup
   }
 
-  function addCashLoan({ date, name, amount, reason, adminId, relatedTransactionId = '' }) {
+  function addCashLoan({ date, relatedDate = '', name, amount, reason, adminId }) {
     const summary = getCashSummary(date)
     const numericAmount = Number(amount) || 0
     if (!name?.trim() || !reason?.trim() || numericAmount <= 0) return { ok: false, message: 'Nama, jumlah, dan alasan pinjaman wajib diisi.' }
     if (summary.status === 'locked') return { ok: false, message: 'Kas hari ini sedang ditutup.' }
     if (numericAmount > summary.remaining) return { ok: false, message: `Sisa kas tidak cukup. Kas tersedia: Rp${summary.remaining.toLocaleString('id-ID')}.` }
-    const relatedTransaction = relatedTransactionId ? transactions.find((item) => item.id === relatedTransactionId && item.paymentMethod === 'personal') : null
-    if (relatedTransactionId && !relatedTransaction) return { ok: false, message: 'Pembelian talangan yang dipilih tidak ditemukan.' }
-    if (relatedTransaction && cashLoans.some((item) => item.relatedTransactionId === relatedTransaction.id)) return { ok: false, message: 'Pembelian ini sudah memiliki catatan penggantian talangan.' }
-    if (relatedTransaction && numericAmount !== Number(relatedTransaction.total)) return { ok: false, message: 'Nominal penggantian harus sama dengan total pembelian talangan.' }
-    const loan = { id: `loan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, name: relatedTransaction?.name || name.trim(), amount: numericAmount, reason: reason.trim(), adminId, ...(relatedTransaction ? { relatedTransactionId: relatedTransaction.id, relatedDate: relatedTransaction.date, relatedNotaNumber: relatedTransaction.notaNumber } : {}), createdAt: new Date().toISOString() }
+    if (relatedDate && !/^\d{4}-\d{2}-\d{2}$/.test(relatedDate)) return { ok: false, message: 'Tanggal kejadian tidak valid.' }
+    const loan = { id: `loan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, ...(relatedDate ? { relatedDate } : {}), name: name.trim(), amount: numericAmount, reason: reason.trim(), adminId, createdAt: new Date().toISOString() }
     setCashLoans((prev) => [loan, ...prev])
     addAuditLog({ action: 'Mencatat pinjaman kas', actorId: adminId, detail: `${loan.name}: Rp${loan.amount.toLocaleString('id-ID')} · ${loan.reason}` })
     return { ok: true, loan }

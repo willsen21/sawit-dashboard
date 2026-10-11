@@ -69,7 +69,7 @@ function downloadCsv(rows, reportKind) {
       isLoan ? '—' : t.pricePerKg,
       isLoan ? t.amount : t.total,
       isLoan ? '' : t.notaNumber || '',
-      (isLoan ? t.reason || '' : t.note || '').replaceAll(',', ';'),
+      (isLoan ? `${t.relatedDate ? `Tanggal terkait ${formatCsvDate(t.relatedDate)} · ` : ''}${t.reason || ''}` : t.note || '').replaceAll(',', ';'),
     ]
   })
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
@@ -100,7 +100,7 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
       isLoan ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
       isLoan ? '—' : formatRupiah(t.pricePerKg),
       formatRupiah(isLoan ? t.amount : t.total),
-      isLoan ? t.reason || '—' : t.note || '—',
+      isLoan ? `${t.relatedDate ? `Terkait ${formatShortDate(t.relatedDate)} · ` : ''}${t.reason || '—'}` : t.note || '—',
     ]
   })
 
@@ -381,7 +381,7 @@ export default function Reports() {
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(t.pricePerKg)}</td>
                     <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{formatRupiah(type === 'loan' ? t.amount : t.total)}</td>
-                    <td className="table-cell text-ink-500">{type === 'loan' ? t.reason || '—' : t.note || '—'}</td>
+                    <td className="table-cell text-ink-500">{type === 'loan' ? <>{t.relatedDate && <span className="mb-1 block text-xs">Tanggal terkait: {formatShortDate(t.relatedDate)}</span>}{t.reason || '—'}</> : t.note || '—'}</td>
                     {currentUser?.role === 'owner' && <td className="table-cell"><div className="flex items-center gap-1">{type === 'loan' ? <button type="button" onClick={() => openLoanEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit pinjaman" aria-label={`Edit pinjaman ${t.name || ''}`}><Pencil size={16} /></button> : <button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button>}<button type="button" onClick={() => { setDeleteTarget({ type, record: t }); setDeleteError('') }} className="rounded-md p-2 text-ink-500 transition hover:bg-red-50 hover:text-red-700" title={type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus pembelian'} aria-label={`Hapus ${type === 'loan' ? 'pinjaman' : 'pembelian'} ${t.name || ''}`}><Trash2 size={16} /></button></div></td>}
                   </tr>
                 ))

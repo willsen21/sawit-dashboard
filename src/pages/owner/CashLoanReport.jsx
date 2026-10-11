@@ -22,9 +22,10 @@ function getRange(label) {
 
 function exportCsv(loans, admins) {
   const rows = [
-    ['Tanggal', 'Nama peminjam', 'Nominal', 'Catatan', 'Dicatat oleh'],
+    ['Tanggal kas', 'Tanggal pembelian terkait', 'Nama peminjam', 'Nominal', 'Catatan', 'Dicatat oleh'],
     ...loans.map((loan) => [
       loan.date,
+      loan.relatedDate || '',
       loan.name,
       loan.amount,
       loan.reason,
@@ -49,9 +50,10 @@ function exportPdf(loans, admins, range) {
   pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}`, 14, 22)
   autoTable(pdf, {
     startY: 28,
-    head: [['Tanggal', 'Nama peminjam', 'Nominal', 'Catatan', 'Dicatat oleh']],
+    head: [['Tanggal kas', 'Tanggal pembelian terkait', 'Nama peminjam', 'Nominal', 'Catatan', 'Dicatat oleh']],
     body: loans.map((loan) => [
       formatShortDate(loan.date),
+      loan.relatedDate ? formatShortDate(loan.relatedDate) : '—',
       loan.name || '—',
       formatRupiah(loan.amount),
       loan.reason || '—',
@@ -110,13 +112,14 @@ export default function CashLoanReport() {
     <section className="card overflow-hidden">
       <div className="border-b border-ink-900/8 px-5 py-4">
         <h2 className="text-sm font-semibold text-ink-700">Rincian pinjaman</h2>
-        <p className="mt-1 text-xs text-ink-500">Nominal tercatat sebagai kas keluar pada tanggal pinjaman.</p>
+        <p className="mt-1 text-xs text-ink-500">Nominal mengurangi kas pada tanggal kas. Pembelian yang ditalangi tetap tercatat pada tanggal pembelian aslinya.</p>
       </div>
       {filtered.length === 0 ? <p className="px-5 py-12 text-center text-sm text-ink-500">Tidak ada pinjaman pada rentang tanggal ini.</p> : <div className="table-scroll"><table className="w-full">
-        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal</th><th className="table-head">Nama peminjam</th><th className="table-head">Nominal</th><th className="table-head">Catatan / alasan</th><th className="table-head">Dicatat oleh</th><th className="table-head">Aksi</th></tr></thead>
+        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal kas</th><th className="table-head">Tanggal pembelian</th><th className="table-head">Nama peminjam</th><th className="table-head">Nominal</th><th className="table-head">Catatan / alasan</th><th className="table-head">Dicatat oleh</th><th className="table-head">Aksi</th></tr></thead>
         <tbody>{filtered.map((loan, index) => <tr key={loan.id}>
           <td className="table-cell text-ink-500">{index + 1}</td>
           <td className="table-cell whitespace-nowrap">{formatShortDate(loan.date)}</td>
+          <td className="table-cell whitespace-nowrap">{loan.relatedDate ? formatShortDate(loan.relatedDate) : '—'}</td>
           <td className="table-cell font-medium">{loan.name || '—'}</td>
           <td className="table-cell font-semibold text-plantation-900">{formatRupiah(loan.amount)}</td>
           <td className="table-cell text-ink-600">{loan.reason || '—'}</td>
@@ -126,7 +129,7 @@ export default function CashLoanReport() {
       </table></div>}
     </section>
     <Modal open={!!editTarget} onClose={() => { setEditTarget(null); setEditForm(null); setFormError('') }} title="Edit pinjaman kas">
-      {editForm && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); const result = editCashLoan(editTarget.id, editForm, currentUser.id); if (!result?.ok) return setFormError(result?.message || 'Perubahan gagal disimpan.'); setEditTarget(null); setEditForm(null) }}><p className="text-sm text-ink-600">Perubahan nominal akan memperbarui perhitungan saldo kas.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal"><input type="date" className="input" value={editForm.date} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></Field><Field label="Nama peminjam"><input className="input" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></Field><Field label="Nominal (Rp)"><input type="number" min="1" step="1" className="input" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></Field><Field label="Alasan / catatan"><input className="input" value={editForm.reason} onChange={(event) => setEditForm({ ...editForm, reason: event.target.value })} /></Field></div>{formError && <p role="alert" className="text-sm text-red-700">{formError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setEditTarget(null)}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan</button></div></form>}
+      {editForm && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); const result = editCashLoan(editTarget.id, editForm, currentUser.id); if (!result?.ok) return setFormError(result?.message || 'Perubahan gagal disimpan.'); setEditTarget(null); setEditForm(null) }}><p className="text-sm text-ink-600">Perubahan nominal akan memperbarui perhitungan saldo kas.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal kas dipotong"><input type="date" className="input" value={editForm.date} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></Field><Field label="Nama peminjam"><input className="input" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></Field><Field label="Nominal (Rp)"><input type="number" min="1" step="1" className="input" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></Field><Field label="Alasan / catatan"><input className="input" value={editForm.reason} onChange={(event) => setEditForm({ ...editForm, reason: event.target.value })} /></Field></div>{formError && <p role="alert" className="text-sm text-red-700">{formError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setEditTarget(null)}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan</button></div></form>}
     </Modal>
     <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Hapus pinjaman kas">
       {deleteTarget && <div className="space-y-4"><p className="text-sm text-ink-700">Yakin menghapus pinjaman <b>{deleteTarget.name}</b> sebesar <b>{formatRupiah(deleteTarget.amount)}</b>? Saldo kas pada tanggal pinjaman akan dihitung ulang.</p><div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setDeleteTarget(null)}>Batal</button><button type="button" className="btn-danger" onClick={() => { const result = deleteCashLoan(deleteTarget.id, currentUser.id); if (result?.ok) setDeleteTarget(null) }}><Trash2 size={16} /> Hapus</button></div></div>}

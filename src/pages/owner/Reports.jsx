@@ -63,7 +63,7 @@ function downloadCsv(rows, reportKind) {
       isBrondolan ? (isLoan ? 'Pinjaman Kas' : 'Brondolan') : (t.cv || 'Belum dipilih'),
       t.name || '',
       isLoan ? '—' : t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
+      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
       isLoan ? '—' : t.grossKg ?? t.weightKg ?? 0,
       isLoan ? '—' : t.netKg ?? t.weightKg ?? 0,
       isLoan ? '—' : t.pricePerKg,
@@ -95,7 +95,7 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
       isBrondolan ? (isLoan ? 'Pinjaman Kas' : 'Brondolan') : (t.cv || 'Belum dipilih'),
       t.name || supplierMap[t.supplierId]?.name || '—',
       isLoan ? '—' : (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun',
+      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
       isLoan ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
       isLoan ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
       isLoan ? '—' : formatRupiah(t.pricePerKg),
@@ -376,7 +376,7 @@ export default function Reports() {
                     {reportKind === 'buah' ? <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td> : <td className="table-cell font-medium">{type === 'loan' ? <span className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-700">Pinjaman Kas</span> : 'Brondolan'}</td>}
                     <td className="table-cell">{t.name || supplierMap[t.supplierId]?.name || '—'}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : <PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} />}</td>
-                    <td className="table-cell">{type === 'loan' ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : 'Kas Kebun'}</td>
+                    <td className="table-cell">{type === 'loan' ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun'}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(t.pricePerKg)}</td>
@@ -405,7 +405,7 @@ export default function Reports() {
             <Field label="Nama penjual"><input className="input" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></Field>
             {reportKind === 'buah' && <Field label="CV"><select className="input" value={editForm.cv} onChange={(event) => setEditForm({ ...editForm, cv: event.target.value })}><option value="">Belum dipilih</option>{CVS.map((cv) => <option key={cv}>{cv}</option>)}</select></Field>}
             <Field label="Status pembayaran"><select className="input" value={editForm.paymentStatus} onChange={(event) => setEditForm({ ...editForm, paymentStatus: event.target.value })}><option value="paid">Sudah bayar</option><option value="unpaid">Belum bayar</option></select></Field>
-            <Field label="Metode pembayaran"><select className="input" value={editForm.paymentMethod} onChange={(event) => setEditForm({ ...editForm, paymentMethod: event.target.value })}><option value="cash">Kas Kebun</option><option value="transfer">Transfer</option></select></Field>
+            <Field label="Metode pembayaran"><select className="input" value={editForm.paymentMethod} onChange={(event) => setEditForm({ ...editForm, paymentMethod: event.target.value })}><option value="cash">Kas Kebun</option><option value="transfer">Transfer</option><option value="personal">Talangan pribadi</option></select></Field>
             <Field label="Berat kotor (kg)"><input type="number" min="0" step="0.01" className="input" value={editForm.grossKg} onChange={(event) => setEditForm({ ...editForm, grossKg: event.target.value })} /></Field>
             <Field label="Berat bersih (kg)"><input type="number" min="0" step="0.01" className="input" value={editForm.netKg} onChange={(event) => setEditForm({ ...editForm, netKg: event.target.value })} /></Field>
             <Field label="Harga per kg bersih (Rp)"><input type="number" min="0" step="1" className="input" value={editForm.pricePerKg} onChange={(event) => setEditForm({ ...editForm, pricePerKg: event.target.value })} /></Field>
@@ -416,7 +416,7 @@ export default function Reports() {
         </form>}
       </Modal>
       <Modal open={!!loanEditTarget} onClose={() => { setLoanEditTarget(null); setLoanEditForm(null); setLoanEditError('') }} title="Edit pinjaman kas">
-        {loanEditForm && <form onSubmit={saveLoanEdit} className="space-y-4"><p className="text-sm text-ink-600">Perubahan pinjaman akan langsung tersimpan dan memperbarui saldo kas pada tanggal terkait.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal"><input type="date" className="input" value={loanEditForm.date} onChange={(event) => setLoanEditForm({ ...loanEditForm, date: event.target.value })} /></Field><Field label="Nama peminjam"><input className="input" value={loanEditForm.name} onChange={(event) => setLoanEditForm({ ...loanEditForm, name: event.target.value })} /></Field><Field label="Nominal (Rp)"><input type="number" min="1" step="1" className="input" value={loanEditForm.amount} onChange={(event) => setLoanEditForm({ ...loanEditForm, amount: event.target.value })} /></Field><Field label="Alasan / catatan"><input className="input" value={loanEditForm.reason} onChange={(event) => setLoanEditForm({ ...loanEditForm, reason: event.target.value })} /></Field></div>{loanEditError && <p role="alert" className="text-sm text-red-700">{loanEditError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setLoanEditTarget(null)}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan</button></div></form>}
+        {loanEditForm && <form onSubmit={saveLoanEdit} className="space-y-4"><p className="text-sm text-ink-600">Perubahan pinjaman akan langsung tersimpan dan memperbarui saldo kas pada tanggal terkait.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal kas dipotong"><input type="date" className="input" value={loanEditForm.date} onChange={(event) => setLoanEditForm({ ...loanEditForm, date: event.target.value })} /></Field><Field label="Nama peminjam"><input className="input" value={loanEditForm.name} onChange={(event) => setLoanEditForm({ ...loanEditForm, name: event.target.value })} /></Field><Field label="Nominal (Rp)"><input type="number" min="1" step="1" className="input" value={loanEditForm.amount} onChange={(event) => setLoanEditForm({ ...loanEditForm, amount: event.target.value })} /></Field><Field label="Alasan / catatan"><input className="input" value={loanEditForm.reason} onChange={(event) => setLoanEditForm({ ...loanEditForm, reason: event.target.value })} /></Field></div>{loanEditError && <p role="alert" className="text-sm text-red-700">{loanEditError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setLoanEditTarget(null)}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan</button></div></form>}
       </Modal>
       <Modal open={!!deleteTarget} onClose={() => { setDeleteTarget(null); setDeleteError('') }} title={deleteTarget?.type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus catatan pembelian'}>
         {deleteTarget && <div className="space-y-4"><p className="text-sm leading-relaxed text-ink-700">Yakin menghapus {deleteTarget.type === 'loan' ? 'pinjaman kas' : 'catatan pembelian'} <b>{deleteTarget.record.name || 'ini'}</b> tanggal <b>{formatShortDate(deleteTarget.record.date)}</b>? {deleteTarget.type === 'loan' ? 'Saldo kas akan dihitung ulang.' : 'Catatan akan dibatalkan dan tidak ditampilkan di laporan.'}</p>{deleteError && <p role="alert" className="text-sm text-red-700">{deleteError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setDeleteTarget(null)}>Batal</button><button type="button" className="btn-danger" onClick={confirmDelete}><Trash2 size={16} /> Hapus</button></div></div>}

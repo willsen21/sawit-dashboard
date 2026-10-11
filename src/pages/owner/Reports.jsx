@@ -63,7 +63,7 @@ function downloadCsv(rows, reportKind) {
       isBrondolan ? (isLoan ? 'Pinjaman Kas' : 'Brondolan') : (t.cv || 'Belum dipilih'),
       t.name || '',
       isLoan ? '—' : t.paymentStatus === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
+      isLoan ? 'Bayar Kas' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
       isLoan ? '—' : t.grossKg ?? t.weightKg ?? 0,
       isLoan ? '—' : t.netKg ?? t.weightKg ?? 0,
       isLoan ? '—' : t.pricePerKg,
@@ -95,7 +95,7 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
       isBrondolan ? (isLoan ? 'Pinjaman Kas' : 'Brondolan') : (t.cv || 'Belum dipilih'),
       t.name || supplierMap[t.supplierId]?.name || '—',
       isLoan ? '—' : (t.paymentStatus || 'paid') === 'unpaid' ? 'Belum bayar' : 'Sudah bayar',
-      isLoan ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
+      isLoan ? 'Bayar Kas' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
       isLoan ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
       isLoan ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
       isLoan ? '—' : formatRupiah(t.pricePerKg),
@@ -376,11 +376,11 @@ export default function Reports() {
                     {reportKind === 'buah' ? <td className="table-cell font-medium">{t.cv || 'Belum dipilih'}</td> : <td className="table-cell font-medium">{type === 'loan' ? <span className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-700">Pinjaman Kas</span> : 'Brondolan'}</td>}
                     <td className="table-cell">{t.name || supplierMap[t.supplierId]?.name || '—'}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : <PaymentBadge status={t.paymentStatus || 'paid'} onConfirm={() => setPaymentTarget(t)} />}</td>
-                    <td className="table-cell">{type === 'loan' ? 'Kas keluar' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun'}</td>
+                    <td className="table-cell">{type === 'loan' ? 'Bayar Kas' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun'}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(t.pricePerKg)}</td>
-                    <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{formatRupiah(type === 'loan' ? t.amount : t.total)}</td>
+                    <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{type === 'loan' && <span className="mb-1 block text-xs font-normal text-ink-500">Total pinjaman</span>}{formatRupiah(type === 'loan' ? t.amount : t.total)}</td>
                     <td className="table-cell text-ink-500">{type === 'loan' ? <>{t.relatedDate && <span className="mb-1 block text-xs">Tanggal terkait: {formatShortDate(t.relatedDate)}</span>}{t.reason || '—'}</> : t.note || '—'}</td>
                     {currentUser?.role === 'owner' && <td className="table-cell"><div className="flex items-center gap-1">{type === 'loan' ? <button type="button" onClick={() => openLoanEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit pinjaman" aria-label={`Edit pinjaman ${t.name || ''}`}><Pencil size={16} /></button> : <button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button>}<button type="button" onClick={() => { setDeleteTarget({ type, record: t }); setDeleteError('') }} className="rounded-md p-2 text-ink-500 transition hover:bg-red-50 hover:text-red-700" title={type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus pembelian'} aria-label={`Hapus ${type === 'loan' ? 'pinjaman' : 'pembelian'} ${t.name || ''}`}><Trash2 size={16} /></button></div></td>}
                   </tr>

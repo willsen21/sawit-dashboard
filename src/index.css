@@ -253,7 +253,7 @@
   .cash-summary { @apply p-4; }
   .cash-stat { @apply px-3 py-3; }
   .low-cash-alert { @apply px-3; }
-  .modal-panel { max-height: calc(100svh - 2rem); overflow-y: auto; }
+  .modal-panel { max-height: calc(100dvh - 1.5rem); overflow-y: auto; }
 }
 
 @keyframes welcome-out {

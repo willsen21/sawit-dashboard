@@ -22,7 +22,7 @@ function getRange(label) {
 
 function exportCsv(loans, admins) {
   const rows = [
-    ['Tanggal kas', 'Tanggal pembelian terkait', 'Nama peminjam', 'Nominal', 'Catatan', 'Dicatat oleh'],
+    ['Tanggal kas', 'Tanggal kejadian', 'Nama peminjam', 'Total pinjaman', 'Catatan', 'Dicatat oleh'],
     ...loans.map((loan) => [
       loan.date,
       loan.relatedDate || '',
@@ -50,7 +50,7 @@ function exportPdf(loans, admins, range) {
   pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}`, 14, 22)
   autoTable(pdf, {
     startY: 28,
-    head: [['Tanggal kas', 'Tanggal pembelian terkait', 'Nama peminjam', 'Nominal', 'Catatan', 'Dicatat oleh']],
+    head: [['Tanggal kas', 'Tanggal kejadian', 'Nama peminjam', 'Total pinjaman', 'Catatan', 'Dicatat oleh']],
     body: loans.map((loan) => [
       formatShortDate(loan.date),
       loan.relatedDate ? formatShortDate(loan.relatedDate) : '—',
@@ -115,7 +115,7 @@ export default function CashLoanReport() {
         <p className="mt-1 text-xs text-ink-500">Nominal mengurangi kas pada tanggal kas. Pembelian yang ditalangi tetap tercatat pada tanggal pembelian aslinya.</p>
       </div>
       {filtered.length === 0 ? <p className="px-5 py-12 text-center text-sm text-ink-500">Tidak ada pinjaman pada rentang tanggal ini.</p> : <div className="table-scroll"><table className="w-full">
-        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal kas</th><th className="table-head">Tanggal pembelian</th><th className="table-head">Nama peminjam</th><th className="table-head">Nominal</th><th className="table-head">Catatan / alasan</th><th className="table-head">Dicatat oleh</th><th className="table-head">Aksi</th></tr></thead>
+        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal kas</th><th className="table-head">Tanggal kejadian</th><th className="table-head">Nama peminjam</th><th className="table-head">Total pinjaman</th><th className="table-head">Catatan / alasan</th><th className="table-head">Dicatat oleh</th><th className="table-head">Aksi</th></tr></thead>
         <tbody>{filtered.map((loan, index) => <tr key={loan.id}>
           <td className="table-cell text-ink-500">{index + 1}</td>
           <td className="table-cell whitespace-nowrap">{formatShortDate(loan.date)}</td>

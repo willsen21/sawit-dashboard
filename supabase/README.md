@@ -45,6 +45,10 @@ Form pembelian menyediakan tanggal hari ini atau tanggal sebelumnya. Jika kas un
 
 Untuk proyek yang sudah menjalankan skema sebelumnya, jalankan `supabase/owner-only-transaction-edits.sql` satu kali melalui **SQL Editor → New query**. Ini menambahkan pengamanan database agar admin tidak dapat mengubah transaksi yang sudah tersimpan. Admin tetap dapat mencatat transaksi baru dan mengajukan pembatalan melalui alur yang tersedia. Owner dapat mengedit catatan dari tabel **Laporan**; total dihitung ulang dari berat bersih dan harga per kg.
 
+## 6. Fitur stok dan penjualan batu
+
+Setelah versi aplikasi dengan menu **Stok Batu** dan **Catat Batu** diterbitkan, jalankan `supabase/stone-feature.sql` satu kali di **SQL Editor → New query**. Owner dapat menambah stok Batu A–D. Admin dapat mencatat tanggal, nama sopir, dan berat bersih penjualan. Penjualan mengurangi stok tersedia dan muncul pada tabel di halaman owner serta admin.
+
 ## Catatan
 
 - Saat owner pertama kali login, data lama dari localStorage pada perangkat itu digabungkan sekali ke cloud. Baris cloud dengan ID yang sama akan dipertahankan. Lakukan login pertama di perangkat yang menyimpan data lama yang ingin dipindahkan; jangan hapus data browser sebelum proses ini selesai.

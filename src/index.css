@@ -163,6 +163,7 @@
   .table-scroll::-webkit-scrollbar-thumb, .card > .overflow-x-auto::-webkit-scrollbar-thumb { background: #B8C2BA; border: 3px solid #F5EFE3; border-radius: 999px; }
   .table-scroll::-webkit-scrollbar-thumb:hover, .card > .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: #6B7A70; }
   .table-scroll table, .card > .overflow-x-auto table { min-width: 1050px; }
+  .table-scroll table.compact-table { min-width: 680px; }
   .table-scroll .table-head, .table-scroll .table-cell, .card > .overflow-x-auto .table-head, .card > .overflow-x-auto .table-cell { white-space: nowrap; }
   .table-scroll .table-head + .table-head,
   .table-scroll .table-cell + .table-cell,

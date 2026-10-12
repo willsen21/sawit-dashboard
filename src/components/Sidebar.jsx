@@ -1,16 +1,18 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout, Mountain } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Kas Hari Ini', icon: Wallet, end: true },
+  { to: '/admin/batu', label: 'Catat Batu', icon: Mountain },
   { to: '/admin/catat-pembelian/buah', label: 'Catat Pembelian', icon: ReceiptText, children: [{ to: '/admin/catat-pembelian/buah', label: 'Buah' }, { to: '/admin/catat-pembelian/brondolan', label: 'Brondolan' }] },
   { to: '/admin/pembelian/buah', label: 'Riwayat Pembelian', icon: ClipboardList, children: [{ to: '/admin/pembelian/buah', label: 'Buah' }, { to: '/admin/pembelian/brondolan', label: 'Brondolan' }] },
 ]
 
 const OWNER_LINKS = [
   { to: '/owner', label: 'Ringkasan', icon: LayoutGrid, end: true },
+  { to: '/owner/batu', label: 'Stok Batu', icon: Mountain },
   { to: '/owner/laporan/buah', label: 'Laporan', icon: ClipboardList, children: [{ to: '/owner/laporan/buah', label: 'Buah' }, { to: '/owner/laporan/brondolan', label: 'Brondolan' }, { to: '/owner/laporan/pinjaman', label: 'Pinjaman Kas' }] },
   { to: '/owner/operasional', label: 'Operasional Kebun', icon: CalendarDays },
   { to: '/owner/kebun-pribadi', label: 'Kebun Pribadi', icon: Sprout },

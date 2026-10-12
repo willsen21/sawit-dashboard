@@ -7,7 +7,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
-const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms']
+const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'stoneStock', 'stoneSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 
 function keepCloudRecord(collection, item) {
@@ -49,6 +49,8 @@ export function DataProvider({ children }) {
   const [operationalExpenses, setOperationalExpenses] = useState(() => loadItem('operationalExpenses', []))
   const [payrolls, setPayrolls] = useState(() => loadItem('payrolls', []))
   const [privateFarms, setPrivateFarms] = useState(() => loadItem('privateFarms', []))
+  const [stoneStock, setStoneStock] = useState(() => loadItem('stoneStock', []))
+  const [stoneSales, setStoneSales] = useState(() => loadItem('stoneSales', []))
   const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
   const [cloudError, setCloudError] = useState('')
   const cloudBaseline = useRef({})
@@ -57,9 +59,9 @@ export function DataProvider({ children }) {
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
     cancellationRequests: setCancellationRequests, cashUnlockRequests: setCashUnlockRequests,
     harvestSchedules: setHarvestSchedules, operationalExpenses: setOperationalExpenses,
-    payrolls: setPayrolls, privateFarms: setPrivateFarms,
+    payrolls: setPayrolls, privateFarms: setPrivateFarms, stoneStock: setStoneStock, stoneSales: setStoneSales,
   }
-  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms }
+  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, stoneStock, stoneSales }
   const collectionValuesRef = useRef(collectionValues)
   collectionValuesRef.current = collectionValues
 
@@ -99,6 +101,8 @@ useLayoutEffect(() => {
 useLayoutEffect(() => {
   saveItem('privateFarms', privateFarms)
 }, [privateFarms])
+useLayoutEffect(() => { saveItem('stoneStock', stoneStock) }, [stoneStock])
+useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
   useEffect(() => {
     const syncStorageChange = (event) => {
@@ -226,6 +230,8 @@ useLayoutEffect(() => {
   useEffect(() => { syncCollectionToCloud('operationalExpenses', operationalExpenses) }, [operationalExpenses, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('payrolls', payrolls) }, [payrolls, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('privateFarms', privateFarms) }, [privateFarms, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('stoneStock', stoneStock) }, [stoneStock, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('stoneSales', stoneSales) }, [stoneSales, cloudReady, currentUser?.id])
 
   function addAuditLog({ action, actorId, transactionId = null, detail }) {
     setAuditLogs((prev) => [{
@@ -236,6 +242,33 @@ useLayoutEffect(() => {
       detail,
       createdAt: new Date().toISOString(),
     }, ...prev])
+  }
+
+  function addStoneStock({ date, type, quantityKg, note = '', ownerId }) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok batu.' }
+    const quantity = Number(quantityKg)
+    if (!['Batu A', 'Batu B', 'Batu C', 'Batu D'].includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0) {
+      return { ok: false, message: 'Jenis, tanggal, dan jumlah stok harus diisi dengan benar.' }
+    }
+    const entry = { id: `stone-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, note: note.trim(), ownerId, createdAt: new Date().toISOString() }
+    setStoneStock((prev) => [entry, ...prev])
+    addAuditLog({ action: 'Menambah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg` })
+    return { ok: true, entry }
+  }
+
+  function addStoneSale({ date, type, driverName, netKg, adminId }) {
+    if (currentUser?.role !== 'admin') return { ok: false, message: 'Pencatatan penjualan batu hanya tersedia untuk admin.' }
+    const quantity = Number(netKg)
+    if (!['Batu A', 'Batu B', 'Batu C', 'Batu D'].includes(type) || !date || !driverName?.trim() || !Number.isFinite(quantity) || quantity <= 0) {
+      return { ok: false, message: 'Tanggal, jenis batu, nama sopir, dan berat bersih wajib diisi.' }
+    }
+    const available = stoneStock.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+      - stoneSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+    if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
+    const sale = { id: `stone-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, driverName: driverName.trim(), netKg: quantity, adminId, createdAt: new Date().toISOString() }
+    setStoneSales((prev) => [sale, ...prev])
+    addAuditLog({ action: 'Mencatat penjualan batu', actorId: adminId, detail: `${type} · ${sale.driverName}: ${quantity.toLocaleString('id-ID')} kg` })
+    return { ok: true, sale }
   }
 
   // ---- Supplier ----
@@ -585,6 +618,10 @@ useLayoutEffect(() => {
     markOperationalExpensePaid,
     payrolls,
     privateFarms,
+    stoneStock,
+    stoneSales,
+    addStoneStock,
+    addStoneSale,
     addPrivateFarm,
     addPrivateHarvestRecord,
     addPayroll,

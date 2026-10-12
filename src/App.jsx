@@ -16,6 +16,8 @@ import PurchaseDetails from './pages/owner/PurchaseDetails'
 import TransactionControls from './pages/owner/TransactionControls'
 import Operations from './pages/owner/Operations'
 import PrivateFarms from './pages/owner/PrivateFarms'
+import StoneSales from './pages/admin/StoneSales'
+import Stones from './pages/owner/Stones'
 
 function RootRedirect() {
   const { currentUser, authReady } = useAuth()
@@ -41,6 +43,7 @@ export default function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
+            <Route path="batu" element={<StoneSales />} />
             <Route path="catat-pembelian" element={<Navigate to="/admin/catat-pembelian/buah" replace />} />
             <Route path="catat-pembelian/:kind" element={<PurchaseForm />} />
             <Route path="pembelian-hari-ini" element={<Navigate to="/admin/pembelian/buah" replace />} />
@@ -56,6 +59,7 @@ export default function App() {
             }
           >
             <Route index element={<OwnerDashboard />} />
+            <Route path="batu" element={<Stones />} />
             <Route path="operasional" element={<Operations />} />
             <Route path="kebun-pribadi" element={<PrivateFarms />} />
             <Route path="laporan" element={<Navigate to="/owner/laporan/buah" replace />} />

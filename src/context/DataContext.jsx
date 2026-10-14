@@ -197,7 +197,13 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
     hydrateCloudData().catch((error) => {
       console.error('Gagal memuat data Supabase:', error)
-      if (active) { setCloudError('Data cloud belum dapat dimuat. Periksa koneksi dan konfigurasi Supabase; pastikan supabase/schema.sql serta supabase/stone-feature.sql sudah dijalankan.'); setCloudReady(false) }
+      if (active) {
+        const reason = [error?.message, error?.code && `kode ${error.code}`, error?.hint].filter(Boolean).join(' · ')
+        setCloudError(reason
+          ? `Data cloud gagal dimuat: ${reason}`
+          : 'Data cloud gagal dimuat. Periksa koneksi dan konfigurasi Supabase, lalu pastikan skema database sudah diterapkan.')
+        setCloudReady(false)
+      }
     })
     return () => { active = false; if (channel) supabase.removeChannel(channel) }
   }, [authReady, currentUser?.id, currentUser?.role])

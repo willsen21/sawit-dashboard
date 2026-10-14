@@ -3,6 +3,7 @@ import { loadItem, saveItem } from '../lib/storage'
 import { todayKey } from '../lib/dateUtils'
 import { useAuth } from './AuthContext'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { STONE_TYPES, canonicalStoneType } from '../lib/stoneUtils'
 
 const DataContext = createContext(null)
 
@@ -247,7 +248,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
   function addStoneStock({ date, type, quantityKg, note = '', ownerId }) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok batu.' }
     const quantity = Number(quantityKg)
-    if (!['Batu A', 'Batu B', 'Batu C', 'Batu D'].includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0) {
+    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0) {
       return { ok: false, message: 'Jenis, tanggal, dan jumlah stok harus diisi dengan benar.' }
     }
     const entry = { id: `stone-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, note: note.trim(), ownerId, createdAt: new Date().toISOString() }
@@ -256,19 +257,29 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     return { ok: true, entry }
   }
 
-  function addStoneSale({ date, type, driverName, netKg, adminId }) {
+  function addStoneSale({ date, type, driverName, netKg, paymentMethod, adminId }) {
     if (currentUser?.role !== 'admin') return { ok: false, message: 'Pencatatan penjualan batu hanya tersedia untuk admin.' }
     const quantity = Number(netKg)
-    if (!['Batu A', 'Batu B', 'Batu C', 'Batu D'].includes(type) || !date || !driverName?.trim() || !Number.isFinite(quantity) || quantity <= 0) {
-      return { ok: false, message: 'Tanggal, jenis batu, nama sopir, dan berat bersih wajib diisi.' }
+    if (!STONE_TYPES.includes(type) || !date || !driverName?.trim() || !Number.isFinite(quantity) || quantity <= 0 || !['transfer', 'paid'].includes(paymentMethod)) {
+      return { ok: false, message: 'Tanggal, jenis batu, nama sopir, berat bersih, dan status pembayaran wajib diisi.' }
     }
-    const available = stoneStock.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
-      - stoneSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+    const available = stoneStock.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+      - stoneSales.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
     if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
-    const sale = { id: `stone-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, driverName: driverName.trim(), netKg: quantity, adminId, createdAt: new Date().toISOString() }
+    const sale = { id: `stone-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, driverName: driverName.trim(), netKg: quantity, paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', adminId, createdAt: new Date().toISOString() }
     setStoneSales((prev) => [sale, ...prev])
     addAuditLog({ action: 'Mencatat penjualan batu', actorId: adminId, detail: `${type} · ${sale.driverName}: ${quantity.toLocaleString('id-ID')} kg` })
     return { ok: true, sale }
+  }
+
+  function markStoneSalePaid(id, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengonfirmasi pelunasan.' }
+    const sale = stoneSales.find((item) => item.id === id)
+    if (!sale) return { ok: false, message: 'Catatan penjualan batu tidak ditemukan.' }
+    if (sale.paymentStatus === 'paid' || sale.paymentMethod === 'paid') return { ok: false, message: 'Catatan ini sudah lunas.' }
+    setStoneSales((prev) => prev.map((item) => item.id === id ? { ...item, paymentStatus: 'paid', paidBy: ownerId, paidAt: new Date().toISOString() } : item))
+    addAuditLog({ action: 'Mengonfirmasi pelunasan batu', actorId: ownerId, detail: `${canonicalStoneType(sale.type)} · ${sale.driverName} · ${sale.date}` })
+    return { ok: true }
   }
 
   // ---- Supplier ----
@@ -622,6 +633,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     stoneSales,
     addStoneStock,
     addStoneSale,
+    markStoneSalePaid,
     addPrivateFarm,
     addPrivateHarvestRecord,
     addPayroll,

@@ -138,11 +138,15 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       if (error) throw error
       const grouped = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, []]))
       for (const row of data || []) if (grouped[row.collection]) grouped[row.collection].push(row.data)
+      // Keep the fetched cloud snapshot separate from local migration records.
+      // Otherwise a failed migration is mistaken for data already in the cloud.
+      const rawCloudData = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, [...grouped[name]]]))
+      const migrationWarnings = []
 
       // Merge the legacy local cache once on the first owner login; cloud records win on duplicate IDs.
       const localMigrationDone = window.localStorage.getItem('kebunkas_cloud_migration_done') === 'true'
       if (currentUser.role === 'owner') {
-        const additions = []
+        const additionsByCollection = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, []]))
         for (const name of COLLECTION_NAMES) {
           // Keep the legacy migration one-time for general records, but retry
           // local stone inventory every owner login until it reaches the cloud.
@@ -152,18 +156,22 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
           if (missing.length) {
             grouped[name] = [...grouped[name], ...missing]
-            additions.push(...missing.map((item) => ({ collection: name, record_id: String(item.id), data: item })))
+            additionsByCollection[name] = missing.map((item) => ({ collection: name, record_id: String(item.id), data: item }))
           }
         }
-        if (additions.length) {
+        let legacyMigrationFailed = false
+        for (const [name, additions] of Object.entries(additionsByCollection)) {
+          if (!additions.length) continue
           const { error: migrateError } = await supabase.from('app_records').upsert(additions, { onConflict: 'collection,record_id' })
-          if (migrateError) throw migrateError
+          if (!migrateError) continue
+          console.error(`Gagal memindahkan data lokal ${name} ke Supabase:`, migrateError)
+          migrationWarnings.push(`${name}: ${migrateError.message}${migrateError.code ? ` (kode ${migrateError.code})` : ''}`)
+          if (name !== 'stoneStock' && name !== 'stoneSales') legacyMigrationFailed = true
         }
-        if (!localMigrationDone) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
+        if (!localMigrationDone && !legacyMigrationFailed) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
       }
 
       if (!active) return
-      const rawCloudData = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, [...grouped[name]]]))
       for (const name of COLLECTION_NAMES) {
         grouped[name] = grouped[name].map((item) => keepCloudRecord(name, item)).filter(Boolean)
       }
@@ -175,6 +183,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       }))
       for (const name of COLLECTION_NAMES) collectionSetters[name](grouped[name])
       setCloudReady(true)
+      if (migrationWarnings.length) setCloudError(`Sebagian data lokal belum terkirim ke cloud: ${migrationWarnings.join('; ')}. Periksa aturan database di Supabase.`)
 
       channel = supabase.channel(`kebunkas-records-${currentUser.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'app_records' }, (payload) => {

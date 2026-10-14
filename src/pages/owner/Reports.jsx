@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { CheckCircle2, Download, Pencil, Save, Trash2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -119,8 +119,8 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
 }
 
 export default function Reports() {
-  const { kind } = useParams()
-  const reportKind = kind === 'brondolan' ? 'brondolan' : 'buah'
+  const { pathname } = useLocation()
+  const reportKind = pathname.endsWith('/brondolan') ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
   const { transactions, cashLoans, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))

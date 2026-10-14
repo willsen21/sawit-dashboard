@@ -268,15 +268,16 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     }, ...prev])
   }
 
-  function addStoneStock({ date, type, quantityKg, note = '', ownerId }) {
+  function addStoneStock({ date, type, quantityKg, capitalCost, note = '', ownerId }) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok batu.' }
     const quantity = parseKgInput(quantityKg)
-    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0) {
-      return { ok: false, message: 'Jenis, tanggal, dan jumlah stok harus diisi dengan benar.' }
+    const cost = Number(String(capitalCost ?? '').replaceAll('.', '')) || 0
+    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost) || cost <= 0) {
+      return { ok: false, message: 'Jenis, tanggal, jumlah stok, dan modal pembelian harus diisi dengan benar.' }
     }
-    const entry = { id: `stone-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, note: note.trim(), ownerId, createdAt: new Date().toISOString() }
+    const entry = { id: `stone-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, capitalCost: cost, note: note.trim(), ownerId, createdAt: new Date().toISOString() }
     setStoneStock((prev) => [entry, ...prev])
-    addAuditLog({ action: 'Menambah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg` })
+    addAuditLog({ action: 'Menambah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg · modal Rp${cost.toLocaleString('id-ID')}` })
     return { ok: true, entry }
   }
 
@@ -598,7 +599,9 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const todaysTopups = topups.filter((t) => t.date === dateKey)
     const totalTopup = todaysTopups.reduce((sum, t) => sum + Number(t.amount), 0)
     const todaysTx = transactions.filter((t) => t.date === dateKey && t.status !== 'voided')
-    const totalUsed = todaysTx.reduce((sum, t) => sum + (['transfer', 'personal'].includes(t.paymentMethod) ? 0 : Number(t.total)), 0)
+    const totalPurchaseUsed = todaysTx.reduce((sum, t) => sum + (['transfer', 'personal'].includes(t.paymentMethod) ? 0 : Number(t.total)), 0)
+    const totalStoneCapital = stoneStock.filter((item) => item.date === dateKey).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
+    const totalUsed = totalPurchaseUsed + totalStoneCapital
     const todaysLoans = cashLoans.filter((loan) => loan.date === dateKey)
     const totalLoans = todaysLoans.reduce((sum, loan) => sum + Number(loan.amount), 0)
     const remaining = initialAmount + totalTopup - totalUsed - totalLoans
@@ -608,6 +611,8 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       initialAmount,
       totalTopup,
       totalUsed,
+      totalPurchaseUsed,
+      totalStoneCapital,
       totalLoans,
       remaining,
       topups: todaysTopups,

@@ -18,6 +18,9 @@ import Operations from './pages/owner/Operations'
 import PrivateFarms from './pages/owner/PrivateFarms'
 import StoneSales from './pages/admin/StoneSales'
 import Stones from './pages/owner/Stones'
+import { SHOW_FRUIT_PURCHASES } from './config/features'
+
+const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 
 function RootRedirect() {
   const { currentUser, authReady } = useAuth()
@@ -44,10 +47,12 @@ export default function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="batu" element={<StoneSales />} />
-            <Route path="catat-pembelian" element={<Navigate to="/admin/catat-pembelian/buah" replace />} />
-            <Route path="catat-pembelian/:kind" element={<PurchaseForm />} />
-            <Route path="pembelian-hari-ini" element={<Navigate to="/admin/pembelian/buah" replace />} />
-            <Route path="pembelian/:kind" element={<PurchaseHistory />} />
+            <Route path="catat-pembelian" element={<Navigate to={`/admin/catat-pembelian/${defaultPurchaseKind}`} replace />} />
+            <Route path="catat-pembelian/buah" element={SHOW_FRUIT_PURCHASES ? <PurchaseForm /> : <Navigate to="/admin/catat-pembelian/brondolan" replace />} />
+            <Route path="catat-pembelian/brondolan" element={<PurchaseForm />} />
+            <Route path="pembelian-hari-ini" element={<Navigate to={`/admin/pembelian/${defaultPurchaseKind}`} replace />} />
+            <Route path="pembelian/buah" element={SHOW_FRUIT_PURCHASES ? <PurchaseHistory /> : <Navigate to="/admin/pembelian/brondolan" replace />} />
+            <Route path="pembelian/brondolan" element={<PurchaseHistory />} />
           </Route>
 
           <Route
@@ -62,9 +67,10 @@ export default function App() {
             <Route path="batu" element={<Stones />} />
             <Route path="operasional" element={<Operations />} />
             <Route path="kebun-pribadi" element={<PrivateFarms />} />
-            <Route path="laporan" element={<Navigate to="/owner/laporan/buah" replace />} />
+            <Route path="laporan" element={<Navigate to={`/owner/laporan/${defaultPurchaseKind}`} replace />} />
             <Route path="laporan/pinjaman" element={<CashLoanReport />} />
-            <Route path="laporan/:kind" element={<Reports />} />
+            <Route path="laporan/buah" element={SHOW_FRUIT_PURCHASES ? <Reports /> : <Navigate to="/owner/laporan/brondolan" replace />} />
+            <Route path="laporan/brondolan" element={<Reports />} />
             <Route path="pembelian/:period" element={<PurchaseDetails />} />
             <Route path="admin" element={<ManageAdmins />} />
             <Route path="kontrol-transaksi" element={<TransactionControls />} />

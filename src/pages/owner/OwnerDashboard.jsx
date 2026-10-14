@@ -5,21 +5,24 @@ import { Clock3 } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import StatCard from '../../components/StatCard'
 import { addDays, formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKey } from '../../lib/dateUtils'
+import { STONE_TYPES, canonicalStoneType } from '../../lib/stoneUtils'
+import { SHOW_FRUIT_PURCHASES } from '../../config/features'
 
 const RANGES = [{ label: '7 hari', value: 7 }, { label: '15 hari', value: 15 }, { label: '1 bulan', value: 'month' }]
 const sum = (items, field) => items.reduce((total, item) => total + Number(item[field] || 0), 0)
 const kgText = (kg) => `${Number(kg || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg`
 
 export default function OwnerDashboard() {
-  const { transactions, getCashSummary } = useData()
+  const { transactions, stoneSales, getCashSummary } = useData()
   const navigate = useNavigate()
   const [chartRange, setChartRange] = useState(7)
   const today = todayKey()
   const cashToday = getCashSummary(today)
+  const visibleTransactions = useMemo(() => transactions.filter((item) => SHOW_FRUIT_PURCHASES || item.kind === 'brondolan'), [transactions])
   const stats = useMemo(() => {
-    const now = new Date(); const scoped = (start) => transactions.filter((t) => t.status !== 'voided' && t.date >= start && t.date <= today)
+    const now = new Date(); const scoped = (start) => visibleTransactions.filter((t) => t.status !== 'voided' && t.date >= start && t.date <= today)
     return { today: scoped(today), week: scoped(toDateKey(startOfWeek(now))), month: scoped(`${today.slice(0, 7)}-01`) }
-  }, [transactions, today])
+  }, [visibleTransactions, today])
   const chartData = useMemo(() => {
     const now = new Date()
     const start = chartRange === 'month'
@@ -27,22 +30,26 @@ export default function OwnerDashboard() {
       : addDays(now, -chartRange + 1)
     const days = Math.floor((toDateKey(now) > toDateKey(start) ? (new Date(toDateKey(now)) - new Date(toDateKey(start))) : 0) / 86_400_000) + 1
     return Array.from({ length: days }, (_, index) => {
-      const key = toDateKey(addDays(start, index)); const day = transactions.filter((t) => t.status !== 'voided' && t.date === key)
+      const key = toDateKey(addDays(start, index)); const day = visibleTransactions.filter((t) => t.status !== 'voided' && t.date === key)
       return { key, label: formatShortDate(key), volume: day.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0), total: sum(day, 'total') }
     })
-  }, [transactions, chartRange])
+  }, [visibleTransactions, chartRange])
+  const stoneSalesToday = useMemo(() => stoneSales.filter((sale) => sale.date === today), [stoneSales, today])
+  const stoneSaleBreakdown = STONE_TYPES.map((type) => ({ type, kg: stoneSalesToday.filter((sale) => canonicalStoneType(sale.type) === type).reduce((total, sale) => total + Number(sale.netKg || 0), 0) })).filter((item) => item.kg > 0)
+  const stoneKgToday = stoneSaleBreakdown.reduce((total, item) => total + item.kg, 0)
   const unpaidToday = stats.today.filter((transaction) => transaction.paymentStatus === 'unpaid')
   const unpaidTotal = sum(unpaidToday, 'total')
   return <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
     <div className="mb-6"><h1 className="text-2xl font-display">Ringkasan</h1><p className="text-sm text-ink-500 mt-1">{formatShortDate(today)}</p></div>
     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <StatCard label="Pembelian bersih hari ini" numericValue={stats.today.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={0} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/hari-ini')} />
-      <StatCard label="Pembelian bersih minggu ini" numericValue={stats.week.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={120} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/minggu-ini')} />
-      <StatCard label="Pembelian bersih bulan ini" numericValue={stats.month.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={240} sub="Lihat detail pembelian" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
+      <StatCard label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih hari ini`} numericValue={stats.today.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={0} sub="Lihat detail" onClick={() => navigate('/owner/pembelian/hari-ini')} />
+      <StatCard label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih minggu ini`} numericValue={stats.week.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={120} sub="Lihat detail" onClick={() => navigate('/owner/pembelian/minggu-ini')} />
+      <StatCard label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih bulan ini`} numericValue={stats.month.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={240} sub="Lihat detail" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
       <StatCard label="Sisa kas hari ini" numericValue={cashToday.remaining} formatValue={formatRupiah} delay={360} tone={cashToday.remaining < 0 ? 'danger' : 'gold'} sub={`dari ${formatRupiah(cashToday.initialAmount + cashToday.totalTopup)}`} />
     </div>
+    <section className="card mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-plantation-700 px-5 py-4"><div><p className="text-sm font-medium text-ink-800">Catatan batu terjual hari ini</p><p className="mt-1 font-display text-xl text-plantation-900">{kgText(stoneKgToday)}</p><p className="mt-1 text-sm text-ink-500">{stoneSaleBreakdown.length ? stoneSaleBreakdown.map((item) => `${item.type}: ${kgText(item.kg)}`).join(' · ') : 'Belum ada penjualan batu hari ini.'}</p></div><button type="button" className="btn-ghost" onClick={() => navigate('/owner/batu')}>Lihat stok dan riwayat batu</button></section>
     {unpaidToday.length > 0 && <button type="button" onClick={() => navigate('/owner/laporan')} className="mb-6 flex w-full flex-col items-start justify-between gap-3 rounded-lg border border-gold-500/35 bg-gold-400/10 px-4 py-4 text-left transition hover:bg-gold-400/15 sm:flex-row sm:items-center sm:px-5"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-500/15 text-gold-600"><Clock3 size={18} /></span><div><p className="font-medium text-plantation-900">Ada {unpaidToday.length} pembelian yang belum dibayar hari ini</p><p className="text-sm text-ink-500 mt-0.5">Perlu tindak lanjut pembayaran kepada pemasok.</p></div></div><span className="font-display text-lg text-gold-600 sm:shrink-0">{formatRupiah(unpaidTotal)}</span></button>}
-    <div className="grid lg:grid-cols-2 gap-4"><ChartCard title="Volume pembelian" range={chartRange} setRange={setChartRange} data={chartData} type="volume"><BarChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="volume" />} /><Bar dataKey="volume" fill="#3A6B58" activeBar={{ fill: '#2A5245' }} radius={[4, 4, 0, 0]} /></BarChart></ChartCard><ChartCard title="Total Pembelian" range={chartRange} setRange={setChartRange} data={chartData} type="total"><LineChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="total" />} /><Line type="monotone" dataKey="total" stroke="#C98A2E" strokeWidth={2.5} dot={false} /></LineChart></ChartCard></div>
+    <div className="grid lg:grid-cols-2 gap-4"><ChartCard title={`Volume ${SHOW_FRUIT_PURCHASES ? 'pembelian' : 'brondolan'}`} range={chartRange} setRange={setChartRange} data={chartData} type="volume"><BarChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="volume" />} /><Bar dataKey="volume" fill="#3A6B58" activeBar={{ fill: '#2A5245' }} radius={[4, 4, 0, 0]} /></BarChart></ChartCard><ChartCard title={`Total ${SHOW_FRUIT_PURCHASES ? 'pembelian' : 'brondolan'}`} range={chartRange} setRange={setChartRange} data={chartData} type="total"><LineChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="total" />} /><Line type="monotone" dataKey="total" stroke="#C98A2E" strokeWidth={2.5} dot={false} /></LineChart></ChartCard></div>
   </div>
 }
 function ChartBase() { return <CartesianGrid strokeDasharray="3 3" stroke="#3A6B5826" vertical /> }

@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { STONE_TYPES, canonicalStoneType } from '../lib/stoneUtils'
 import { parseKgInput } from '../lib/kgUtils'
+import { parseRupiahInput } from '../lib/currencyInput'
 
 const DataContext = createContext(null)
 
@@ -281,19 +282,88 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     return { ok: true, entry }
   }
 
-  function addStoneSale({ date, type, driverName, netKg, paymentMethod, adminId }) {
+  function updateStoneStock(id, patch, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah stok batu.' }
+    const existing = stoneStock.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan stok batu tidak ditemukan.' }
+    const type = patch.type || existing.type
+    const quantity = parseKgInput(patch.quantityKg ?? existing.quantityKg)
+    const cost = Number(String(patch.capitalCost ?? existing.capitalCost ?? 0).replaceAll('.', '')) || 0
+    const date = patch.date || existing.date
+    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost) || cost < 0) {
+      return { ok: false, message: 'Tanggal, jenis, jumlah kg, dan modal harus diisi dengan benar.' }
+    }
+    const affectedTypes = new Set([canonicalStoneType(existing.type), canonicalStoneType(type)])
+    for (const affectedType of affectedTypes) {
+      const totalStock = stoneStock.filter((item) => canonicalStoneType(item.type) === affectedType && item.id !== id).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+        + (canonicalStoneType(type) === affectedType ? quantity : 0)
+      const totalSold = stoneSales.filter((item) => canonicalStoneType(item.type) === affectedType).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+      if (totalStock < totalSold) return { ok: false, message: `Jumlah stok ${affectedType} tidak bisa kurang dari total terjual (${totalSold.toLocaleString('id-ID')} kg).` }
+    }
+    const updated = { ...existing, ...patch, date, type, quantityKg: quantity, capitalCost: cost, note: String(patch.note ?? existing.note ?? '').trim(), updatedAt: new Date().toISOString() }
+    setStoneStock((prev) => prev.map((item) => item.id === id ? updated : item))
+    addAuditLog({ action: 'Mengubah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg · modal Rp${cost.toLocaleString('id-ID')}` })
+    return { ok: true, entry: updated }
+  }
+
+  function deleteStoneStock(id, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus stok batu.' }
+    const existing = stoneStock.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan stok batu tidak ditemukan.' }
+    const remainingStock = stoneStock.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(existing.type) && item.id !== id).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+    const totalSold = stoneSales.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(existing.type)).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+    if (remainingStock < totalSold) return { ok: false, message: `Stok tidak bisa dihapus karena ${totalSold.toLocaleString('id-ID')} kg ${canonicalStoneType(existing.type)} sudah tercatat terjual.` }
+    setStoneStock((prev) => prev.filter((item) => item.id !== id))
+    addAuditLog({ action: 'Menghapus stok batu', actorId: ownerId, detail: `${canonicalStoneType(existing.type)}: ${Number(existing.quantityKg).toLocaleString('id-ID')} kg · modal Rp${Number(existing.capitalCost || 0).toLocaleString('id-ID')}` })
+    return { ok: true }
+  }
+
+  function addStoneSale({ date, type, driverName, netKg, pricePerKg, paymentMethod, adminId }) {
     if (currentUser?.role !== 'admin') return { ok: false, message: 'Pencatatan penjualan batu hanya tersedia untuk admin.' }
     const quantity = parseKgInput(netKg)
-    if (!STONE_TYPES.includes(type) || !date || !driverName?.trim() || !Number.isFinite(quantity) || quantity <= 0 || !['transfer', 'paid'].includes(paymentMethod)) {
-      return { ok: false, message: 'Tanggal, jenis batu, nama sopir, berat bersih, dan status pembayaran wajib diisi.' }
+    const price = parseRupiahInput(pricePerKg)
+    if (!STONE_TYPES.includes(type) || !date || !driverName?.trim() || !Number.isFinite(quantity) || quantity <= 0 || price <= 0 || !['transfer', 'paid'].includes(paymentMethod)) {
+      return { ok: false, message: 'Tanggal, jenis batu, nama sopir, berat, harga per kg, dan status pembayaran wajib diisi.' }
     }
     const available = stoneStock.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
       - stoneSales.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
     if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
-    const sale = { id: `stone-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, driverName: driverName.trim(), netKg: quantity, paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', adminId, createdAt: new Date().toISOString() }
+    const sale = { id: `stone-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, driverName: driverName.trim(), netKg: quantity, pricePerKg: price, total: Math.round(quantity * price), paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', adminId, createdAt: new Date().toISOString() }
     setStoneSales((prev) => [sale, ...prev])
-    addAuditLog({ action: 'Mencatat penjualan batu', actorId: adminId, detail: `${type} · ${sale.driverName}: ${quantity.toLocaleString('id-ID')} kg` })
+    addAuditLog({ action: 'Mencatat penjualan batu', actorId: adminId, detail: `${type} · ${sale.driverName}: ${quantity.toLocaleString('id-ID')} kg × Rp${price.toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
     return { ok: true, sale }
+  }
+
+  function updateStoneSale(id, patch, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah penjualan batu.' }
+    const existing = stoneSales.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan penjualan batu tidak ditemukan.' }
+    const type = patch.type || existing.type
+    const quantity = parseKgInput(patch.netKg ?? existing.netKg)
+    const price = parseRupiahInput(patch.pricePerKg ?? existing.pricePerKg)
+    const date = patch.date || existing.date
+    const driverName = String(patch.driverName ?? existing.driverName ?? '').trim()
+    const paymentMethod = patch.paymentMethod || existing.paymentMethod
+    if (!STONE_TYPES.includes(type) || !date || !driverName || quantity <= 0 || price <= 0 || !['transfer', 'paid'].includes(paymentMethod)) {
+      return { ok: false, message: 'Tanggal, jenis batu, sopir, berat, harga per kg, dan pembayaran wajib diisi.' }
+    }
+    const available = stoneStock.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(type)).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+      - stoneSales.filter((item) => item.id !== id && canonicalStoneType(item.type) === canonicalStoneType(type)).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+    if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
+    const total = Math.round(quantity * price)
+    const updated = { ...existing, ...patch, date, type, driverName, netKg: quantity, pricePerKg: price, total, paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', updatedAt: new Date().toISOString() }
+    setStoneSales((prev) => prev.map((item) => item.id === id ? updated : item))
+    addAuditLog({ action: 'Mengubah penjualan batu', actorId: ownerId, detail: `${type} · ${driverName}: ${quantity.toLocaleString('id-ID')} kg × Rp${price.toLocaleString('id-ID')} = Rp${total.toLocaleString('id-ID')}` })
+    return { ok: true, sale: updated }
+  }
+
+  function deleteStoneSale(id, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus penjualan batu.' }
+    const existing = stoneSales.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan penjualan batu tidak ditemukan.' }
+    setStoneSales((prev) => prev.filter((item) => item.id !== id))
+    addAuditLog({ action: 'Menghapus penjualan batu', actorId: ownerId, detail: `${canonicalStoneType(existing.type)} · ${existing.driverName}: ${Number(existing.netKg).toLocaleString('id-ID')} kg` })
+    return { ok: true }
   }
 
   function markStoneSalePaid(id, ownerId) {
@@ -660,7 +730,11 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     stoneStock,
     stoneSales,
     addStoneStock,
+    updateStoneStock,
+    deleteStoneStock,
     addStoneSale,
+    updateStoneSale,
+    deleteStoneSale,
     markStoneSalePaid,
     addPrivateFarm,
     addPrivateHarvestRecord,

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { formatShortDate, todayKey } from '../../lib/dateUtils'
 import { STONE_TYPES, canonicalStoneType } from '../../lib/stoneUtils'
+import { formatKgInput } from '../../lib/kgUtils'
 
 const number = (value) => Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })
 
@@ -33,7 +34,7 @@ export default function StoneSales() {
         <div><label className="label" htmlFor="stone-date">Tanggal</label><input id="stone-date" className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required /></div>
         <div><label className="label" htmlFor="stone-type">Jenis batu</label><select id="stone-type" className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{STONE_TYPES.map((type) => <option key={type}>{type}</option>)}</select><p className="mt-1 text-xs text-ink-500">Tersedia {number(availableFor(form.type))} kg</p></div>
         <div><label className="label" htmlFor="stone-driver">Nama sopir</label><input id="stone-driver" className="input" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} placeholder="Contoh: Pak Andi" required /></div>
-        <div><label className="label" htmlFor="stone-weight">Berat bersih (kg)</label><input id="stone-weight" className="input" type="number" min="0.01" step="0.01" value={form.netKg} onChange={(e) => setForm({ ...form, netKg: e.target.value })} placeholder="Contoh: 850" required /></div>
+        <div><label className="label" htmlFor="stone-weight">Berat bersih (kg)</label><input id="stone-weight" className="input" type="text" inputMode="decimal" value={form.netKg} onChange={(e) => setForm({ ...form, netKg: formatKgInput(e.target.value) })} placeholder="Contoh: 1.250 atau 1.250,5" required /></div>
         <div><label className="label" htmlFor="stone-payment">Pembayaran</label><select id="stone-payment" className="input" value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}><option value="transfer">Transfer — menunggu konfirmasi owner</option><option value="paid">Sudah dibayar — lunas</option></select></div>
         <div className="md:col-span-2 lg:col-span-4 flex flex-wrap items-center justify-between gap-3">{message && <p role="status" className={`text-sm ${message.includes('tersimpan') ? 'text-plantation-700' : 'text-red-700'}`}>{message}</p>}<button className="btn-primary ml-auto" type="submit" disabled={!cloudReady}><Plus size={16} /> Simpan penjualan</button></div>
       </form>

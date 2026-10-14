@@ -4,6 +4,7 @@ import { todayKey } from '../lib/dateUtils'
 import { useAuth } from './AuthContext'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { STONE_TYPES, canonicalStoneType } from '../lib/stoneUtils'
+import { parseKgInput } from '../lib/kgUtils'
 
 const DataContext = createContext(null)
 
@@ -13,6 +14,8 @@ const CLOUD_DATA_CUTOFF = '2026-10-10'
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
+  // Stone inventory is an ongoing balance; retain historical stock and sale entries.
+  if (collection === 'stoneStock' || collection === 'stoneSales') return item
   if (collection === 'privateFarms') {
     return {
       ...item,
@@ -247,7 +250,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
   function addStoneStock({ date, type, quantityKg, note = '', ownerId }) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok batu.' }
-    const quantity = Number(quantityKg)
+    const quantity = parseKgInput(quantityKg)
     if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0) {
       return { ok: false, message: 'Jenis, tanggal, dan jumlah stok harus diisi dengan benar.' }
     }
@@ -259,7 +262,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
   function addStoneSale({ date, type, driverName, netKg, paymentMethod, adminId }) {
     if (currentUser?.role !== 'admin') return { ok: false, message: 'Pencatatan penjualan batu hanya tersedia untuk admin.' }
-    const quantity = Number(netKg)
+    const quantity = parseKgInput(netKg)
     if (!STONE_TYPES.includes(type) || !date || !driverName?.trim() || !Number.isFinite(quantity) || quantity <= 0 || !['transfer', 'paid'].includes(paymentMethod)) {
       return { ok: false, message: 'Tanggal, jenis batu, nama sopir, berat bersih, dan status pembayaran wajib diisi.' }
     }

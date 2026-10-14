@@ -141,9 +141,12 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
       // Merge the legacy local cache once on the first owner login; cloud records win on duplicate IDs.
       const localMigrationDone = window.localStorage.getItem('kebunkas_cloud_migration_done') === 'true'
-      if (currentUser.role === 'owner' && !localMigrationDone) {
+      if (currentUser.role === 'owner') {
         const additions = []
         for (const name of COLLECTION_NAMES) {
+          // Keep the legacy migration one-time for general records, but retry
+          // local stone inventory every owner login until it reaches the cloud.
+          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales') continue
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
           const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
@@ -156,7 +159,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
           const { error: migrateError } = await supabase.from('app_records').upsert(additions, { onConflict: 'collection,record_id' })
           if (migrateError) throw migrateError
         }
-        window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
+        if (!localMigrationDone) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
       }
 
       if (!active) return
@@ -194,7 +197,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
     hydrateCloudData().catch((error) => {
       console.error('Gagal memuat data Supabase:', error)
-      if (active) { setCloudError('Data cloud belum dapat dimuat. Periksa konfigurasi dan jalankan supabase/schema.sql.'); setCloudReady(false) }
+      if (active) { setCloudError('Data cloud belum dapat dimuat. Periksa koneksi dan konfigurasi Supabase; pastikan supabase/schema.sql serta supabase/stone-feature.sql sudah dijalankan.'); setCloudReady(false) }
     })
     return () => { active = false; if (channel) supabase.removeChannel(channel) }
   }, [authReady, currentUser?.id, currentUser?.role])
@@ -217,7 +220,9 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       if (failure) {
         console.error(`Gagal menyimpan ${collection} ke Supabase:`, failure)
         cloudBaseline.current = { ...cloudBaseline.current, [collection]: previous }
-        setCloudError('Sebagian perubahan belum tersimpan ke cloud. Periksa koneksi sebelum berpindah perangkat.')
+        setCloudError(collection === 'stoneStock'
+          ? `Stok batu belum tersimpan ke cloud. Pastikan supabase/stone-feature.sql sudah dijalankan di Supabase. Detail: ${failure.message}`
+          : 'Sebagian perubahan belum tersimpan ke cloud. Periksa koneksi sebelum berpindah perangkat.')
       } else setCloudError('')
     })
   }

@@ -1,8 +1,9 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout, Mountain } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout, Mountain, KeyRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { SHOW_FRUIT_PURCHASES } from '../config/features'
+import ChangePasswordModal from './ChangePasswordModal'
 
 const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 const ADMIN_LINKS = [
@@ -25,6 +26,7 @@ const OWNER_LINKS = [
 export default function Sidebar({ role, collapsed, onToggle }) {
   const { currentUser, logout } = useAuth()
   const location = useLocation()
+  const [showPasswordModal, setShowPasswordModal] = React.useState(false)
   const links = role === 'owner' ? OWNER_LINKS : ADMIN_LINKS
   const nestedMenuOpen = (path) => path.startsWith('/owner/laporan') || path.startsWith('/admin/catat-pembelian') || path.startsWith('/admin/pembelian/')
 
@@ -66,6 +68,7 @@ export default function Sidebar({ role, collapsed, onToggle }) {
         <div className={`mb-2 ${collapsed ? 'flex justify-center py-2' : 'px-3 py-2'}`} title={currentUser?.name}>
           {collapsed ? <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold-500/20 text-xs font-medium text-gold-400">{currentUser?.name?.slice(0, 1)}</span> : <><p className="text-sm text-paper-50">{currentUser?.name}</p><p className="text-xs text-paper-100/45 capitalize">{currentUser?.role}</p></>}
         </div>
+        <button type="button" onClick={() => setShowPasswordModal(true)} className={`w-full flex items-center rounded-md py-2.5 text-sm text-paper-100/70 hover:bg-paper-50/5 hover:text-paper-50 transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'}`} title="Ubah kata sandi" aria-label="Ubah kata sandi"><KeyRound size={17} />{!collapsed && 'Ubah kata sandi'}</button>
         <button
           onClick={logout}
           className={`w-full flex items-center rounded-md py-2.5 text-sm text-paper-100/70 hover:bg-paper-50/5 hover:text-paper-50 transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'}`}
@@ -75,6 +78,7 @@ export default function Sidebar({ role, collapsed, onToggle }) {
           {!collapsed && 'Keluar'}
         </button>
       </div>
+      <ChangePasswordModal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
     </aside>
   )
 }

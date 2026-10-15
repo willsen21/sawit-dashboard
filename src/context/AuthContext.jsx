@@ -96,6 +96,25 @@ export function AuthProvider({ children }) {
     return { ok: true, user: found }
   }
 
+  async function changePassword(currentPassword, newPassword) {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        current_password: currentPassword,
+      })
+      if (error) return { ok: false, message: 'Gagal mengubah kata sandi. Periksa kata sandi lama dan coba lagi.' }
+      return { ok: true }
+    }
+
+    const activeUser = users.find((user) => user.id === currentUser?.id)
+    if (!activeUser || activeUser.password !== currentPassword) {
+      return { ok: false, message: 'Kata sandi lama tidak sesuai.' }
+    }
+    setUsers((prev) => prev.map((user) => user.id === activeUser.id ? { ...user, password: newPassword } : user))
+    setCurrentUser((prev) => prev ? { ...prev, password: newPassword } : prev)
+    return { ok: true }
+  }
+
   async function logout() {
     if (isSupabaseConfigured) await supabase.auth.signOut()
     setCurrentUser(null)
@@ -131,7 +150,7 @@ export function AuthProvider({ children }) {
   }
 
   const admins = users.filter((user) => user.role === 'admin')
-  return <AuthContext.Provider value={{ currentUser, authReady, cloudMode: isSupabaseConfigured, login, logout, admins, addAdmin, toggleAdminActive, resetAdminPassword }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ currentUser, authReady, cloudMode: isSupabaseConfigured, login, logout, changePassword, admins, addAdmin, toggleAdminActive, resetAdminPassword }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

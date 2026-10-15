@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, ClipboardList, Users, Wallet, ReceiptText, ShieldCheck, LogOut, CalendarDays, Sprout, Menu, X, Mountain } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Users, Wallet, ReceiptText, ShieldCheck, LogOut, CalendarDays, Sprout, Menu, X, Mountain, KeyRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { SHOW_FRUIT_PURCHASES } from '../config/features'
+import ChangePasswordModal from './ChangePasswordModal'
 
 const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 const ADMIN_LINKS = [
@@ -26,6 +27,7 @@ export default function MobileNav({ role }) {
   const { currentUser, logout } = useAuth()
   const location = useLocation()
   const [open, setOpen] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
   const links = role === 'owner' ? OWNER_LINKS : ADMIN_LINKS
   const activeLink = links.find(({ to, end, children }) => children?.some((child) => child.to === location.pathname) || (end ? location.pathname === to : location.pathname.startsWith(to)))
   const activeChild = activeLink?.children?.find((child) => child.to === location.pathname)
@@ -40,8 +42,9 @@ export default function MobileNav({ role }) {
       <nav className="mobile-drawer" aria-label="Navigasi utama">
         <div className="flex items-center justify-between border-b border-paper-50/10 px-5 py-4"><div><p className="font-display text-lg text-paper-50">Kebun Kas</p><p className="mt-1 text-xs capitalize text-paper-100/60">{currentUser?.name} · {role}</p></div><button type="button" className="mobile-menu-button" onClick={() => setOpen(false)} aria-label="Tutup menu"><X size={20} /></button></div>
         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">{links.map(({ to, label, icon: Icon, end, children }) => { const nestedActive = children?.some((child) => child.to === location.pathname); return <React.Fragment key={to}><NavLink to={to} end={end} onClick={() => setOpen(false)} className={({ isActive }) => `flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm transition-colors ${isActive || nestedActive ? 'bg-gold-500/15 font-medium text-gold-300' : 'text-paper-100/75 hover:bg-paper-50/5 hover:text-paper-50'}`}><Icon size={18} />{label}</NavLink>{nestedActive && <div className="ml-8 space-y-1 border-l border-paper-50/15 pl-3">{children.map((child) => <NavLink key={child.to} to={child.to} onClick={() => setOpen(false)} className={({ isActive }) => `block rounded-lg px-3 py-2.5 text-sm ${isActive ? 'font-medium text-gold-300' : 'text-paper-100/65 hover:text-paper-50'}`}>{child.label}</NavLink>)}</div>}</React.Fragment> })}</div>
-        <div className="mt-auto border-t border-paper-50/10 p-3"><button type="button" onClick={logout} className="flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-sm text-paper-100/75 transition-colors hover:bg-paper-50/5 hover:text-paper-50"><LogOut size={18} />Keluar</button></div>
+        <div className="mt-auto border-t border-paper-50/10 p-3"><button type="button" onClick={() => { setOpen(false); setShowPasswordModal(true) }} className="mb-1 flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-sm text-paper-100/75 transition-colors hover:bg-paper-50/5 hover:text-paper-50"><KeyRound size={18} />Ubah kata sandi</button><button type="button" onClick={logout} className="flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-sm text-paper-100/75 transition-colors hover:bg-paper-50/5 hover:text-paper-50"><LogOut size={18} />Keluar</button></div>
       </nav>
     </div>}
+    <ChangePasswordModal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
   </>
 }

@@ -3,7 +3,7 @@ import { CalendarDays, CheckCircle2, CircleAlert, Clock3, Plus, Wallet, HandCoin
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
-import { useParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
 
 const CVS = ['Sinar Mandiri', 'Jaya Agung']
@@ -11,8 +11,8 @@ const parseAmount = (value) => Number(String(value || '').replaceAll('.', '').re
 const formatNumericInput = (value) => String(value).replace(/[^0-9,]/g, '').replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
 export default function PurchaseForm() {
-  const { kind: routeKind } = useParams()
-  const kind = routeKind === 'brondolan' ? 'brondolan' : 'buah'
+  const { pathname } = useLocation()
+  const kind = pathname.endsWith('/brondolan') ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
   const { addTransaction, transactions, getCashSummary, requestCashUnlock, cashUnlockRequests, requestCashInitialEdit, cancellationRequests, addCashLoan, requestCashLoanDeletion } = useData()
   const [date, setDate] = useState(todayKey())

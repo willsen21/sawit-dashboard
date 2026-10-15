@@ -4,12 +4,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
 import Modal from '../../components/Modal'
-import { useParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 
 
 export default function PurchaseHistory() {
-  const { kind: routeKind } = useParams()
-  const kind = routeKind === 'brondolan' ? 'brondolan' : 'buah'
+  const { pathname } = useLocation()
+  const kind = pathname.endsWith('/brondolan') ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
   const { supplierMap, transactions, updateTransaction, requestCancellation, cancellationRequests, getCashSummary } = useData()
   const [statusFilter, setStatusFilter] = useState('all')

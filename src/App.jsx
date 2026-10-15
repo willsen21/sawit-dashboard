@@ -18,7 +18,7 @@ import Operations from './pages/owner/Operations'
 import PrivateFarms from './pages/owner/PrivateFarms'
 import StoneSales from './pages/admin/StoneSales'
 import Stones from './pages/owner/Stones'
-import { SHOW_FRUIT_PURCHASES } from './config/features'
+import { SHOW_BRONDOLAN_PURCHASES, SHOW_FRUIT_PURCHASES } from './config/features'
 
 const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 
@@ -49,10 +49,10 @@ export default function App() {
             <Route path="batu" element={<StoneSales />} />
             <Route path="catat-pembelian" element={<Navigate to={`/admin/catat-pembelian/${defaultPurchaseKind}`} replace />} />
             <Route path="catat-pembelian/buah" element={SHOW_FRUIT_PURCHASES ? <PurchaseForm /> : <Navigate to="/admin/catat-pembelian/brondolan" replace />} />
-            <Route path="catat-pembelian/brondolan" element={<PurchaseForm />} />
+            <Route path="catat-pembelian/brondolan" element={SHOW_BRONDOLAN_PURCHASES ? <PurchaseForm /> : <Navigate to="/admin/catat-pembelian/buah" replace />} />
             <Route path="pembelian-hari-ini" element={<Navigate to={`/admin/pembelian/${defaultPurchaseKind}`} replace />} />
             <Route path="pembelian/buah" element={SHOW_FRUIT_PURCHASES ? <PurchaseHistory /> : <Navigate to="/admin/pembelian/brondolan" replace />} />
-            <Route path="pembelian/brondolan" element={<PurchaseHistory />} />
+            <Route path="pembelian/brondolan" element={SHOW_BRONDOLAN_PURCHASES ? <PurchaseHistory /> : <Navigate to="/admin/pembelian/buah" replace />} />
           </Route>
 
           <Route

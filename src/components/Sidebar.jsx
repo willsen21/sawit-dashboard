@@ -2,14 +2,14 @@ import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout, Mountain } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { SHOW_FRUIT_PURCHASES } from '../config/features'
+import { SHOW_BRONDOLAN_PURCHASES, SHOW_FRUIT_PURCHASES } from '../config/features'
 
 const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Kas Hari Ini', icon: Wallet, end: true },
   { to: '/admin/batu', label: 'Catat Batu', icon: Mountain },
-  { to: `/admin/catat-pembelian/${defaultPurchaseKind}`, label: 'Catat Pembelian', icon: ReceiptText, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/admin/catat-pembelian/buah', label: 'Buah' }] : []), { to: '/admin/catat-pembelian/brondolan', label: 'Brondolan' }] },
-  { to: `/admin/pembelian/${defaultPurchaseKind}`, label: 'Riwayat Pembelian', icon: ClipboardList, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/admin/pembelian/buah', label: 'Buah' }] : []), { to: '/admin/pembelian/brondolan', label: 'Brondolan' }] },
+  { to: `/admin/catat-pembelian/${defaultPurchaseKind}`, label: 'Catat Pembelian', icon: ReceiptText, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/admin/catat-pembelian/buah', label: 'Buah' }] : []), ...(SHOW_BRONDOLAN_PURCHASES ? [{ to: '/admin/catat-pembelian/brondolan', label: 'Brondolan' }] : [])] },
+  { to: `/admin/pembelian/${defaultPurchaseKind}`, label: 'Riwayat Pembelian', icon: ClipboardList, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/admin/pembelian/buah', label: 'Buah' }] : []), ...(SHOW_BRONDOLAN_PURCHASES ? [{ to: '/admin/pembelian/brondolan', label: 'Brondolan' }] : [])] },
 ]
 
 const OWNER_LINKS = [

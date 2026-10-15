@@ -39,13 +39,13 @@ export default function PurchaseForm() {
   const [loanDeleteError, setLoanDeleteError] = useState('')
   const total = parseAmount(form.netKg) * parseAmount(form.pricePerKg)
   const loanPurchaseTotal = Math.round(parseAmount(loanForm.netKg) * parseAmount(loanForm.pricePerKg))
-  const dailyRows = transactions.filter((item) => item.date === date && (item.kind || 'buah') === kind && item.status !== 'voided').sort((a, b) => (b.time || '').localeCompare(a.time || ''))
+  const dailyRows = transactions.filter((item) => item.date === date && (item.kind || 'buah') === kind && item.status !== 'voided').sort((a, b) => (a.time || '').localeCompare(b.time || ''))
   const externalPayment = ['transfer', 'personal'].includes(form.paymentMethod)
   const loans = summary.loans || []
   const dailyEntries = [
     ...dailyRows.map((item) => ({ type: 'purchase', item, sortAt: new Date(`${date}T${item.time || '00:00'}:00`).getTime() })),
     ...(kind === 'brondolan' ? loans.map((item) => ({ type: 'loan', item, sortAt: new Date(item.createdAt).getTime() })) : []),
-  ].sort((a, b) => b.sortAt - a.sortAt)
+  ].sort((a, b) => a.sortAt - b.sortAt)
 
   useEffect(() => {
     if (!success) return undefined

@@ -78,7 +78,7 @@ export default function CashLoanReport() {
 
   const filtered = useMemo(() => cashLoans
     .filter((loan) => loan.date >= range[0] && loan.date <= range[1])
-    .sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))), [cashLoans, range])
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))), [cashLoans, range])
   const total = filtered.reduce((sum, loan) => sum + Number(loan.amount || 0), 0)
 
   return <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">

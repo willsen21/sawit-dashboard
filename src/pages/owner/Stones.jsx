@@ -29,8 +29,8 @@ export default function Stones() {
     const sold = stoneSales.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
     return { added, sold, available: added - sold }
   }
-  const rows = useMemo(() => [...stoneSales].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)), [stoneSales])
-  const stockRows = useMemo(() => [...stoneStock].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)), [stoneStock])
+  const rows = useMemo(() => [...stoneSales].sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))), [stoneSales])
+  const stockRows = useMemo(() => [...stoneStock].sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))), [stoneStock])
 
   function submit(event) {
     event.preventDefault()

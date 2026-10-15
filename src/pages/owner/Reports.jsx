@@ -143,14 +143,14 @@ export default function Reports() {
   const filtered = useMemo(() => {
     return transactions
       .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= range[0] && t.date <= range[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
-      .sort((a, b) => (a.date === b.date ? (a.time < b.time ? 1 : -1) : a.date < b.date ? 1 : -1))
+      .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')))
   }, [transactions, reportKind, range, paymentStatus, cvFilter])
   const displayRows = useMemo(() => {
     const purchaseRows = filtered.map((record) => ({ type: 'purchase', record, sortTime: record.time || '00:00' }))
     const loanRows = reportKind === 'brondolan'
       ? cashLoans.filter((loan) => loan.date >= range[0] && loan.date <= range[1]).map((record) => ({ type: 'loan', record, sortTime: record.createdAt?.slice(11, 16) || '00:00' }))
       : []
-    return [...purchaseRows, ...loanRows].sort((a, b) => b.record.date.localeCompare(a.record.date) || b.sortTime.localeCompare(a.sortTime))
+    return [...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || a.sortTime.localeCompare(b.sortTime))
   }, [filtered, cashLoans, reportKind, range])
   const pageCount = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE))
   const paginated = displayRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -240,12 +240,12 @@ export default function Reports() {
     const pdfRange = computePdfRange(pdfRangeDays)
     const purchaseRows = transactions
       .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= pdfRange[0] && t.date <= pdfRange[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
-      .sort((a, b) => (a.date === b.date ? (a.time < b.time ? 1 : -1) : a.date < b.date ? 1 : -1))
+      .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')))
       .map((record) => ({ type: 'purchase', record }))
     const loanRows = reportKind === 'brondolan'
       ? cashLoans.filter((loan) => loan.date >= pdfRange[0] && loan.date <= pdfRange[1]).map((record) => ({ type: 'loan', record }))
       : []
-    downloadPdf([...purchaseRows, ...loanRows].sort((a, b) => b.record.date.localeCompare(a.record.date) || String(b.record.createdAt || b.record.time || '').localeCompare(String(a.record.createdAt || a.record.time || ''))), supplierMap, pdfRange, reportKind)
+    downloadPdf([...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || String(a.record.createdAt || a.record.time || '').localeCompare(String(b.record.createdAt || b.record.time || ''))), supplierMap, pdfRange, reportKind)
     setShowPdfOptions(false)
   }
 

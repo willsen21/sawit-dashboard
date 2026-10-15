@@ -21,7 +21,7 @@ export default function PurchaseDetails() {
   const [cvFilter, setCvFilter] = useState('all')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [title, from, to] = info(period)
-  const rows = useMemo(() => transactions.filter((item) => (SHOW_FRUIT_PURCHASES || item.kind === 'brondolan') && item.status !== 'voided' && item.date >= from && item.date <= to && (SHOW_FRUIT_PURCHASES ? cvFilter === 'all' || (cvFilter === 'unassigned' ? !item.cv : item.cv === cvFilter) : true)).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time)), [transactions, from, to, cvFilter])
+  const rows = useMemo(() => transactions.filter((item) => (SHOW_FRUIT_PURCHASES || item.kind === 'brondolan') && item.status !== 'voided' && item.date >= from && item.date <= to && (SHOW_FRUIT_PURCHASES ? cvFilter === 'all' || (cvFilter === 'unassigned' ? !item.cv : item.cv === cvFilter) : true)).sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || ''))), [transactions, from, to, cvFilter])
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const kg = rows.reduce((sum, item) => sum + Number(item.netKg ?? item.weightKg ?? 0), 0)

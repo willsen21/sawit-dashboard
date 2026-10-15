@@ -43,13 +43,26 @@ export default function Login() {
     }
     setSendingRecovery(true)
     const redirectTo = `${window.location.origin}${window.location.pathname}#/reset-password`
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(recoveryEmail.trim(), { redirectTo })
-    setSendingRecovery(false)
-    if (resetError) {
-      setRecoveryError('Email pemulihan gagal dikirim. Periksa alamat email dan pengaturan Supabase.')
-      return
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(recoveryEmail.trim(), { redirectTo })
+      if (resetError) {
+        const detail = resetError.message || 'Kesalahan tidak diketahui.'
+        const normalized = detail.toLowerCase()
+        if (normalized.includes('redirect') || normalized.includes('url')) {
+          setRecoveryError(`Alamat tujuan pemulihan belum diizinkan di Supabase. Tambahkan ${redirectTo} pada Authentication → URL Configuration → Redirect URLs. Detail: ${detail}`)
+        } else if (normalized.includes('rate') || normalized.includes('limit') || normalized.includes('too many')) {
+          setRecoveryError(`Supabase membatasi pengiriman email sementara. Tunggu sebelum mencoba lagi. Detail: ${detail}`)
+        } else {
+          setRecoveryError(`Supabase menolak permintaan pemulihan. Detail: ${detail}`)
+        }
+        return
+      }
+      setRecoveryMessage('Jika email terdaftar, tautan pemulihan akan dikirim. Periksa kotak masuk dan folder spam.')
+    } catch (resetError) {
+      setRecoveryError(`Permintaan pemulihan gagal tersambung ke Supabase. Periksa koneksi internet lalu coba lagi. Detail: ${resetError?.message || 'Kesalahan jaringan.'}`)
+    } finally {
+      setSendingRecovery(false)
     }
-    setRecoveryMessage('Jika email terdaftar, tautan pemulihan akan dikirim. Buka email tersebut untuk membuat kata sandi baru.')
   }
 
   return (

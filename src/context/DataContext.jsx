@@ -405,9 +405,22 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     return { ok: true }
   }
 
-  function lockDay(dateKey, actorId) {
-    setDailyCash((prev) => prev.map((d) => (d.date === dateKey ? { ...d, status: 'locked' } : d)))
-    addAuditLog({ action: 'Menutup kas harian', actorId, detail: dateKey })
+  function lockDay(dateKey, actorId, countedCash) {
+    const amount = Number(countedCash)
+    if (!Number.isFinite(amount) || amount < 0) return { ok: false, message: 'Uang kas fisik harus berupa angka 0 atau lebih.' }
+    const expectedCash = getCashSummary(dateKey).remaining
+    const closedAt = new Date().toISOString()
+    setDailyCash((prev) => prev.map((d) => (d.date === dateKey ? {
+      ...d,
+      status: 'locked',
+      countedCash: amount,
+      systemCashAtClose: expectedCash,
+      cashDifference: amount - expectedCash,
+      closedAt,
+      closedBy: actorId,
+    } : d)))
+    addAuditLog({ action: 'Menutup kas harian', actorId, detail: `${dateKey}: sistem Rp${expectedCash.toLocaleString('id-ID')}, fisik Rp${amount.toLocaleString('id-ID')}, selisih Rp${(amount - expectedCash).toLocaleString('id-ID')}` })
+    return { ok: true }
   }
 
   function unlockDay(dateKey, actorId) {
@@ -669,7 +682,14 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const todaysTopups = topups.filter((t) => t.date === dateKey)
     const totalTopup = todaysTopups.reduce((sum, t) => sum + Number(t.amount), 0)
     const todaysTx = transactions.filter((t) => t.date === dateKey && t.status !== 'voided')
-    const totalPurchaseUsed = todaysTx.reduce((sum, t) => sum + (['transfer', 'personal'].includes(t.paymentMethod) ? 0 : Number(t.total)), 0)
+    const totalPurchaseUsed = todaysTx.reduce((sum, t) => {
+      if (['transfer', 'personal'].includes(t.paymentMethod)) return sum
+      const sellerName = String(t.name || suppliers.find((supplier) => supplier.id === t.supplierId)?.name || '').trim().toLocaleLowerCase('id-ID')
+      const netKg = Number(t.netKg ?? t.weightKg ?? 0)
+      const isHarminiBrondolan = (t.kind || 'buah') === 'brondolan' && sellerName.includes('harmini')
+      const total = isHarminiBrondolan ? Math.round(netKg * (Number(t.pricePerKg || 0) + 10)) : Number(t.total)
+      return sum + total
+    }, 0)
     const totalStoneCapital = stoneStock.filter((item) => item.date === dateKey).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
     const totalUsed = totalPurchaseUsed + totalStoneCapital
     const todaysLoans = cashLoans.filter((loan) => loan.date === dateKey)

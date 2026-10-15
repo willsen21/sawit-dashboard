@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { CheckCircle2, Download, Pencil, Save, Trash2 } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Save, Trash2, Wallet } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useData } from '../../context/DataContext'
@@ -10,6 +10,7 @@ import {
   addDays,
   formatRupiah,
   formatShortDate,
+  parseDateKey,
   startOfWeek,
   toDateKey,
   todayKey,
@@ -20,12 +21,6 @@ import StatCard from '../../components/StatCard'
 const CVS = ['Sinar Mandiri', 'Jaya Agung']
 const parseNumber = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
 const QUICK_RANGES = ['Hari ini', 'Minggu ini', 'Bulan ini', 'Tahun ini', '30 hari terakhir']
-const PDF_RANGES = [
-  { value: '7', label: '1 minggu terakhir' },
-  { value: '15', label: '15 hari terakhir' },
-  { value: '30', label: '1 bulan terakhir' },
-  { value: '365', label: '1 tahun terakhir' },
-]
 const formatCsvDate = (key) => key.split('-').reverse().join('/')
 
 function computeQuickRange(label) {
@@ -47,12 +42,7 @@ function computeQuickRange(label) {
   }
 }
 
-function computePdfRange(days) {
-  const now = new Date()
-  return [toDateKey(addDays(now, -(Number(days) - 1))), toDateKey(now)]
-}
-
-function downloadCsv(rows, reportKind) {
+function downloadCsv(rows, reportKind, range) {
   const isBrondolan = reportKind === 'brondolan'
   const header = ['Tanggal', ...(isBrondolan ? ['Jenis catatan'] : ['CV']), 'Nama', 'Status pembayaran', 'Metode pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total / nominal', 'No. Nota', 'Catatan / alasan']
   const lines = rows.map(({ type = 'purchase', record }) => {
@@ -78,7 +68,7 @@ function downloadCsv(rows, reportKind) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `laporan-${reportKind}-sawit.csv`
+  a.download = `laporan-${reportKind}-${range[0]}_${range[1]}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -122,9 +112,9 @@ export default function Reports() {
   const { pathname } = useLocation()
   const reportKind = pathname.endsWith('/brondolan') ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
-  const { transactions, cashLoans, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction } = useData()
-  const [range, setRange] = useState(() => computeQuickRange('Bulan ini'))
-  const [activeQuick, setActiveQuick] = useState('Bulan ini')
+  const { transactions, cashLoans, dailyCash, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction } = useData()
+  const [range, setRange] = useState(() => computeQuickRange('Hari ini'))
+  const [activeQuick, setActiveQuick] = useState('Hari ini')
   const [page, setPage] = useState(1)
   const [paymentStatus, setPaymentStatus] = useState('all')
   const [cvFilter, setCvFilter] = useState('all')
@@ -137,8 +127,9 @@ export default function Reports() {
   const [loanEditError, setLoanEditError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
-  const [showPdfOptions, setShowPdfOptions] = useState(false)
-  const [pdfRangeDays, setPdfRangeDays] = useState('7')
+  const [showExportOptions, setShowExportOptions] = useState(false)
+  const [exportFormat, setExportFormat] = useState('pdf')
+  const [exportRange, setExportRange] = useState(() => computeQuickRange('Hari ini'))
 
   const filtered = useMemo(() => {
     return transactions
@@ -158,9 +149,35 @@ export default function Reports() {
   const summary = useMemo(() => {
     const totalWeight = filtered.reduce((s, t) => s + Number(t.netKg ?? t.weightKg ?? 0), 0)
     const totalGrossWeight = filtered.reduce((s, t) => s + Number(t.grossKg ?? t.weightKg ?? 0), 0)
-    const totalValue = filtered.reduce((s, t) => s + Number(t.total || 0), 0)
+    const totalValue = filtered.reduce((sum, t) => {
+      const name = String(t.name || supplierMap[t.supplierId]?.name || '').trim().toLocaleLowerCase('id-ID')
+      const adjusted = reportKind === 'brondolan' && name.includes('harmini')
+        ? Math.round(Number(t.netKg ?? t.weightKg ?? 0) * (Number(t.pricePerKg || 0) + 10))
+        : Number(t.total || 0)
+      return sum + adjusted
+    }, 0)
     return { totalWeight, totalGrossWeight, totalValue, count: filtered.length }
-  }, [filtered])
+  }, [filtered, reportKind, supplierMap])
+
+  const dailyClose = useMemo(() => {
+    if (reportKind !== 'brondolan' || range[0] !== range[1]) return null
+    const date = range[0]
+    const records = transactions.filter((t) => t.date === date && t.status !== 'voided' && (t.kind || 'buah') === 'brondolan')
+    const purchases = records.reduce((result, t) => {
+      const name = String(t.name || supplierMap[t.supplierId]?.name || '').trim().toLocaleLowerCase('id-ID')
+      const netKg = Number(t.netKg ?? t.weightKg ?? 0)
+      const price = Number(t.pricePerKg || 0) + (name.includes('harmini') ? 10 : 0)
+      const total = Math.round(netKg * price)
+      result.netKg += netKg
+      if (t.paymentMethod === 'transfer') result.transfer += total
+      else if (t.paymentMethod === 'personal') result.personal += total
+      else result.cash += total
+      return result
+    }, { netKg: 0, cash: 0, transfer: 0, personal: 0 })
+    const loans = cashLoans.filter((loan) => loan.date === date).reduce((sum, loan) => sum + Number(loan.amount || 0), 0)
+    const closure = dailyCash.find((item) => item.date === date)
+    return { ...purchases, total: purchases.cash + purchases.transfer, allTotal: purchases.cash + purchases.transfer + purchases.personal, loans, closure }
+  }, [reportKind, range, transactions, cashLoans, dailyCash, supplierMap])
 
   function confirmPayment() {
     if (!paymentTarget) return
@@ -236,17 +253,34 @@ export default function Reports() {
     setDeleteError('')
   }
 
-  function downloadSelectedPdf() {
-    const pdfRange = computePdfRange(pdfRangeDays)
+  function downloadSelectedExport() {
+    const selectedRange = exportRange
+    if (!selectedRange[0] || !selectedRange[1] || selectedRange[0] > selectedRange[1]) return
     const purchaseRows = transactions
-      .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= pdfRange[0] && t.date <= pdfRange[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
+      .filter((t) => t.status !== 'voided' && (t.kind || 'buah') === reportKind && t.date >= selectedRange[0] && t.date <= selectedRange[1] && (paymentStatus === 'all' || (t.paymentStatus || 'paid') === paymentStatus) && (reportKind === 'brondolan' || cvFilter === 'all' || (cvFilter === 'unassigned' ? !t.cv : t.cv === cvFilter)))
       .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')))
       .map((record) => ({ type: 'purchase', record }))
     const loanRows = reportKind === 'brondolan'
-      ? cashLoans.filter((loan) => loan.date >= pdfRange[0] && loan.date <= pdfRange[1]).map((record) => ({ type: 'loan', record }))
+      ? cashLoans.filter((loan) => loan.date >= selectedRange[0] && loan.date <= selectedRange[1]).map((record) => ({ type: 'loan', record }))
       : []
-    downloadPdf([...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || String(a.record.createdAt || a.record.time || '').localeCompare(String(b.record.createdAt || b.record.time || ''))), supplierMap, pdfRange, reportKind)
-    setShowPdfOptions(false)
+    const rows = [...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || String(a.record.createdAt || a.record.time || '').localeCompare(String(b.record.createdAt || b.record.time || '')))
+    if (exportFormat === 'csv') downloadCsv(rows, reportKind, selectedRange)
+    else downloadPdf(rows, supplierMap, selectedRange, reportKind)
+    setShowExportOptions(false)
+  }
+
+  function selectQuickRange(label) {
+    setActiveQuick(label)
+    setRange(computeQuickRange(label))
+    setPage(1)
+  }
+
+  function shiftReportDay(amount) {
+    const current = range[0] === range[1] ? range[0] : range[1]
+    const next = toDateKey(addDays(parseDateKey(current), amount))
+    setRange([next, next])
+    setActiveQuick(next === todayKey() ? 'Hari ini' : null)
+    setPage(1)
   }
 
   return (
@@ -260,25 +294,22 @@ export default function Reports() {
           {reportKind === 'brondolan' && <p className="mt-1 text-xs text-ink-500">Pinjaman kas tampil di tabel sebagai kas keluar; ringkasan total pembelian hanya menghitung brondolan.</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost" onClick={() => downloadCsv(displayRows, reportKind)}>
-            <Download size={16} /> Ekspor CSV
-          </button>
-          <button className="btn-primary" onClick={() => setShowPdfOptions(true)}>
-            <Download size={16} /> Unduh PDF
+          <button className="btn-primary" onClick={() => { setExportRange(range); setShowExportOptions(true) }}>
+            <Download size={16} /> Unduh laporan
           </button>
         </div>
       </div>
 
       <div className="card p-5 mb-6">
-        <div className="flex flex-wrap gap-2 mb-4">
-          {QUICK_RANGES.map((label) => (
+        {reportKind === 'brondolan' && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-plantation-900/10 bg-plantation-50/60 p-3">
+          <div><p className="text-xs font-medium text-ink-500">Lihat laporan per hari</p><p className="mt-0.5 font-display text-base text-plantation-950">{range[0] === range[1] ? formatShortDate(range[0]) : `${formatShortDate(range[0])} — ${formatShortDate(range[1])}`}</p></div>
+          <div className="flex items-center gap-2"><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftReportDay(-1)} aria-label="Hari sebelumnya"><ChevronLeft size={18} /><span className="hidden sm:inline">Hari sebelumnya</span></button><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => selectQuickRange('Hari ini')}>Hari ini</button><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftReportDay(1)} aria-label="Hari berikutnya"><span className="hidden sm:inline">Hari berikutnya</span><ChevronRight size={18} /></button></div>
+        </div>}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(reportKind === 'brondolan' ? ['Hari ini'] : QUICK_RANGES).map((label) => (
             <button
               key={label}
-              onClick={() => {
-                setActiveQuick(label)
-                setRange(computeQuickRange(label))
-                setPage(1)
-              }}
+              onClick={() => selectQuickRange(label)}
               className={`rounded-full px-3.5 py-1.5 text-xs font-medium border transition-colors ${
                 activeQuick === label
                   ? 'bg-plantation-900 text-paper-50 border-plantation-900'
@@ -290,7 +321,7 @@ export default function Reports() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid grid-cols-1 items-end gap-3 sm:grid-cols-2 ${reportKind === 'brondolan' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>
           <div>
             <label className="label">Dari tanggal</label>
             <input
@@ -341,6 +372,28 @@ export default function Reports() {
         <StatCard label="Total pembelian" value={formatRupiah(summary.totalValue)} tone="gold" delay={200} />
         <StatCard label="Total berat kotor" value={`${summary.totalGrossWeight.toLocaleString('id-ID')} kg`} delay={300} />
       </div>
+
+      {dailyClose && <section className="mb-6 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white shadow-soft">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-900/8 bg-gradient-to-r from-plantation-50 to-white px-5 py-4">
+          <div className="flex items-start gap-3"><span className="cash-summary-icon"><Wallet size={17} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap harian brondolan</h2><p className="mt-0.5 text-xs text-ink-500">Perhitungan memakai berat bersih × harga/kg pada setiap catatan. Harmini dihitung dengan tambahan Rp10/kg.</p></div></div>
+          {dailyClose.closure?.status === 'locked' ? <span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-semibold text-plantation-800">Kas ditutup</span> : <span className="rounded-full bg-gold-400/15 px-3 py-1 text-xs font-semibold text-gold-700">Kas belum ditutup</span>}
+        </div>
+        <div className="grid gap-px bg-ink-900/8 sm:grid-cols-2 lg:grid-cols-3">
+          <CloseMetric label="Total berat bersih" value={`${dailyClose.netKg.toLocaleString('id-ID')} kg`} />
+          <CloseMetric label="Pembayaran via kas kebun" value={formatRupiah(dailyClose.cash)} tone="green" />
+          <CloseMetric label="Pembayaran via transfer" value={formatRupiah(dailyClose.transfer)} tone="blue" />
+          {dailyClose.personal > 0 && <CloseMetric label="Talangan pribadi" value={formatRupiah(dailyClose.personal)} />}
+          <CloseMetric label="Total kas + transfer" value={formatRupiah(dailyClose.total)} tone="gold" />
+          {dailyClose.personal > 0 && <CloseMetric label="Total semua metode" value={formatRupiah(dailyClose.allTotal)} tone="gold" />}
+          <CloseMetric label="Pinjaman kas (dipisah)" value={formatRupiah(dailyClose.loans)} tone="gold" />
+        </div>
+        <div className="grid gap-3 border-t border-ink-900/8 bg-paper-50/70 p-4 sm:grid-cols-3">
+          <CloseBalance label="Sisa menurut sistem" value={dailyClose.closure?.systemCashAtClose} />
+          <CloseBalance label="Uang fisik dihitung admin" value={dailyClose.closure?.countedCash} />
+          <CloseBalance label="Selisih kas admin" value={dailyClose.closure?.cashDifference} difference />
+        </div>
+        {dailyClose.closure?.status === 'locked' && dailyClose.closure?.countedCash === undefined && <p className="px-5 pb-4 text-xs text-ink-500">Kas ini ditutup sebelum pencatatan jumlah uang fisik tersedia.</p>}
+      </section>}
 
       <div className="card overflow-hidden">
         <div className="table-scroll">
@@ -421,16 +474,16 @@ export default function Reports() {
       <Modal open={!!deleteTarget} onClose={() => { setDeleteTarget(null); setDeleteError('') }} title={deleteTarget?.type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus catatan pembelian'}>
         {deleteTarget && <div className="space-y-4"><p className="text-sm leading-relaxed text-ink-700">Yakin menghapus {deleteTarget.type === 'loan' ? 'pinjaman kas' : 'catatan pembelian'} <b>{deleteTarget.record.name || 'ini'}</b> tanggal <b>{formatShortDate(deleteTarget.record.date)}</b>? {deleteTarget.type === 'loan' ? 'Saldo kas akan dihitung ulang.' : 'Catatan akan dibatalkan dan tidak ditampilkan di laporan.'}</p>{deleteError && <p role="alert" className="text-sm text-red-700">{deleteError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setDeleteTarget(null)}>Batal</button><button type="button" className="btn-danger" onClick={confirmDelete}><Trash2 size={16} /> Hapus</button></div></div>}
       </Modal>
-      <Modal open={showPdfOptions} onClose={() => setShowPdfOptions(false)} title="Unduh laporan PDF">
+      <Modal open={showExportOptions} onClose={() => setShowExportOptions(false)} title="Unduh laporan">
         <div className="space-y-5">
-          <div>
-            <label className="label" htmlFor="pdf-range">Rentang laporan</label>
-            <select id="pdf-range" className="input" value={pdfRangeDays} onChange={(event) => setPdfRangeDays(event.target.value)}>
-              {PDF_RANGES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+          <p className="text-sm text-ink-600">Pilih tanggal awal dan akhir untuk menentukan isi file yang diunduh.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Dari tanggal"><input type="date" className="input" value={exportRange[0]} max={exportRange[1]} onChange={(event) => setExportRange([event.target.value, exportRange[1]])} /></Field>
+            <Field label="Sampai tanggal"><input type="date" className="input" value={exportRange[1]} min={exportRange[0]} onChange={(event) => setExportRange([exportRange[0], event.target.value])} /></Field>
           </div>
-          <p className="text-xs text-ink-500">PDF hanya berisi tanggal rentang pilihan dan tabel pembelian.</p>
-          <button type="button" className="btn-primary w-full" onClick={downloadSelectedPdf}><Download size={16} /> Unduh PDF</button>
+          <div><span className="label">Format file</span><div className="grid grid-cols-2 gap-2"><button type="button" className={exportFormat === 'pdf' ? 'btn-primary' : 'btn-ghost'} onClick={() => setExportFormat('pdf')}>PDF</button><button type="button" className={exportFormat === 'csv' ? 'btn-primary' : 'btn-ghost'} onClick={() => setExportFormat('csv')}>CSV</button></div></div>
+          <p className="text-xs text-ink-500">Data pinjaman kas juga disertakan untuk laporan brondolan.</p>
+          <button type="button" disabled={!exportRange[0] || !exportRange[1] || exportRange[0] > exportRange[1]} className="btn-primary w-full" onClick={downloadSelectedExport}><Download size={16} /> Unduh {exportFormat.toUpperCase()}</button>
         </div>
       </Modal>
     </div>
@@ -439,3 +492,14 @@ export default function Reports() {
 
 function PaymentBadge({ status, onConfirm }) { return status === 'unpaid' ? <button type="button" onClick={onConfirm} className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-600 transition hover:bg-gold-400/30" title="Klik untuk konfirmasi pembayaran">Belum bayar</button> : <span className="rounded-full bg-plantation-700/10 px-2 py-1 text-xs font-medium text-plantation-700">Sudah bayar</span> }
 function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }
+function CloseMetric({ label, value, tone = '' }) {
+  const toneClass = tone === 'green' ? 'text-plantation-800' : tone === 'blue' ? 'text-sky-800' : tone === 'gold' ? 'text-gold-700' : 'text-ink-900'
+  return <div className="bg-white px-5 py-4"><p className="text-xs text-ink-500">{label}</p><p className={`mt-1 font-display text-xl ${toneClass}`}>{value}</p></div>
+}
+function CloseBalance({ label, value, difference = false }) {
+  const known = value !== undefined && value !== null
+  const numeric = Number(value || 0)
+  const text = !known ? 'Belum dicatat' : `${difference && numeric > 0 ? '+' : ''}${formatRupiah(numeric)}`
+  const color = !known ? 'text-ink-500' : difference && numeric < 0 ? 'text-red-700' : difference && numeric > 0 ? 'text-plantation-800' : 'text-ink-900'
+  return <div className="rounded-xl border border-ink-900/8 bg-white px-4 py-3"><p className="text-xs text-ink-500">{label}</p><p className={`mt-1 text-sm font-semibold ${color}`}>{text}</p>{difference && known && numeric !== 0 && <p className="mt-0.5 text-[11px] text-ink-500">{numeric > 0 ? 'Uang fisik lebih' : 'Uang fisik kurang'} dari saldo sistem</p>}</div>
+}

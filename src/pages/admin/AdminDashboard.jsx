@@ -21,6 +21,9 @@ export default function AdminDashboard() {
   const isLocked = summary.status === 'locked'
   const [showInitialCash, setShowInitialCash] = useState(false)
   const [showCashEdit, setShowCashEdit] = useState(false)
+  const [showCloseCash, setShowCloseCash] = useState(false)
+  const [countedCashInput, setCountedCashInput] = useState('')
+  const [closeCashError, setCloseCashError] = useState('')
   const [cashEditForm, setCashEditForm] = useState({ amount: '', reason: '' })
   const [cashEditError, setCashEditError] = useState('')
   const [showTopup, setShowTopup] = useState(false)
@@ -61,6 +64,20 @@ export default function AdminDashboard() {
     setShowCashEdit(false)
   }
 
+  function openCloseCash() {
+    setCountedCashInput(formatNumericInput(String(Math.max(0, summary.remaining))))
+    setCloseCashError('')
+    setShowCloseCash(true)
+  }
+
+  function handleCloseCash(event) {
+    event.preventDefault()
+    const result = lockDay(date, currentUser.id, parseAmount(countedCashInput))
+    if (!result?.ok) return setCloseCashError(result?.message || 'Kas gagal ditutup.')
+    setShowCloseCash(false)
+    setCloseCashError('')
+  }
+
   function handleAddTopup(event) {
     event.preventDefault()
     if (parseAmount(topupForm.amount) <= 0) return
@@ -83,7 +100,7 @@ export default function AdminDashboard() {
   return <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10">
     <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-600">Operasional</p><h1 className="text-2xl font-display mt-1">Kas Hari Ini</h1><p className="text-sm text-ink-500 mt-1">{formatShortDate(date)} — {currentUser.name}</p></div>
-      {summary.exists && <button disabled={isLocked && hasPendingUnlock} onClick={() => (isLocked ? setShowUnlockRequest(true) : lockDay(date, currentUser.id))} className={isLocked ? 'btn-ghost' : 'btn-primary'}>{isLocked ? <Unlock size={16} /> : <Lock size={16} />}{isLocked ? (hasPendingUnlock ? 'Menunggu Persetujuan Owner' : 'Ajukan Buka Kas') : 'Tutup Kas Harian'}</button>}
+      {summary.exists && <button disabled={isLocked && hasPendingUnlock} onClick={() => (isLocked ? setShowUnlockRequest(true) : openCloseCash())} className={isLocked ? 'btn-ghost' : 'btn-primary'}>{isLocked ? <Unlock size={16} /> : <Lock size={16} />}{isLocked ? (hasPendingUnlock ? 'Menunggu Persetujuan Owner' : 'Ajukan Buka Kas') : 'Tutup Kas Harian'}</button>}
     </div>
     {isLocked && <div className="mb-6 rounded-md border border-gold-500/30 bg-gold-400/10 px-4 py-3 text-sm text-plantation-900">Kas hari ini sudah ditutup. Transaksi baru dan penghapusan transaksi tidak tersedia sampai kas dibuka kembali.</div>}
     {!summary.exists && pendingCashEdit && <div className="mb-6 rounded-md border border-gold-500/30 bg-gold-400/10 px-4 py-3 text-sm text-plantation-900">Pengajuan kas awal sudah dikirim. Saldo akan tersedia setelah owner menyetujuinya.</div>}
@@ -96,6 +113,19 @@ export default function AdminDashboard() {
     <Modal open={showInitialCash} onClose={() => setShowInitialCash(false)} title="Ajukan kas awal ke owner"><form onSubmit={handleSaveInitialCash} className="space-y-4"><p className="text-sm text-ink-600">Kas awal belum diatur. Pengajuan ini akan menunggu persetujuan owner sebelum saldo dipakai.</p><div><label className="label" htmlFor="initial-cash-amount">Jumlah kas awal (Rp)</label><input id="initial-cash-amount" type="text" inputMode="numeric" className="input" value={initialCashInput} onChange={(event) => setInitialCashInput(formatNumericInput(event.target.value))} autoFocus required /></div><div><label className="label" htmlFor="initial-cash-reason">Alasan / keterangan</label><textarea id="initial-cash-reason" className="input min-h-24" value={initialCashReason} onChange={(event) => { setInitialCashReason(event.target.value); setInitialCashError('') }} placeholder="Contoh: kas awal operasional hari ini" required /></div>{initialCashError && <p role="alert" className="text-sm text-red-700">{initialCashError}</p>}<button type="submit" className="btn-primary w-full"><ShieldCheck size={16} /> Kirim ke owner</button></form></Modal>
     <Modal open={showCashEdit} onClose={() => setShowCashEdit(false)} title="Ajukan perubahan kas awal"><form onSubmit={handleRequestCashEdit} className="space-y-4"><p className="text-sm text-ink-600">Nilai kas awal tidak langsung berubah. Owner perlu menyetujui permintaan ini terlebih dahulu.</p><div><label className="label" htmlFor="cash-edit-amount">Kas awal baru (Rp)</label><input id="cash-edit-amount" type="text" inputMode="numeric" className="input" value={cashEditForm.amount} onChange={(event) => setCashEditForm({ ...cashEditForm, amount: formatNumericInput(event.target.value) })} autoFocus required /><p className="mt-1 text-xs text-ink-500">Saat ini: {formatRupiah(summary.initialAmount)}</p></div><div><label className="label" htmlFor="cash-edit-reason">Alasan perubahan</label><textarea id="cash-edit-reason" className="input min-h-24" value={cashEditForm.reason} onChange={(event) => { setCashEditForm({ ...cashEditForm, reason: event.target.value }); setCashEditError('') }} placeholder="Contoh: koreksi jumlah kas awal" required /></div>{cashEditError && <p role="alert" className="text-sm text-red-700">{cashEditError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setShowCashEdit(false)}>Batal</button><button type="submit" className="btn-primary"><ShieldCheck size={16} /> Kirim ke owner</button></div></form></Modal>
     <Modal open={showTopup} onClose={() => setShowTopup(false)} title="Tambah kas (top-up)"><form onSubmit={handleAddTopup} className="space-y-4"><div><label className="label">Jumlah tambahan (Rp)</label><input type="text" inputMode="numeric" className="input" value={topupForm.amount} onChange={(event) => setTopupForm({ ...topupForm, amount: formatNumericInput(event.target.value) })} placeholder="mis. 20000000" autoFocus /><p className="mt-2 text-xs text-plantation-700">Jumlah tambahan: <b>{formatRupiah(parseAmount(topupForm.amount))}</b></p></div><div><label className="label">Sumber dana (opsional)</label><input className="input" value={topupForm.source} onChange={(event) => setTopupForm({ ...topupForm, source: event.target.value })} placeholder="mis. transfer dari owner" /></div><div><label className="label">Catatan (opsional)</label><input className="input" value={topupForm.note} onChange={(event) => setTopupForm({ ...topupForm, note: event.target.value })} placeholder="mis. kas awal habis jam 14.00" /></div><button type="submit" className="btn-gold w-full">Tambahkan ke kas</button></form></Modal>
+    <Modal open={showCloseCash} onClose={() => setShowCloseCash(false)} title="Tutup kas hari ini">
+      <form onSubmit={handleCloseCash} className="space-y-4">
+        <p className="text-sm leading-relaxed text-ink-600">Hitung uang tunai yang tersisa, lalu masukkan jumlah fisiknya. Owner akan melihat angka sistem dan selisihnya di ringkasan laporan brondolan.</p>
+        <div className="grid grid-cols-2 gap-3 rounded-xl border border-plantation-900/10 bg-plantation-50/70 p-4">
+          <div><p className="text-xs text-ink-500">Sisa menurut sistem</p><p className="mt-1 font-display text-lg text-plantation-900">{formatRupiah(summary.remaining)}</p></div>
+          <div><p className="text-xs text-ink-500">Hitungan fisik</p><p className="mt-1 font-display text-lg text-plantation-900">{formatRupiah(parseAmount(countedCashInput))}</p></div>
+          <div className="col-span-2 border-t border-plantation-900/10 pt-3"><p className="text-xs text-ink-500">Selisih kas</p><p className={`mt-1 font-semibold ${parseAmount(countedCashInput) - summary.remaining < 0 ? 'text-red-700' : 'text-plantation-800'}`}>{parseAmount(countedCashInput) - summary.remaining > 0 ? '+' : ''}{formatRupiah(parseAmount(countedCashInput) - summary.remaining)}</p></div>
+        </div>
+        <div><label className="label" htmlFor="counted-cash">Uang kas fisik tersisa (Rp)</label><input id="counted-cash" inputMode="numeric" className="input" value={countedCashInput} onChange={(event) => { setCountedCashInput(formatNumericInput(event.target.value)); setCloseCashError('') }} autoFocus required /></div>
+        {closeCashError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{closeCashError}</p>}
+        <div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setShowCloseCash(false)}>Batal</button><button type="submit" className="btn-primary"><Lock size={16} /> Simpan &amp; tutup kas</button></div>
+      </form>
+    </Modal>
     <Modal open={showUnlockRequest} onClose={() => { setShowUnlockRequest(false); setUnlockError('') }} title="Ajukan buka kas"><form onSubmit={handleUnlockRequest} className="space-y-4"><p className="text-sm text-ink-700">Kas hanya dapat dibuka kembali setelah owner menyetujui permintaan ini.</p><div><label className="label" htmlFor="unlock-reason">Alasan buka kas</label><textarea id="unlock-reason" className="input min-h-24" value={unlockReason} onChange={(event) => { setUnlockReason(event.target.value); setUnlockError('') }} placeholder="Contoh: ada transaksi yang belum tercatat" autoFocus /></div>{unlockError && <p className="text-sm text-red-700">{unlockError}</p>}<button type="submit" className="btn-primary w-full"><Unlock size={16} /> Kirim permintaan</button></form></Modal>
   </div>
 }

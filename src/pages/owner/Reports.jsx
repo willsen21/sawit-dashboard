@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Save, Trash2, Wallet } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -22,6 +22,16 @@ const CVS = ['Sinar Mandiri', 'Jaya Agung']
 const parseNumber = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
 const QUICK_RANGES = ['Hari ini', 'Minggu ini', 'Bulan ini', 'Tahun ini', '30 hari terakhir']
 const formatCsvDate = (key) => key.split('-').reverse().join('/')
+function reportedPricePerKg(record, supplierMap, reportKind) {
+  const name = String(record.name || supplierMap[record.supplierId]?.name || '').trim().toLocaleLowerCase('id-ID')
+  return Number(record.pricePerKg || 0) + (reportKind === 'brondolan' && name.includes('harmini') ? 10 : 0)
+}
+function reportedTotal(record, supplierMap, reportKind) {
+  const netKg = Number(record.netKg ?? record.weightKg ?? 0)
+  return reportKind === 'brondolan' && Number(record.pricePerKg) > 0
+    ? Math.round(netKg * reportedPricePerKg(record, supplierMap, reportKind))
+    : Number(record.total || 0)
+}
 
 function computeQuickRange(label) {
   const now = new Date()
@@ -42,7 +52,7 @@ function computeQuickRange(label) {
   }
 }
 
-function downloadCsv(rows, reportKind, range) {
+function downloadCsv(rows, reportKind, range, supplierMap) {
   const isBrondolan = reportKind === 'brondolan'
   const header = ['Tanggal', ...(isBrondolan ? ['Jenis catatan'] : ['CV']), 'Nama', 'Status pembayaran', 'Metode pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total / nominal', 'No. Nota', 'Catatan / alasan']
   const lines = rows.map(({ type = 'purchase', record }) => {
@@ -56,8 +66,8 @@ function downloadCsv(rows, reportKind, range) {
       isLoan ? 'Bayar Kas' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
       isLoan ? '—' : t.grossKg ?? t.weightKg ?? 0,
       isLoan ? '—' : t.netKg ?? t.weightKg ?? 0,
-      isLoan ? '—' : t.pricePerKg,
-      isLoan ? t.amount : t.total,
+      isLoan ? '—' : reportedPricePerKg(t, supplierMap, reportKind),
+      isLoan ? t.amount : reportedTotal(t, supplierMap, reportKind),
       isLoan ? '' : t.notaNumber || '',
       (isLoan ? `${t.relatedDate ? `Tanggal terkait ${formatCsvDate(t.relatedDate)} · ` : ''}${t.reason || ''}` : t.note || '').replaceAll(',', ';'),
     ]
@@ -88,8 +98,8 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
       isLoan ? 'Bayar Kas' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun',
       isLoan ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
       isLoan ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`,
-      isLoan ? '—' : formatRupiah(t.pricePerKg),
-      formatRupiah(isLoan ? t.amount : t.total),
+      isLoan ? '—' : formatRupiah(reportedPricePerKg(t, supplierMap, reportKind)),
+      formatRupiah(isLoan ? t.amount : reportedTotal(t, supplierMap, reportKind)),
       isLoan ? `${t.relatedDate ? `Terkait ${formatShortDate(t.relatedDate)} · ` : ''}${t.reason || '—'}` : t.note || '—',
     ]
   })
@@ -119,6 +129,7 @@ export default function Reports() {
   const [paymentStatus, setPaymentStatus] = useState('all')
   const [cvFilter, setCvFilter] = useState('all')
   const [paymentTarget, setPaymentTarget] = useState(null)
+  const [dailyDetailFilter, setDailyDetailFilter] = useState(null)
   const [editTarget, setEditTarget] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const [editError, setEditError] = useState('')
@@ -143,18 +154,11 @@ export default function Reports() {
       : []
     return [...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || a.sortTime.localeCompare(b.sortTime))
   }, [filtered, cashLoans, reportKind, range])
-  const pageCount = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE))
-  const paginated = displayRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
   const summary = useMemo(() => {
     const totalWeight = filtered.reduce((s, t) => s + Number(t.netKg ?? t.weightKg ?? 0), 0)
     const totalGrossWeight = filtered.reduce((s, t) => s + Number(t.grossKg ?? t.weightKg ?? 0), 0)
     const totalValue = filtered.reduce((sum, t) => {
-      const name = String(t.name || supplierMap[t.supplierId]?.name || '').trim().toLocaleLowerCase('id-ID')
-      const adjusted = reportKind === 'brondolan' && name.includes('harmini')
-        ? Math.round(Number(t.netKg ?? t.weightKg ?? 0) * (Number(t.pricePerKg || 0) + 10))
-        : Number(t.total || 0)
-      return sum + adjusted
+      return sum + reportedTotal(t, supplierMap, reportKind)
     }, 0)
     return { totalWeight, totalGrossWeight, totalValue, count: filtered.length }
   }, [filtered, reportKind, supplierMap])
@@ -163,21 +167,58 @@ export default function Reports() {
     if (reportKind !== 'brondolan' || range[0] !== range[1]) return null
     const date = range[0]
     const records = transactions.filter((t) => t.date === date && t.status !== 'voided' && (t.kind || 'buah') === 'brondolan')
-    const purchases = records.reduce((result, t) => {
-      const name = String(t.name || supplierMap[t.supplierId]?.name || '').trim().toLocaleLowerCase('id-ID')
+    const pricedRecords = records.map((t) => {
       const netKg = Number(t.netKg ?? t.weightKg ?? 0)
-      const price = Number(t.pricePerKg || 0) + (name.includes('harmini') ? 10 : 0)
-      const total = Math.round(netKg * price)
-      result.netKg += netKg
+      const price = reportedPricePerKg(t, supplierMap, reportKind)
+      return { ...t, reportNetKg: netKg, reportPrice: price, reportTotal: Math.round(netKg * price) }
+    })
+    const priceCounts = pricedRecords.reduce((counts, t) => counts.set(t.reportPrice, (counts.get(t.reportPrice) || 0) + 1), new Map())
+    const purchases = pricedRecords.reduce((result, t) => {
+      const total = t.reportTotal
+      result.netKg += t.reportNetKg
       if (t.paymentMethod === 'transfer') result.transfer += total
       else if (t.paymentMethod === 'personal') result.personal += total
       else result.cash += total
+      const sameRate = priceCounts.get(t.reportPrice) > 1
+      const group = sameRate ? result.samePrice : result.differentPrice
+      group.netKg += t.reportNetKg
+      group.total += total
+      group.ids.push(t.id)
       return result
-    }, { netKg: 0, cash: 0, transfer: 0, personal: 0 })
+    }, { netKg: 0, cash: 0, transfer: 0, personal: 0, samePrice: { netKg: 0, total: 0, ids: [] }, differentPrice: { netKg: 0, total: 0, ids: [] } })
     const loans = cashLoans.filter((loan) => loan.date === date).reduce((sum, loan) => sum + Number(loan.amount || 0), 0)
     const closure = dailyCash.find((item) => item.date === date)
     return { ...purchases, total: purchases.cash + purchases.transfer, allTotal: purchases.cash + purchases.transfer + purchases.personal, loans, closure }
   }, [reportKind, range, transactions, cashLoans, dailyCash, supplierMap])
+
+  useEffect(() => {
+    setDailyDetailFilter(null)
+    setPage(1)
+  }, [range])
+
+  const detailFilterLabels = {
+    weight: 'Semua pembelian brondolan', cash: 'Pembayaran via kas kebun', transfer: 'Pembayaran via transfer',
+    personal: 'Pembelian dengan talangan pribadi', loans: 'Pinjaman kas', samePrice: 'Pembelian dengan harga/kg yang sama',
+    differentPrice: 'Pembelian dengan harga/kg berbeda', all: 'Semua catatan hari ini',
+  }
+  const tableRows = useMemo(() => {
+    if (!dailyDetailFilter) return displayRows
+    if (dailyDetailFilter === 'all' || dailyDetailFilter === 'weight') return dailyDetailFilter === 'weight' ? displayRows.filter((row) => row.type !== 'loan') : displayRows
+    if (dailyDetailFilter === 'loans') return displayRows.filter((row) => row.type === 'loan')
+    if (['cash', 'transfer', 'personal'].includes(dailyDetailFilter)) return displayRows.filter((row) => row.type === 'purchase' && (row.record.paymentMethod || 'cash') === dailyDetailFilter)
+    if (['samePrice', 'differentPrice'].includes(dailyDetailFilter)) {
+      const ids = new Set(dailyClose?.[dailyDetailFilter]?.ids || [])
+      return displayRows.filter((row) => row.type === 'purchase' && ids.has(row.record.id))
+    }
+    return displayRows
+  }, [displayRows, dailyDetailFilter, dailyClose])
+  const pageCount = Math.max(1, Math.ceil(tableRows.length / PAGE_SIZE))
+  const paginated = tableRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  function selectDailyDetail(filter) {
+    setDailyDetailFilter((current) => current === filter ? null : filter)
+    setPage(1)
+  }
 
   function confirmPayment() {
     if (!paymentTarget) return
@@ -264,7 +305,7 @@ export default function Reports() {
       ? cashLoans.filter((loan) => loan.date >= selectedRange[0] && loan.date <= selectedRange[1]).map((record) => ({ type: 'loan', record }))
       : []
     const rows = [...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || String(a.record.createdAt || a.record.time || '').localeCompare(String(b.record.createdAt || b.record.time || '')))
-    if (exportFormat === 'csv') downloadCsv(rows, reportKind, selectedRange)
+    if (exportFormat === 'csv') downloadCsv(rows, reportKind, selectedRange, supplierMap)
     else downloadPdf(rows, supplierMap, selectedRange, reportKind)
     setShowExportOptions(false)
   }
@@ -375,27 +416,28 @@ export default function Reports() {
 
       {dailyClose && <section className="mb-6 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-900/8 bg-gradient-to-r from-plantation-50 to-white px-5 py-4">
-          <div className="flex items-start gap-3"><span className="cash-summary-icon"><Wallet size={17} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap harian brondolan</h2><p className="mt-0.5 text-xs text-ink-500">Perhitungan memakai berat bersih × harga/kg pada setiap catatan. Harmini dihitung dengan tambahan Rp10/kg.</p></div></div>
+          <div className="flex items-start gap-3"><span className="cash-summary-icon"><Wallet size={17} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap harian brondolan</h2><p className="mt-0.5 text-xs text-ink-500">Perhitungan memakai berat bersih × harga/kg pada setiap catatan. Harmini dihitung dengan tambahan Rp10/kg.</p><p className="mt-1 text-[11px] text-ink-500">Pilih kartu untuk melihat catatan pembentuk nilainya di tabel bawah. Harga/kg sama berarti dipakai oleh lebih dari satu catatan.</p></div></div>
           {dailyClose.closure?.status === 'locked' ? <span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-semibold text-plantation-800">Kas ditutup</span> : <span className="rounded-full bg-gold-400/15 px-3 py-1 text-xs font-semibold text-gold-700">Kas belum ditutup</span>}
         </div>
         <div className="grid gap-px bg-ink-900/8 sm:grid-cols-2 lg:grid-cols-3">
-          <CloseMetric label="Total berat bersih" value={`${dailyClose.netKg.toLocaleString('id-ID')} kg`} />
-          <CloseMetric label="Pembayaran via kas kebun" value={formatRupiah(dailyClose.cash)} tone="green" />
-          <CloseMetric label="Pembayaran via transfer" value={formatRupiah(dailyClose.transfer)} tone="blue" />
-          {dailyClose.personal > 0 && <CloseMetric label="Talangan pribadi" value={formatRupiah(dailyClose.personal)} />}
-          <CloseMetric label="Total kas + transfer" value={formatRupiah(dailyClose.total)} tone="gold" />
-          {dailyClose.personal > 0 && <CloseMetric label="Total semua metode" value={formatRupiah(dailyClose.allTotal)} tone="gold" />}
-          <CloseMetric label="Pinjaman kas (dipisah)" value={formatRupiah(dailyClose.loans)} tone="gold" />
+          <CloseMetric label="Total berat bersih" value={`${dailyClose.netKg.toLocaleString('id-ID')} kg`} hint="Semua catatan pembelian" active={dailyDetailFilter === 'weight'} onClick={() => selectDailyDetail('weight')} />
+          <CloseMetric label="Pembayaran via kas kebun" value={formatRupiah(dailyClose.cash)} tone="green" hint="Klik untuk melihat catatan kas" active={dailyDetailFilter === 'cash'} onClick={() => selectDailyDetail('cash')} />
+          <CloseMetric label="Pembayaran via transfer" value={formatRupiah(dailyClose.transfer)} tone="blue" hint="Klik untuk melihat catatan transfer" active={dailyDetailFilter === 'transfer'} onClick={() => selectDailyDetail('transfer')} />
+          {dailyClose.personal > 0 && <CloseMetric label="Talangan pribadi" value={formatRupiah(dailyClose.personal)} hint="Klik untuk melihat catatan talangan" active={dailyDetailFilter === 'personal'} onClick={() => selectDailyDetail('personal')} />}
+          <CloseMetric label="Berat bersih × harga/kg sama" value={formatRupiah(dailyClose.samePrice.total)} tone="gold" hint={`${dailyClose.samePrice.netKg.toLocaleString('id-ID')} kg · ${dailyClose.samePrice.ids.length} catatan dengan harga/kg berulang`} active={dailyDetailFilter === 'samePrice'} onClick={() => selectDailyDetail('samePrice')} />
+          <CloseMetric label="Berat bersih × harga/kg berbeda" value={formatRupiah(dailyClose.differentPrice.total)} tone="gold" hint={`${dailyClose.differentPrice.netKg.toLocaleString('id-ID')} kg · ${dailyClose.differentPrice.ids.length} catatan dengan harga/kg unik`} active={dailyDetailFilter === 'differentPrice'} onClick={() => selectDailyDetail('differentPrice')} />
+          <CloseMetric label="Pinjaman kas (dipisah)" value={formatRupiah(dailyClose.loans)} tone="gold" hint="Klik untuk melihat catatan pinjaman" active={dailyDetailFilter === 'loans'} onClick={() => selectDailyDetail('loans')} />
         </div>
         <div className="grid gap-3 border-t border-ink-900/8 bg-paper-50/70 p-4 sm:grid-cols-3">
-          <CloseBalance label="Sisa menurut sistem" value={dailyClose.closure?.systemCashAtClose} />
-          <CloseBalance label="Uang fisik dihitung admin" value={dailyClose.closure?.countedCash} />
-          <CloseBalance label="Selisih kas admin" value={dailyClose.closure?.cashDifference} difference />
+          <CloseBalance label="Sisa menurut sistem" value={dailyClose.closure?.systemCashAtClose} onClick={() => selectDailyDetail('all')} active={dailyDetailFilter === 'all'} />
+          <CloseBalance label="Uang fisik dihitung admin" value={dailyClose.closure?.countedCash} onClick={() => selectDailyDetail('all')} active={dailyDetailFilter === 'all'} />
+          <CloseBalance label="Selisih kas admin" value={dailyClose.closure?.cashDifference} difference onClick={() => selectDailyDetail('all')} active={dailyDetailFilter === 'all'} />
         </div>
         {dailyClose.closure?.status === 'locked' && dailyClose.closure?.countedCash === undefined && <p className="px-5 pb-4 text-xs text-ink-500">Kas ini ditutup sebelum pencatatan jumlah uang fisik tersedia.</p>}
       </section>}
 
       <div className="card overflow-hidden">
+        {dailyDetailFilter && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/8 bg-plantation-50/70 px-5 py-3"><div><p className="text-sm font-semibold text-plantation-950">{detailFilterLabels[dailyDetailFilter]}</p><p className="mt-0.5 text-xs text-ink-500">{tableRows.length} catatan masuk ke perhitungan kartu ini.</p></div><button type="button" className="btn-ghost !px-3 !py-1.5 text-xs" onClick={() => { setDailyDetailFilter(null); setPage(1) }}>Tampilkan semua</button></div>}
         <div className="table-scroll">
           <table className="w-full">
             <thead>
@@ -415,7 +457,7 @@ export default function Reports() {
               </tr>
             </thead>
             <tbody>
-              {displayRows.length === 0 ? (
+              {tableRows.length === 0 ? (
                 <tr>
                   <td colSpan={11 + (currentUser?.role === 'owner' ? 1 : 0)} className="table-cell text-center text-ink-500 py-10">
                     Tidak ada transaksi pada rentang ini.
@@ -432,8 +474,8 @@ export default function Reports() {
                     <td className="table-cell">{type === 'loan' ? 'Bayar Kas' : t.paymentMethod === 'transfer' ? 'Transfer' : t.paymentMethod === 'personal' ? 'Talangan pribadi' : 'Kas Kebun'}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.grossKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
                     <td className="table-cell">{type === 'loan' ? '—' : `${Number(t.netKg ?? t.weightKg ?? 0).toLocaleString('id-ID')} kg`}</td>
-                    <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(t.pricePerKg)}</td>
-                    <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{type === 'loan' && <span className="mb-1 block text-xs font-normal text-ink-500">Total pinjaman</span>}{formatRupiah(type === 'loan' ? t.amount : t.total)}</td>
+                    <td className="table-cell">{type === 'loan' ? '—' : formatRupiah(reportedPricePerKg(t, supplierMap, reportKind))}</td>
+                    <td className={`table-cell font-medium ${type === 'loan' ? 'text-gold-700' : ''}`}>{type === 'loan' && <span className="mb-1 block text-xs font-normal text-ink-500">Total pinjaman</span>}{formatRupiah(type === 'loan' ? t.amount : reportedTotal(t, supplierMap, reportKind))}</td>
                     <td className="table-cell text-ink-500">{type === 'loan' ? <>{t.relatedDate && <span className="mb-1 block text-xs">Tanggal terkait: {formatShortDate(t.relatedDate)}</span>}{t.reason || '—'}</> : t.note || '—'}</td>
                     {currentUser?.role === 'owner' && <td className="table-cell"><div className="flex items-center gap-1">{type === 'loan' ? <button type="button" onClick={() => openLoanEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit pinjaman" aria-label={`Edit pinjaman ${t.name || ''}`}><Pencil size={16} /></button> : <button type="button" onClick={() => openEdit(t)} className="rounded-md p-2 text-ink-500 transition hover:bg-plantation-700/10 hover:text-plantation-800" title="Edit catatan" aria-label={`Edit catatan ${t.name || 'transaksi'}`}><Pencil size={16} /></button>}<button type="button" onClick={() => { setDeleteTarget({ type, record: t }); setDeleteError('') }} className="rounded-md p-2 text-ink-500 transition hover:bg-red-50 hover:text-red-700" title={type === 'loan' ? 'Hapus pinjaman kas' : 'Hapus pembelian'} aria-label={`Hapus ${type === 'loan' ? 'pinjaman' : 'pembelian'} ${t.name || ''}`}><Trash2 size={16} /></button></div></td>}
                   </tr>
@@ -442,7 +484,7 @@ export default function Reports() {
             </tbody>
           </table>
         </div>
-        {displayRows.length > PAGE_SIZE && <Pagination page={page} pages={pageCount} setPage={setPage} />}
+        {tableRows.length > PAGE_SIZE && <Pagination page={page} pages={pageCount} setPage={setPage} />}
       </div>
       <Modal open={!!paymentTarget} onClose={() => setPaymentTarget(null)} title="Konfirmasi pembayaran">
         <div className="space-y-4">
@@ -492,14 +534,14 @@ export default function Reports() {
 
 function PaymentBadge({ status, onConfirm }) { return status === 'unpaid' ? <button type="button" onClick={onConfirm} className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-600 transition hover:bg-gold-400/30" title="Klik untuk konfirmasi pembayaran">Belum bayar</button> : <span className="rounded-full bg-plantation-700/10 px-2 py-1 text-xs font-medium text-plantation-700">Sudah bayar</span> }
 function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }
-function CloseMetric({ label, value, tone = '' }) {
+function CloseMetric({ label, value, tone = '', hint, active = false, onClick }) {
   const toneClass = tone === 'green' ? 'text-plantation-800' : tone === 'blue' ? 'text-sky-800' : tone === 'gold' ? 'text-gold-700' : 'text-ink-900'
-  return <div className="bg-white px-5 py-4"><p className="text-xs text-ink-500">{label}</p><p className={`mt-1 font-display text-xl ${toneClass}`}>{value}</p></div>
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`group min-h-28 bg-white px-5 py-4 text-left transition-colors hover:bg-plantation-50/60 focus-visible:relative focus-visible:z-10 ${active ? 'bg-plantation-50 ring-2 ring-inset ring-plantation-700/30' : ''}`}><span className="block text-xs text-ink-500">{label}</span><span className={`mt-1 block font-display text-xl ${toneClass}`}>{value}</span>{hint && <span className="mt-1.5 block text-[11px] leading-snug text-ink-500 group-hover:text-plantation-800">{hint}</span>}</button>
 }
-function CloseBalance({ label, value, difference = false }) {
+function CloseBalance({ label, value, difference = false, onClick, active = false }) {
   const known = value !== undefined && value !== null
   const numeric = Number(value || 0)
   const text = !known ? 'Belum dicatat' : `${difference && numeric > 0 ? '+' : ''}${formatRupiah(numeric)}`
   const color = !known ? 'text-ink-500' : difference && numeric < 0 ? 'text-red-700' : difference && numeric > 0 ? 'text-plantation-800' : 'text-ink-900'
-  return <div className="rounded-xl border border-ink-900/8 bg-white px-4 py-3"><p className="text-xs text-ink-500">{label}</p><p className={`mt-1 text-sm font-semibold ${color}`}>{text}</p>{difference && known && numeric !== 0 && <p className="mt-0.5 text-[11px] text-ink-500">{numeric > 0 ? 'Uang fisik lebih' : 'Uang fisik kurang'} dari saldo sistem</p>}</div>
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`w-full rounded-xl border bg-white px-4 py-3 text-left transition-colors hover:border-plantation-700/25 hover:bg-plantation-50/50 ${active ? 'border-plantation-700/30 ring-2 ring-plantation-700/15' : 'border-ink-900/8'}`}><span className="block text-xs text-ink-500">{label}</span><span className={`mt-1 block text-sm font-semibold ${color}`}>{text}</span>{difference && known && numeric !== 0 && <span className="mt-0.5 block text-[11px] text-ink-500">{numeric > 0 ? 'Uang fisik lebih' : 'Uang fisik kurang'} dari saldo sistem</span>}</button>
 }

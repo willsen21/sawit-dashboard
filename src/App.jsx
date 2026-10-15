@@ -5,6 +5,7 @@ import { DataProvider } from './context/DataContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppLayout from './components/AppLayout'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import PurchaseForm from './pages/admin/PurchaseForm'
 import PurchaseHistory from './pages/admin/PurchaseHistory'
@@ -36,6 +37,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route
             path="/admin"

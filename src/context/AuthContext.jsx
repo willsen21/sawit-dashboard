@@ -65,15 +65,25 @@ export function AuthProvider({ children }) {
 
   async function login(identifier, password) {
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: identifier.trim(), password })
-      if (error) return { ok: false, message: 'Email atau kata sandi salah.' }
+      const username = identifier.trim().toLowerCase()
+      const { data: loginData, error: loginError } = await supabase.functions.invoke('login-with-username', {
+        body: { username, password },
+      })
+      if (loginError || !loginData?.access_token || !loginData?.refresh_token) {
+        return { ok: false, message: 'Nama pengguna atau kata sandi salah.' }
+      }
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: loginData.access_token,
+        refresh_token: loginData.refresh_token,
+      })
+      if (sessionError || !sessionData.user) return { ok: false, message: 'Login gagal. Silakan coba lagi.' }
       const { data: profile, error: profileError } = await supabase.from('profiles')
-        .select('id, display_name, email, role, active').eq('id', data.user.id).maybeSingle()
+        .select('id, display_name, email, role, active').eq('id', sessionData.user.id).maybeSingle()
       if (profileError || !profile || !profile.active) {
         await supabase.auth.signOut()
         return { ok: false, message: 'Akun belum diatur atau dinonaktifkan. Hubungi owner.' }
       }
-      const user = { id: profile.id, name: profile.display_name, role: profile.role, active: profile.active, email: data.user.email }
+      const user = { id: profile.id, name: profile.display_name, role: profile.role, active: profile.active, email: sessionData.user.email }
       setCurrentUser(user)
       return { ok: true, user }
     }

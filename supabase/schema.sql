@@ -5,6 +5,7 @@
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null,
+  username text unique,
   email text not null unique,
   role text not null check (role in ('owner', 'admin')),
   active boolean not null default true,
@@ -46,7 +47,7 @@ alter table public.app_records enable row level security;
 revoke all on public.profiles from anon, authenticated;
 revoke all on public.app_records from anon, authenticated;
 grant select on public.profiles to authenticated;
-grant update (display_name, active) on public.profiles to authenticated;
+grant update (display_name, username, active) on public.profiles to authenticated;
 grant select, insert, update, delete on public.app_records to authenticated;
 grant execute on function public.current_kebunkas_role() to authenticated;
 revoke all on function public.current_kebunkas_role() from public, anon;

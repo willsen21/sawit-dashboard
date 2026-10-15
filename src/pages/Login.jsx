@@ -60,13 +60,13 @@ export default function Login() {
 
           <div className="space-y-4">
             <div>
-              <label className="label">{cloudMode ? 'Email' : 'Username'}</label>
+              <label className="label">Nama pengguna</label>
               <input
-                type={cloudMode ? 'email' : 'text'}
+                type="text"
                 className="input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={cloudMode ? 'nama@contoh.com' : 'mis. admin1 / papa'}
+                placeholder="mis. admin1 atau papa"
                 autoFocus
               />
             </div>

@@ -49,8 +49,28 @@ Untuk proyek yang sudah menjalankan skema sebelumnya, jalankan `supabase/owner-o
 
 Setelah versi aplikasi dengan menu **Stok Batu** dan **Catat Batu** diterbitkan, jalankan `supabase/stone-feature.sql` satu kali di **SQL Editor → New query**. Owner dapat menambah stok Batu A–D. Admin dapat mencatat tanggal, nama sopir, dan berat bersih penjualan. Penjualan mengurangi stok tersedia dan muncul pada tabel di halaman owner serta admin.
 
+## 7. Login menggunakan nama pengguna
+
+Untuk proyek cloud yang sudah berjalan:
+
+1. Push dan deploy perubahan aplikasi.
+2. Buka Supabase → **SQL Editor → New query**, lalu jalankan seluruh isi `supabase/username-login.sql`. Skrip membuat username awal dari nama profil dan menampilkan daftar username yang dihasilkan.
+3. Jika ingin username yang lebih mudah diingat, jalankan contoh `UPDATE` di bagian bawah file SQL dengan UUID akun yang sesuai. Setiap username harus unik.
+4. Buka terminal di folder proyek, lalu jalankan:
+
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref REF_PROYEK
+   npx supabase functions deploy login-with-username --no-verify-jwt
+   ```
+
+   Ganti `REF_PROYEK` dengan bagian sebelum `.supabase.co` pada URL proyek Supabase.
+5. Setelah fungsi selesai diterbitkan, login memakai username dan kata sandi. Email tetap disimpan di Supabase Auth, tetapi tidak perlu dimasukkan di halaman login.
+
+Jangan pernah menaruh kunci `service_role` di `.env.local`, GitHub, atau source aplikasi browser. Edge Function menggunakan kunci tersebut hanya di sisi server.
+
 ## Catatan
 
 - Saat owner pertama kali login, data lama dari localStorage pada perangkat itu digabungkan sekali ke cloud. Baris cloud dengan ID yang sama akan dipertahankan. Lakukan login pertama di perangkat yang menyimpan data lama yang ingin dipindahkan; jangan hapus data browser sebelum proses ini selesai.
-- Supabase Auth memakai email dan password. Akun demo lokal bukan akun cloud; buat kredensial baru untuk owner dan admin.
+- Supabase Auth menyimpan email dan password. Setelah Edge Function username login diterbitkan, pengguna tidak perlu mengetik email di halaman login. Akun demo lokal bukan akun cloud; buat kredensial baru untuk owner dan admin.
 - RLS di `schema.sql` membatasi pembacaan ke anggota aktif dan membatasi koleksi yang bisa ditulis admin. Jangan menonaktifkan RLS.

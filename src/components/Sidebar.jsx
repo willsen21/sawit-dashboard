@@ -47,7 +47,7 @@ export default function Sidebar({ role, collapsed, onToggle }) {
               end={end}
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center rounded-md py-2.5 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
+                `sidebar-link flex items-center rounded-lg py-2.5 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
                   (children ? nestedMenuOpen(location.pathname) && location.pathname.startsWith(to.slice(0, to.lastIndexOf('/'))) : isActive)
                     ? 'bg-gold-500/15 text-gold-400 font-medium'
                     : 'text-paper-100/70 hover:bg-paper-50/5 hover:text-paper-50'

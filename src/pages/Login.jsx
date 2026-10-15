@@ -67,14 +67,14 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid md:grid-cols-2 bg-paper-50">
-      <div className="relative hidden overflow-hidden md:flex flex-col justify-between bg-plantation-950 text-paper-50 p-12">
+      <div className="login-visual relative hidden overflow-hidden md:flex flex-col justify-between bg-plantation-950 text-paper-50 p-12">
         <img src="https://images.unsplash.com/photo-1672385896578-470b10319a67?auto=format&fit=crop&w=1400&q=85" alt="Hamparan kebun sawit" className="absolute inset-0 h-full w-full object-cover opacity-45" />
         <div className="absolute inset-0 bg-gradient-to-b from-plantation-950/75 via-plantation-950/60 to-plantation-950/90" />
-        <div className="relative flex items-center gap-2.5">
+        <div className="login-brand relative flex items-center gap-2.5">
           <Leaf className="text-gold-400" size={22} />
           <span className="font-display text-xl">Kebun Kas</span>
         </div>
-        <div className="relative max-w-sm">
+        <div className="login-copy relative max-w-sm">
           <h1 className="font-display text-4xl leading-[1.15] text-paper-50">
             “Setiap panen yang tercatat rapi, menumbuhkan usaha yang lebih pasti.”
           </h1>
@@ -86,7 +86,7 @@ export default function Login() {
       </div>
 
       <div className="flex items-center justify-center bg-paper-100/60 p-6 md:p-10">
-        <div className="w-full max-w-sm rounded-xl border border-ink-900/10 bg-white p-6 shadow-soft md:p-8">
+        <div className="login-panel w-full max-w-sm rounded-2xl border border-ink-900/10 bg-white p-6 shadow-soft md:p-8">
           <div className="md:hidden flex items-center gap-2.5 mb-8">
             <Leaf className="text-gold-500" size={22} />
             <span className="font-display text-xl text-plantation-950">Kebun Kas</span>

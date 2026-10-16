@@ -16,7 +16,7 @@ export default function StoneSales() {
   const [message, setMessage] = useState('')
   const availableFor = (type) => stoneStock.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
     - stoneSales.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
-  const rows = useMemo(() => [...stoneSales].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)), [stoneSales])
+  const rows = useMemo(() => [...stoneSales].sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))), [stoneSales])
   const saleTotal = Math.round((Number(String(form.netKg).replaceAll('.', '').replace(',', '.')) || 0) * parseRupiahInput(form.pricePerKg))
 
   function submit(event) {

@@ -123,6 +123,7 @@ export default function Reports() {
   const [cvFilter, setCvFilter] = useState('all')
   const [paymentTarget, setPaymentTarget] = useState(null)
   const [dailyDetailFilter, setDailyDetailFilter] = useState(null)
+  const [showCashDifferenceDetails, setShowCashDifferenceDetails] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const [editError, setEditError] = useState('')
@@ -184,8 +185,20 @@ export default function Reports() {
     return { ...purchases, total: purchases.cash + purchases.transfer, allTotal: purchases.cash + purchases.transfer + purchases.personal, loans, closure }
   }, [reportKind, range, transactions, cashLoans, dailyCash, supplierMap])
 
+  const cashDifferenceSummary = useMemo(() => {
+    if (reportKind !== 'brondolan') return null
+    const days = dailyCash
+      .filter((item) => item.date >= range[0] && item.date <= range[1] && item.status === 'locked' && item.cashDifference !== null && item.cashDifference !== undefined && Number.isFinite(Number(item.cashDifference)))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((item) => ({ ...item, numericDifference: Number(item.cashDifference) }))
+    const excess = days.reduce((total, day) => total + Math.max(0, day.numericDifference), 0)
+    const shortage = days.reduce((total, day) => total + Math.max(0, -day.numericDifference), 0)
+    return { days, count: days.length, excess, shortage, net: excess - shortage }
+  }, [reportKind, dailyCash, range])
+
   useEffect(() => {
     setDailyDetailFilter(null)
+    setShowCashDifferenceDetails(false)
     setPage(1)
   }, [range])
 
@@ -424,9 +437,27 @@ export default function Reports() {
         <div className="grid gap-3 border-t border-ink-900/8 bg-paper-50/70 p-4 sm:grid-cols-3">
           <CloseBalance label="Sisa menurut sistem" value={dailyClose.closure?.systemCashAtClose} onClick={() => selectDailyDetail('all')} active={dailyDetailFilter === 'all'} />
           <CloseBalance label="Uang fisik dihitung admin" value={dailyClose.closure?.countedCash} onClick={() => selectDailyDetail('all')} active={dailyDetailFilter === 'all'} />
-          <CloseBalance label="Selisih kas admin" value={dailyClose.closure?.cashDifference} difference onClick={() => selectDailyDetail('all')} active={dailyDetailFilter === 'all'} />
         </div>
         {dailyClose.closure?.status === 'locked' && dailyClose.closure?.countedCash === undefined && <p className="px-5 pb-4 text-xs text-ink-500">Kas ini ditutup sebelum pencatatan jumlah uang fisik tersedia.</p>}
+      </section>}
+
+      {cashDifferenceSummary && <section className="mb-6 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white shadow-soft">
+        <div className="border-b border-ink-900/8 bg-gradient-to-r from-plantation-50 to-white px-5 py-4">
+          <h2 className="font-display text-lg text-plantation-950">Rekap selisih kas admin</h2>
+          <p className="mt-1 text-xs text-ink-500">Berdasarkan penutupan kas pada {formatShortDate(range[0])} — {formatShortDate(range[1])}. Selisih dihitung dari uang fisik admin dikurangi sisa menurut sistem.</p>
+        </div>
+        <button type="button" aria-expanded={showCashDifferenceDetails} onClick={() => setShowCashDifferenceDetails((open) => !open)} className="group grid w-full gap-4 p-5 text-left transition-colors hover:bg-plantation-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-plantation-700 sm:grid-cols-[1.1fr_repeat(3,1fr)] sm:items-center">
+          <div><span className="block text-xs text-ink-500">Hari kas ditutup dengan selisih tercatat</span><span className="mt-1 block font-display text-2xl text-plantation-950">{cashDifferenceSummary.count.toLocaleString('id-ID')} hari</span><span className="mt-1 block text-xs text-plantation-700 group-hover:underline">{showCashDifferenceDetails ? 'Tutup rincian' : 'Klik untuk melihat rincian per tanggal'}</span></div>
+          <DifferenceValue label="Total kelebihan" value={cashDifferenceSummary.excess} tone="green" />
+          <DifferenceValue label="Total kekurangan" value={cashDifferenceSummary.shortage} tone="red" />
+          <DifferenceValue label="Selisih bersih" value={cashDifferenceSummary.net} signed tone={cashDifferenceSummary.net < 0 ? 'red' : 'green'} />
+        </button>
+        {showCashDifferenceDetails && <div className="border-t border-ink-900/8">
+          {cashDifferenceSummary.count === 0 ? <p className="px-5 py-8 text-center text-sm text-ink-500">Belum ada penutupan kas dengan selisih tercatat pada rentang tanggal ini.</p> : <>
+            <div className="px-5 py-3 text-xs leading-relaxed text-ink-500">Total bersih adalah total kelebihan dikurangi total kekurangan. Tabel mempertahankan angka tiap hari agar selisih antarhari tidak saling menyamarkan.</div>
+            <div className="overflow-x-auto"><table className="w-full"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Sisa menurut sistem</th><th className="table-head text-right">Uang fisik admin</th><th className="table-head text-right">Selisih kas</th><th className="table-head">Keterangan</th></tr></thead><tbody>{cashDifferenceSummary.days.map((day) => <tr key={day.id || day.date}><td className="table-cell">{formatShortDate(day.date)}</td><td className="table-cell text-right">{formatRupiah(day.systemCashAtClose)}</td><td className="table-cell text-right">{formatRupiah(day.countedCash)}</td><td className={`table-cell text-right font-semibold ${day.numericDifference < 0 ? 'text-red-700' : day.numericDifference > 0 ? 'text-plantation-700' : 'text-ink-700'}`}>{formatSignedRupiah(day.numericDifference)}</td><td className="table-cell text-ink-500">{day.numericDifference < 0 ? 'Uang fisik kurang dari saldo sistem' : day.numericDifference > 0 ? 'Uang fisik lebih dari saldo sistem' : 'Uang fisik sesuai saldo sistem'}</td></tr>)}</tbody><tfoot><tr className="bg-paper-100"><td className="table-cell font-semibold">Total · {cashDifferenceSummary.count} hari</td><td className="table-cell" colSpan="2"><span className="text-xs text-ink-500">Kelebihan {formatRupiah(cashDifferenceSummary.excess)} · Kekurangan {formatRupiah(cashDifferenceSummary.shortage)}</span></td><td className="table-cell text-right font-semibold">{formatSignedRupiah(cashDifferenceSummary.net)}</td><td className="table-cell text-xs text-ink-500">Selisih bersih seluruh hari</td></tr></tfoot></table></div>
+          </>}
+        </div>}
       </section>}
 
       <div className="card overflow-hidden">
@@ -537,4 +568,16 @@ function CloseBalance({ label, value, difference = false, onClick, active = fals
   const text = !known ? 'Belum dicatat' : `${difference && numeric > 0 ? '+' : ''}${formatRupiah(numeric)}`
   const color = !known ? 'text-ink-500' : difference && numeric < 0 ? 'text-red-700' : difference && numeric > 0 ? 'text-plantation-800' : 'text-ink-900'
   return <button type="button" onClick={onClick} aria-pressed={active} className={`w-full rounded-xl border bg-white px-4 py-3 text-left transition-colors hover:border-plantation-700/25 hover:bg-plantation-50/50 ${active ? 'border-plantation-700/30 ring-2 ring-plantation-700/15' : 'border-ink-900/8'}`}><span className="block text-xs text-ink-500">{label}</span><span className={`mt-1 block text-sm font-semibold ${color}`}>{text}</span>{difference && known && numeric !== 0 && <span className="mt-0.5 block text-[11px] text-ink-500">{numeric > 0 ? 'Uang fisik lebih' : 'Uang fisik kurang'} dari saldo sistem</span>}</button>
+}
+
+function formatSignedRupiah(value) {
+  const amount = Number(value) || 0
+  if (amount > 0) return `+${formatRupiah(amount)}`
+  if (amount < 0) return `−${formatRupiah(Math.abs(amount))}`
+  return formatRupiah(0)
+}
+
+function DifferenceValue({ label, value, signed = false, tone }) {
+  const color = tone === 'red' ? 'text-red-700' : tone === 'green' ? 'text-plantation-800' : 'text-plantation-950'
+  return <div><span className="block text-xs text-ink-500">{label}</span><span className={`mt-1 block font-display text-xl ${color}`}>{signed ? formatSignedRupiah(value) : formatRupiah(value)}</span></div>
 }

@@ -17,21 +17,14 @@ import {
 } from '../../lib/dateUtils'
 import { PAGE_SIZE, Pagination } from './PurchaseDetails'
 import StatCard from '../../components/StatCard'
+import { reportedPurchasePrice, reportedPurchaseTotal } from '../../lib/purchaseCalculations'
 
 const CVS = ['Sinar Mandiri', 'Jaya Agung']
 const parseNumber = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
 const QUICK_RANGES = ['Hari ini', 'Minggu ini', 'Bulan ini', 'Tahun ini', '30 hari terakhir']
 const formatCsvDate = (key) => key.split('-').reverse().join('/')
-function reportedPricePerKg(record, supplierMap, reportKind) {
-  const name = String(record.name || supplierMap[record.supplierId]?.name || '').trim().toLocaleLowerCase('id-ID')
-  return Number(record.pricePerKg || 0) + (reportKind === 'brondolan' && name.includes('harmini') ? 10 : 0)
-}
-function reportedTotal(record, supplierMap, reportKind) {
-  const netKg = Number(record.netKg ?? record.weightKg ?? 0)
-  return reportKind === 'brondolan' && Number(record.pricePerKg) > 0
-    ? Math.round(netKg * reportedPricePerKg(record, supplierMap, reportKind))
-    : Number(record.total || 0)
-}
+const reportedPricePerKg = reportedPurchasePrice
+const reportedTotal = reportedPurchaseTotal
 
 function computeQuickRange(label) {
   const now = new Date()

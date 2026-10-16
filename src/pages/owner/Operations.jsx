@@ -31,6 +31,8 @@ export default function Operations() {
   const [payroll, setPayroll] = useState({ period: today.slice(0, 7), employeeName: '', workDays: '', dailyRate: '', bonus: '', deduction: '', note: '' })
   const [completeTarget, setCompleteTarget] = useState(null)
   const [harvestForm, setHarvestForm] = useState({ farmId: '', grossKg: '', netKg: '', pricePerKg: '', note: '' })
+  const [harvestError, setHarvestError] = useState('')
+  const [expenseError, setExpenseError] = useState('')
 
   const overview = useMemo(() => {
     const month = today.slice(0, 7)
@@ -59,6 +61,7 @@ export default function Operations() {
     if (status === 'completed') {
       const farm = privateFarms.find((entry) => entry.id === item.farmId) || privateFarms.find((entry) => entry.name === (item.farmName || item.block))
       setHarvestForm({ farmId: farm?.id || '', grossKg: '', netKg: '', pricePerKg: '', note: item.note || '' })
+      setHarvestError('')
       setCompleteTarget(item)
       return
     }
@@ -70,16 +73,21 @@ export default function Operations() {
     const grossKg = parseNumeric(harvestForm.grossKg)
     const netKg = parseNumeric(harvestForm.netKg)
     const pricePerKg = parseNumeric(harvestForm.pricePerKg)
-    if (!completeTarget || !privateFarms.some((farm) => farm.id === harvestForm.farmId) || grossKg <= 0 || netKg <= 0 || pricePerKg <= 0) return
+    if (!completeTarget || !privateFarms.some((farm) => farm.id === harvestForm.farmId)) return setHarvestError('Pilih kebun yang sesuai dengan jadwal panen.')
+    if (grossKg <= 0 || netKg <= 0 || pricePerKg <= 0) return setHarvestError('Berat kotor, berat bersih, dan harga harus lebih dari 0.')
+    if (netKg > grossKg) return setHarvestError('Berat bersih tidak boleh melebihi berat kotor.')
     addPrivateHarvestRecord(harvestForm.farmId, { date: completeTarget.date, grossKg, netKg, pricePerKg, total: netKg * pricePerKg, note: harvestForm.note.trim(), scheduleId: completeTarget.id })
     updateHarvestScheduleStatus(completeTarget.id, 'completed', currentUser.id)
     setCompleteTarget(null)
   }
   function submitExpense(event) {
     event.preventDefault()
-    if (!parseNumeric(expense.amount) || !expense.note.trim()) return
+    setExpenseError('')
+    if (parseNumeric(expense.amount) <= 0) return setExpenseError('Nominal pengeluaran harus lebih dari 0.')
+    if (!expense.note.trim()) return setExpenseError('Keterangan pengeluaran wajib diisi.')
     addOperationalExpense({ ...expense, amount: parseNumeric(expense.amount), createdBy: currentUser.id })
-    setExpense({ date: today, category: 'Pupuk', amount: '', block: '', note: '' })
+    setExpense({ date: today, category: 'Pupuk', amount: '', farmId: '', note: '' })
+    setExpenseError('')
   }
   function submitPayroll(event) {
     event.preventDefault()
@@ -100,16 +108,17 @@ export default function Operations() {
     <nav className="operations-tabs mb-6" aria-label="Menu operasional">{TABS.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'operations-tab operations-tab-active' : 'operations-tab'}><Icon size={17} />{label}</button>)}</nav>
 
     {tab === 'harvest' && <HarvestPanel form={schedule} setForm={setSchedule} onSubmit={submitSchedule} schedules={harvestSchedules} farms={privateFarms} today={today} onStatus={handleScheduleStatus} />}
-    {tab === 'expense' && <ExpensePanel form={expense} setForm={setExpense} onSubmit={submitExpense} expenses={operationalExpenses} farms={privateFarms} onPaid={(id) => markOperationalExpensePaid(id, currentUser.id)} />}
+    {tab === 'expense' && <ExpensePanel form={expense} setForm={setExpense} onSubmit={submitExpense} error={expenseError} expenses={operationalExpenses} farms={privateFarms} onPaid={(id) => markOperationalExpensePaid(id, currentUser.id)} />}
     {tab === 'payroll' && <PayrollPanel form={payroll} setForm={setPayroll} onSubmit={submitPayroll} payrolls={payrolls} onPaid={(id) => markPayrollPaid(id, currentUser.id)} />}
     <Modal open={!!completeTarget} onClose={() => setCompleteTarget(null)} title="Catat hasil panen">
       <form onSubmit={submitHarvestCompletion} className="space-y-4">
         <p className="text-sm text-ink-600">Lengkapi hasil panen {completeTarget?.farmName || completeTarget?.block || 'kebun'} pada {completeTarget ? formatShortDate(completeTarget.date) : ''}. Setelah disimpan, catatan otomatis masuk ke Kebun Pribadi dan jadwal ditandai selesai.</p>
-        <Field label="Kebun pribadi *"><select required className="input" value={harvestForm.farmId} onChange={(event) => setHarvestForm({ ...harvestForm, farmId: event.target.value })}><option value="">Pilih kebun</option>{privateFarms.map((farm) => <option value={farm.id} key={farm.id}>{farm.name} · {farm.owner}</option>)}</select></Field>
+        <Field label="Kebun pribadi *"><select required className="input" value={harvestForm.farmId} onChange={(event) => { setHarvestForm({ ...harvestForm, farmId: event.target.value }); setHarvestError('') }}><option value="">Pilih kebun</option>{privateFarms.map((farm) => <option value={farm.id} key={farm.id}>{farm.name} · {farm.owner}</option>)}</select></Field>
         <div className="grid grid-cols-2 gap-3"><Field label="Berat kotor (kg) *"><input required inputMode="decimal" className="input" value={harvestForm.grossKg} onChange={(event) => setHarvestForm({ ...harvestForm, grossKg: formatNumericInput(event.target.value) })} placeholder="mis. 1.250" /></Field><Field label="Berat bersih (kg) *"><input required inputMode="decimal" className="input" value={harvestForm.netKg} onChange={(event) => setHarvestForm({ ...harvestForm, netKg: formatNumericInput(event.target.value) })} placeholder="mis. 1.210" /></Field></div>
         <Field label="Harga per kg (Rp) *"><input required inputMode="numeric" className="input" value={harvestForm.pricePerKg} onChange={(event) => setHarvestForm({ ...harvestForm, pricePerKg: formatNumericInput(event.target.value) })} placeholder="mis. 2.850" /></Field>
         <Field label="Catatan"><textarea className="input min-h-20" value={harvestForm.note} onChange={(event) => setHarvestForm({ ...harvestForm, note: event.target.value })} placeholder="Kondisi panen atau keterangan tambahan" /></Field>
         <div className="rounded-lg bg-plantation-700/8 px-4 py-3"><p className="text-xs text-ink-500">Perkiraan total (berat bersih × harga)</p><p className="mt-1 font-display text-xl text-plantation-900">{formatRupiah(parseNumeric(harvestForm.netKg) * parseNumeric(harvestForm.pricePerKg))}</p></div>
+        {harvestError && <p role="alert" className="text-sm text-red-700">{harvestError}</p>}
         <button className="btn-primary w-full"><CheckCircle2 size={16} /> Simpan hasil dan selesaikan panen</button>
       </form>
     </Modal>
@@ -137,13 +146,13 @@ function HarvestPanel({ form, setForm, onSubmit, schedules, farms, today, onStat
   </div>
 }
 
-function ExpensePanel({ form, setForm, onSubmit, expenses, farms, onPaid }) {
+function ExpensePanel({ form, setForm, onSubmit, error, expenses, farms, onPaid }) {
   return <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
     <form onSubmit={onSubmit} className="card space-y-4 p-5"><div><p className="text-sm font-semibold text-ink-700">Catat pengeluaran</p><p className="mt-1 text-xs text-ink-500">Simpan biaya pupuk, makan, transport, dan kebutuhan kebun.</p></div>
       <div className="grid grid-cols-2 gap-3"><Field label="Tanggal"><input type="date" className="input" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field><Field label="Kategori"><select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field></div>
       <Field label="Kebun"><select className="input" value={form.farmId} onChange={(e) => setForm({ ...form, farmId: e.target.value })}><option value="">Umum / tidak terkait kebun</option>{farms.map((farm) => <option value={farm.id} key={farm.id}>{farm.name}</option>)}</select></Field>
-      <Field label="Nominal (Rp)"><input inputMode="numeric" className="input" value={form.amount} onChange={(e) => setForm({ ...form, amount: formatNumericInput(e.target.value) })} placeholder="500.000" /></Field>
-      <Field label="Keterangan / bukti"><textarea className="input min-h-24" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Contoh: pupuk NPK untuk kebun yang dipilih" /></Field><button className="btn-primary w-full"><Plus size={16} /> Tambah pengeluaran</button>
+      <Field label="Nominal (Rp) *"><input inputMode="numeric" className="input" value={form.amount} onChange={(e) => setForm({ ...form, amount: formatNumericInput(e.target.value) })} placeholder="500.000" /></Field>
+      <Field label="Keterangan / bukti *"><textarea className="input min-h-24" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Contoh: pupuk NPK untuk kebun yang dipilih" /></Field>{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<button className="btn-primary w-full"><Plus size={16} /> Tambah pengeluaran</button>
     </form>
     <section className="card overflow-hidden"><div className="flex items-center justify-between border-b border-ink-900/10 px-5 py-4"><div><h2 className="text-sm font-semibold text-ink-700">Pengeluaran terbaru</h2><p className="mt-0.5 text-xs text-ink-500">Tandai pembayaran setelah dana benar-benar keluar.</p></div><Wallet size={18} className="text-plantation-700" /></div>{expenses.length === 0 ? <Empty icon={<Wallet size={23} />} text="Belum ada pengeluaran." /> : <div className="divide-y divide-ink-900/8">{expenses.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><p className="font-medium text-ink-800">{item.category} <span className="font-normal text-ink-500">· {formatShortDate(item.date)}</span></p><p className="mt-1 text-sm font-semibold text-plantation-900">{formatRupiah(item.amount)}</p><p className="mt-1 text-xs text-ink-500">{item.farmName || item.block ? `${item.farmName || item.block} · ` : ''}{item.note}</p></div>{item.status === 'paid' ? <PaidBadge /> : <button type="button" onClick={() => onPaid(item.id)} className="btn-gold !px-3 !py-2 text-xs"><CheckCircle2 size={15} /> Tandai dibayar</button>}</div>)}</div>}</section>
   </div>

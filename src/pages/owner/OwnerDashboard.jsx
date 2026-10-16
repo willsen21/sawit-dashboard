@@ -7,13 +7,13 @@ import StatCard from '../../components/StatCard'
 import { addDays, formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKey } from '../../lib/dateUtils'
 import { STONE_TYPES, canonicalStoneType } from '../../lib/stoneUtils'
 import { SHOW_FRUIT_PURCHASES } from '../../config/features'
+import { reportedPurchaseTotal } from '../../lib/purchaseCalculations'
 
 const RANGES = [{ label: '7 hari', value: 7 }, { label: '15 hari', value: 15 }, { label: '1 bulan', value: 'month' }]
-const sum = (items, field) => items.reduce((total, item) => total + Number(item[field] || 0), 0)
 const kgText = (kg) => `${Number(kg || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg`
 
 export default function OwnerDashboard() {
-  const { transactions, stoneSales, getCashSummary } = useData()
+  const { transactions, supplierMap, stoneSales, getCashSummary } = useData()
   const navigate = useNavigate()
   const [chartRange, setChartRange] = useState(7)
   const today = todayKey()
@@ -31,14 +31,14 @@ export default function OwnerDashboard() {
     const days = Math.floor((toDateKey(now) > toDateKey(start) ? (new Date(toDateKey(now)) - new Date(toDateKey(start))) : 0) / 86_400_000) + 1
     return Array.from({ length: days }, (_, index) => {
       const key = toDateKey(addDays(start, index)); const day = visibleTransactions.filter((t) => t.status !== 'voided' && t.date === key)
-      return { key, label: formatShortDate(key), volume: day.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0), total: sum(day, 'total') }
+      return { key, label: formatShortDate(key), volume: day.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0), total: day.reduce((total, item) => total + reportedPurchaseTotal(item, supplierMap, item.kind || 'buah'), 0) }
     })
-  }, [visibleTransactions, chartRange])
+  }, [visibleTransactions, supplierMap, chartRange])
   const stoneSalesToday = useMemo(() => stoneSales.filter((sale) => sale.date === today), [stoneSales, today])
   const stoneSaleBreakdown = STONE_TYPES.map((type) => ({ type, kg: stoneSalesToday.filter((sale) => canonicalStoneType(sale.type) === type).reduce((total, sale) => total + Number(sale.netKg || 0), 0) })).filter((item) => item.kg > 0)
   const stoneKgToday = stoneSaleBreakdown.reduce((total, item) => total + item.kg, 0)
   const unpaidToday = stats.today.filter((transaction) => transaction.paymentStatus === 'unpaid')
-  const unpaidTotal = sum(unpaidToday, 'total')
+  const unpaidTotal = unpaidToday.reduce((total, item) => total + reportedPurchaseTotal(item, supplierMap, item.kind || 'buah'), 0)
   return <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
     <div className="mb-6"><h1 className="text-2xl font-display">Ringkasan</h1><p className="text-sm text-ink-500 mt-1">{formatShortDate(today)}</p></div>
     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

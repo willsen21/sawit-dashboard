@@ -17,6 +17,7 @@ export default function PrivateFarms() {
   const [selectedId, setSelectedId] = useState(null)
   const [showFarmForm, setShowFarmForm] = useState(false)
   const [showRecordForm, setShowRecordForm] = useState(false)
+  const [recordError, setRecordError] = useState('')
   const [farmForm, setFarmForm] = useState({ name: '', owner: '', location: '', areaHa: '', note: '' })
   const [recordForm, setRecordForm] = useState({ date: todayKey(), grossKg: '', netKg: '', pricePerKg: '', note: '' })
 
@@ -36,14 +37,16 @@ export default function PrivateFarms() {
     const grossKg = parseNumeric(recordForm.grossKg)
     const netKg = parseNumeric(recordForm.netKg)
     const pricePerKg = parseNumeric(recordForm.pricePerKg)
-    if (!selected || !recordForm.date || grossKg <= 0 || netKg <= 0 || pricePerKg <= 0) return
+    setRecordError('')
+    if (!selected || !recordForm.date || grossKg <= 0 || netKg <= 0 || pricePerKg <= 0) return setRecordError('Tanggal, berat kotor, berat bersih, dan harga harus diisi dengan nilai lebih dari 0.')
+    if (netKg > grossKg) return setRecordError('Berat bersih tidak boleh melebihi berat kotor.')
     const record = { ...recordForm, id: `harvest-${Date.now()}`, grossKg, netKg, pricePerKg, total: netKg * pricePerKg }
     addPrivateHarvestRecord(selected.id, record)
     setRecordForm({ date: todayKey(), grossKg: '', netKg: '', pricePerKg: '', note: '' })
     setShowRecordForm(false)
   }
 
-  if (selected) return <FarmDetail farm={selected} onBack={() => setSelectedId(null)} onAdd={() => setShowRecordForm(true)} showForm={showRecordForm} onCloseForm={() => setShowRecordForm(false)} form={recordForm} setForm={setRecordForm} onSubmit={addRecord} />
+  if (selected) return <FarmDetail farm={selected} onBack={() => setSelectedId(null)} onAdd={() => { setRecordError(''); setShowRecordForm(true) }} showForm={showRecordForm} error={recordError} onCloseForm={() => setShowRecordForm(false)} form={recordForm} setForm={setRecordForm} onSubmit={addRecord} />
 
   return <main className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
     <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
@@ -72,7 +75,7 @@ function FarmCard({ farm, onClick }) {
   </button>
 }
 
-function FarmDetail({ farm, onBack, onAdd, showForm, onCloseForm, form, setForm, onSubmit }) {
+function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit }) {
   const rows = farm.records || []
   const todayRows = rows.filter((row) => row.date === todayKey())
   const totals = todayRows.reduce((sum, row) => ({ gross: sum.gross + Number(row.grossKg), net: sum.net + Number(row.netKg), income: sum.income + Number(row.total) }), { gross: 0, net: 0, income: 0 })
@@ -80,7 +83,7 @@ function FarmDetail({ farm, onBack, onAdd, showForm, onCloseForm, form, setForm,
     <header className="mb-6 overflow-hidden rounded-xl bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 p-6 text-white md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Profil kebun pribadi</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl text-white">{farm.name}</h1><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90"><span className="inline-flex items-center gap-1.5"><UserRound size={15} />{farm.owner}</span><span className="inline-flex items-center gap-1.5"><MapPin size={15} />{farm.location}</span>{farm.areaHa && <span className="text-white">{farm.areaHa} hektar</span>}</div></div></div>{farm.note && <p className="mt-4 max-w-2xl rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">{farm.note}</p>}</header>
     <div className="mb-6 grid gap-3 sm:grid-cols-3"><Stat icon={<Weight size={17} />} label="Berat kotor hari ini" value={`${totals.gross.toLocaleString('id-ID')} kg`} delay={0} /><Stat icon={<Sprout size={17} />} label="Berat bersih hari ini" value={`${totals.net.toLocaleString('id-ID')} kg`} delay={100} /><Stat icon={<TrendingUp size={17} />} label="Pendapatan hari ini" value={formatRupiah(totals.income)} delay={200} /></div>
     <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-medium text-ink-800">Rincian hasil panen</h2><p className="mt-1 text-xs text-ink-500">Berat dan nilai penjualan yang dicatat untuk kebun ini.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full"><thead><tr>{['Tanggal','Berat kotor','Berat bersih','Harga / kg','Total rupiah','Catatan'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="6" className="py-12 text-center text-sm text-ink-500">Belum ada hasil panen. Pilih “Catat hasil panen” untuk menambahkan rincian pertama.</td></tr> : rows.map((row) => <tr key={row.id}><td className="table-cell">{formatShortDate(row.date)}</td><td className="table-cell">{Number(row.grossKg).toLocaleString('id-ID')} kg</td><td className="table-cell font-medium">{Number(row.netKg).toLocaleString('id-ID')} kg</td><td className="table-cell">{money(row.pricePerKg)}</td><td className="table-cell font-semibold text-plantation-900">{money(row.total)}</td><td className="table-cell text-ink-500">{row.note || '—'}</td></tr>)}</tbody></table></div></section>
-    {showForm && <Dialog title={`Catat hasil — ${farm.name}`} onClose={onCloseForm}><form onSubmit={onSubmit} className="space-y-4"><Field label="Tanggal panen *"><input type="date" required className="input" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field><div className="grid grid-cols-2 gap-3"><Field label="Berat kotor (kg) *"><input inputMode="decimal" required className="input" value={form.grossKg} onChange={(e) => setForm({ ...form, grossKg: formatNumericInput(e.target.value) })} placeholder="contoh: 1.250" /></Field><Field label="Berat bersih (kg) *"><input inputMode="decimal" required className="input" value={form.netKg} onChange={(e) => setForm({ ...form, netKg: formatNumericInput(e.target.value) })} placeholder="contoh: 1.210" /></Field></div><Field label="Harga per kg (Rp) *"><input inputMode="numeric" required className="input" value={form.pricePerKg} onChange={(e) => setForm({ ...form, pricePerKg: formatNumericInput(e.target.value) })} placeholder="contoh: 2.850" /></Field><Field label="Catatan"><textarea className="input min-h-20" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Opsional" /></Field><div className="rounded-lg bg-plantation-700/8 px-4 py-3"><p className="text-xs text-ink-500">Perkiraan total berdasarkan berat bersih</p><p className="mt-1 font-display text-xl text-plantation-900">{money(parseNumeric(form.netKg) * parseNumeric(form.pricePerKg))}</p></div><button className="btn-primary w-full"><Plus size={16} /> Simpan hasil panen</button></form></Dialog>}
+    {showForm && <Dialog title={`Catat hasil — ${farm.name}`} onClose={onCloseForm}><form onSubmit={onSubmit} className="space-y-4"><Field label="Tanggal panen *"><input type="date" required className="input" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field><div className="grid grid-cols-2 gap-3"><Field label="Berat kotor (kg) *"><input inputMode="decimal" required className="input" value={form.grossKg} onChange={(e) => setForm({ ...form, grossKg: formatNumericInput(e.target.value) })} placeholder="contoh: 1.250" /></Field><Field label="Berat bersih (kg) *"><input inputMode="decimal" required className="input" value={form.netKg} onChange={(e) => setForm({ ...form, netKg: formatNumericInput(e.target.value) })} placeholder="contoh: 1.210" /></Field></div><Field label="Harga per kg (Rp) *"><input inputMode="numeric" required className="input" value={form.pricePerKg} onChange={(e) => setForm({ ...form, pricePerKg: formatNumericInput(e.target.value) })} placeholder="contoh: 2.850" /></Field><Field label="Catatan"><textarea className="input min-h-20" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Opsional" /></Field><div className="rounded-lg bg-plantation-700/8 px-4 py-3"><p className="text-xs text-ink-500">Perkiraan total berdasarkan berat bersih</p><p className="mt-1 font-display text-xl text-plantation-900">{money(parseNumeric(form.netKg) * parseNumeric(form.pricePerKg))}</p></div>{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<button className="btn-primary w-full"><Plus size={16} /> Simpan hasil panen</button></form></Dialog>}
   </main>
 }
 

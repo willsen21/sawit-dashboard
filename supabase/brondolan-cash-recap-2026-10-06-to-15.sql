@@ -1,10 +1,16 @@
 -- Record historical Brondolan cash closures supplied by the owner.
--- Run once in Supabase SQL Editor. Re-running updates these four dates safely.
+-- Run in Supabase SQL Editor. Re-running safely updates these dates.
 
 begin;
 
 with closures (date_key, system_cash, counted_cash) as (
   values
+    ('2026-10-06'::date, 14973600::numeric, 14935000::numeric),
+    ('2026-10-07'::date, 25713400::numeric, 25728000::numeric),
+    ('2026-10-08'::date, 59800000::numeric, 59822000::numeric),
+    ('2026-10-09'::date, 18053800::numeric, 18125000::numeric),
+    ('2026-10-10'::date, 23225900::numeric, 23284000::numeric),
+    ('2026-10-11'::date, 13938700::numeric, 12961000::numeric),
     ('2026-10-12'::date, 16493600::numeric, 16503000::numeric),
     ('2026-10-13'::date,   128700::numeric,   140000::numeric),
     ('2026-10-14'::date,  8997000::numeric,  9008000::numeric),
@@ -51,6 +57,12 @@ set data = coalesce(target.data, '{}'::jsonb) || jsonb_build_object(
     updated_at = now()
 from (
   values
+    ('dc-2026-10-06', '2026-10-06', 14973600::numeric, 14935000::numeric),
+    ('dc-2026-10-07', '2026-10-07', 25713400::numeric, 25728000::numeric),
+    ('dc-2026-10-08', '2026-10-08', 59800000::numeric, 59822000::numeric),
+    ('dc-2026-10-09', '2026-10-09', 18053800::numeric, 18125000::numeric),
+    ('dc-2026-10-10', '2026-10-10', 23225900::numeric, 23284000::numeric),
+    ('dc-2026-10-11', '2026-10-11', 13938700::numeric, 12961000::numeric),
     ('dc-2026-10-12', '2026-10-12', 16493600::numeric, 16503000::numeric),
     ('dc-2026-10-13', '2026-10-13',   128700::numeric,   140000::numeric),
     ('dc-2026-10-14', '2026-10-14',  8997000::numeric,  9008000::numeric),
@@ -61,7 +73,7 @@ where target.collection = 'dailyCash'
 
 commit;
 
--- Verify the saved daily amounts and show the four-day totals.
+-- Verify the saved daily amounts and show the ten-day totals.
 with saved as (
   select
     data ->> 'date' as tanggal,
@@ -71,14 +83,16 @@ with saved as (
   from public.app_records
   where collection = 'dailyCash'
     and record_id in (
-      'dc-2026-10-12', 'dc-2026-10-13', 'dc-2026-10-14', 'dc-2026-10-15'
+      'dc-2026-10-06', 'dc-2026-10-07', 'dc-2026-10-08', 'dc-2026-10-09',
+      'dc-2026-10-10', 'dc-2026-10-11', 'dc-2026-10-12', 'dc-2026-10-13',
+      'dc-2026-10-14', 'dc-2026-10-15'
     )
 )
 select tanggal, sisa_menurut_sistem, uang_fisik_admin, selisih
 from saved
 union all
 select
-  'TOTAL 4 HARI',
+  'TOTAL 10 HARI',
   sum(sisa_menurut_sistem),
   sum(uang_fisik_admin),
   sum(selisih)

@@ -33,6 +33,32 @@ on conflict (collection, record_id) do update
 set data = public.app_records.data || excluded.data,
     updated_at = now();
 
+-- Explicitly update existing rows as well, including rows that were previously
+-- created with only an id/date and no closing amounts.
+update public.app_records as target
+set data = coalesce(target.data, '{}'::jsonb) || jsonb_build_object(
+      'id', values_to_write.record_id,
+      'date', values_to_write.date_key,
+      'status', 'locked',
+      'systemCashAtClose', values_to_write.system_cash,
+      'countedCash', values_to_write.counted_cash,
+      'cashDifference', values_to_write.counted_cash - values_to_write.system_cash,
+      'closedAt', now(),
+      'closedBy', null,
+      'manualEntry', true,
+      'closureNote', 'Rekap historis dimasukkan owner berdasarkan hitungan fisik admin.'
+    ),
+    updated_at = now()
+from (
+  values
+    ('dc-2026-10-12', '2026-10-12', 16493600::numeric, 16503000::numeric),
+    ('dc-2026-10-13', '2026-10-13',   128700::numeric,   140000::numeric),
+    ('dc-2026-10-14', '2026-10-14',  8997000::numeric,  9008000::numeric),
+    ('dc-2026-10-15', '2026-10-15', 25108200::numeric, 25115000::numeric)
+) as values_to_write(record_id, date_key, system_cash, counted_cash)
+where target.collection = 'dailyCash'
+  and target.record_id = values_to_write.record_id;
+
 commit;
 
 -- Verify the saved daily amounts and show the four-day totals.

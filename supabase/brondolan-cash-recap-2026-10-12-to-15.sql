@@ -35,15 +35,26 @@ set data = public.app_records.data || excluded.data,
 
 commit;
 
--- Verify the saved amounts and differences.
+-- Verify the saved daily amounts and show the four-day totals.
+with saved as (
+  select
+    data ->> 'date' as tanggal,
+    (data ->> 'systemCashAtClose')::numeric as sisa_menurut_sistem,
+    (data ->> 'countedCash')::numeric as uang_fisik_admin,
+    (data ->> 'cashDifference')::numeric as selisih
+  from public.app_records
+  where collection = 'dailyCash'
+    and record_id in (
+      'dc-2026-10-12', 'dc-2026-10-13', 'dc-2026-10-14', 'dc-2026-10-15'
+    )
+)
+select tanggal, sisa_menurut_sistem, uang_fisik_admin, selisih
+from saved
+union all
 select
-  data ->> 'date' as tanggal,
-  (data ->> 'systemCashAtClose')::numeric as sisa_menurut_sistem,
-  (data ->> 'countedCash')::numeric as uang_fisik_admin,
-  (data ->> 'cashDifference')::numeric as selisih
-from public.app_records
-where collection = 'dailyCash'
-  and record_id in (
-    'dc-2026-10-12', 'dc-2026-10-13', 'dc-2026-10-14', 'dc-2026-10-15'
-  )
-order by data ->> 'date';
+  'TOTAL 4 HARI',
+  sum(sisa_menurut_sistem),
+  sum(uang_fisik_admin),
+  sum(selisih)
+from saved
+order by tanggal;

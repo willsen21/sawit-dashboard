@@ -322,6 +322,18 @@ export default function Reports() {
     setPage(1)
   }
 
+  function selectAllCashClosures() {
+    const dates = dailyCash
+      .filter((item) => item.status === 'locked' && item.cashDifference !== null && item.cashDifference !== undefined && Number.isFinite(Number(item.cashDifference)))
+      .map((item) => item.date)
+      .filter(Boolean)
+      .sort()
+    if (!dates.length) return
+    setActiveQuick('Penutupan kas')
+    setRange([dates[0], dates[dates.length - 1]])
+    setPage(1)
+  }
+
   function shiftReportDay(amount) {
     const current = range[0] === range[1] ? range[0] : range[1]
     const next = toDateKey(addDays(parseDateKey(current), amount))
@@ -366,6 +378,12 @@ export default function Reports() {
               {label}
             </button>
           ))}
+          {reportKind === 'brondolan' && <button
+            type="button"
+            onClick={selectAllCashClosures}
+            disabled={!dailyCash.some((item) => item.status === 'locked' && item.cashDifference !== null && item.cashDifference !== undefined && Number.isFinite(Number(item.cashDifference)))}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-medium border transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${activeQuick === 'Penutupan kas' ? 'bg-plantation-900 text-paper-50 border-plantation-900' : 'border-ink-900/15 text-ink-700 hover:bg-paper-100'}`}
+          >Semua penutupan kas</button>}
         </div>
 
         <div className={`grid grid-cols-1 items-end gap-3 sm:grid-cols-2 ${reportKind === 'brondolan' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>

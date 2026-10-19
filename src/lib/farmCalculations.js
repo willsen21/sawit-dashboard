@@ -1,10 +1,12 @@
 export function calculateFarmHarvest({ netKg, pricePerKg, uses = [], manager }) {
   const grossTotal = Math.round((Number(netKg) || 0) * (Number(pricePerKg) || 0))
   const useTotal = uses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const primaryUse = Number(uses[0]?.amount) || 0
+  const wageBase = Math.max(0, grossTotal + primaryUse)
   const managerWage = manager && manager !== 'none'
-    ? Math.round(Math.max(0, grossTotal - useTotal) * 0.1)
+    ? Math.round(wageBase * 0.1)
     : 0
-  return { grossTotal, useTotal, managerWage, finalTotal: grossTotal - useTotal - managerWage }
+  return { grossTotal, primaryUse, wageBase, useTotal, additionalUseTotal: useTotal - primaryUse, managerWage, finalTotal: grossTotal - useTotal - managerWage }
 }
 
 export function getFarmHarvestTotals(record) {

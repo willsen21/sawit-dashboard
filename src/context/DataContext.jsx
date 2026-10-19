@@ -6,6 +6,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { STONE_TYPES, canonicalStoneType } from '../lib/stoneUtils'
 import { parseKgInput } from '../lib/kgUtils'
 import { parseRupiahInput } from '../lib/currencyInput'
+import { calculateFarmHarvest } from '../lib/farmCalculations'
 
 const DataContext = createContext(null)
 
@@ -635,7 +636,12 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
   function addPrivateHarvestRecord(farmId, recordData) {
     const farm = privateFarms.find((item) => item.id === farmId)
     if (!farm) return null
-    const record = { ...recordData, id: `harvest-${Date.now()}` }
+    const netKg = Number(recordData.netKg) || 0
+    const pricePerKg = Number(recordData.pricePerKg) || 0
+    const uses = (Array.isArray(recordData.uses) ? recordData.uses : []).map((item) => ({ ...item, amount: Number(item.amount) || 0 }))
+    const manager = recordData.manager || 'none'
+    const totals = calculateFarmHarvest({ netKg, pricePerKg, uses, manager })
+    const record = { ...recordData, id: recordData.id || `harvest-${Date.now()}`, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
     setPrivateFarms((prev) => prev.map((item) => item.id === farmId ? { ...item, records: [record, ...(item.records || [])].sort((a, b) => b.date.localeCompare(a.date)) } : item))
     return record
   }

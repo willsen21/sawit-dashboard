@@ -646,6 +646,25 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     return record
   }
 
+  function updatePrivateHarvestRecord(farmId, recordId, recordData) {
+    const netKg = Number(recordData.netKg) || 0
+    const pricePerKg = Number(recordData.pricePerKg) || 0
+    const uses = (Array.isArray(recordData.uses) ? recordData.uses : []).map((item) => ({ ...item, amount: Number(item.amount) || 0 }))
+    const manager = recordData.manager || 'none'
+    const totals = calculateFarmHarvest({ netKg, pricePerKg, uses, manager })
+    const updatedRecord = { ...recordData, id: recordId, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
+    setPrivateFarms((prev) => prev.map((farm) => farm.id === farmId
+      ? { ...farm, records: (farm.records || []).map((record) => record.id === recordId ? updatedRecord : record).sort((a, b) => b.date.localeCompare(a.date)) }
+      : farm))
+    return updatedRecord
+  }
+
+  function deletePrivateHarvestRecord(farmId, recordId) {
+    setPrivateFarms((prev) => prev.map((farm) => farm.id === farmId
+      ? { ...farm, records: (farm.records || []).filter((record) => record.id !== recordId) }
+      : farm))
+  }
+
   function addHarvestSchedule({ date, farmId, farmName, block, pic, workers, estimatedKg, note, createdBy }) {
     const schedule = { id: `hs-${Date.now()}`, date, farmId: farmId || '', farmName: (farmName || block || '').trim(), block: (farmName || block || '').trim(), pic: pic.trim(), workers: Number(workers) || 0, estimatedKg: Number(estimatedKg) || 0, note: note.trim(), status: 'planned', createdBy, createdAt: new Date().toISOString() }
     setHarvestSchedules((prev) => [...prev, schedule].sort((a, b) => a.date.localeCompare(b.date)))
@@ -764,6 +783,8 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     markStoneSalePaid,
     addPrivateFarm,
     addPrivateHarvestRecord,
+    updatePrivateHarvestRecord,
+    deletePrivateHarvestRecord,
     addPayroll,
     markPayrollPaid,
     topups,

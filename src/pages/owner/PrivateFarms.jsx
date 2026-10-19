@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { ArrowLeft, BadgePercent, CircleDollarSign, Leaf, MapPin, Plus, Sprout, TrendingUp, UserRound, Weight, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, BadgePercent, CircleDollarSign, Leaf, MapPin, Plus, Sprout, TrendingUp, UserRound, Weight, X, Trash2, Pencil } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
 import { calculateFarmHarvest, getFarmHarvestTotals } from '../../lib/farmCalculations'
@@ -24,10 +24,11 @@ function managerLabel(manager) {
 }
 
 export default function PrivateFarms() {
-  const { privateFarms: farms, addPrivateFarm, addPrivateHarvestRecord } = useData()
+  const { privateFarms: farms, addPrivateFarm, addPrivateHarvestRecord, updatePrivateHarvestRecord, deletePrivateHarvestRecord } = useData()
   const [selectedId, setSelectedId] = useState(null)
   const [showFarmForm, setShowFarmForm] = useState(false)
   const [showRecordForm, setShowRecordForm] = useState(false)
+  const [editingRecordId, setEditingRecordId] = useState(null)
   const [recordError, setRecordError] = useState('')
   const [farmForm, setFarmForm] = useState({ name: '', owner: '', location: '', areaHa: '', note: '' })
   const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], note: '' })
@@ -84,14 +85,37 @@ export default function PrivateFarms() {
       total: finalTotal,
       note: recordForm.note.trim(),
     }
-    addPrivateHarvestRecord(selected.id, record)
+    if (editingRecordId) updatePrivateHarvestRecord(selected.id, editingRecordId, record)
+    else addPrivateHarvestRecord(selected.id, record)
     setRecordForm({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], note: '' })
+    setEditingRecordId(null)
     setShowRecordForm(false)
   }
 
   function openRecordForm() {
     setRecordError('')
+    setEditingRecordId(null)
+    setRecordForm({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], note: '' })
     setShowRecordForm(true)
+  }
+
+  function editRecord(record) {
+    setRecordError('')
+    setEditingRecordId(record.id)
+    setRecordForm({
+      date: record.date || todayKey(),
+      manager: record.manager || '',
+      netKg: formatNumericInput(record.netKg ?? ''),
+      pricePerKg: formatNumericInput(record.pricePerKg ?? ''),
+      uses: (record.uses?.length ? record.uses : [newUse()]).map((item) => ({ ...item, id: item.id || newUse().id, amount: formatNumericInput(item.amount ?? '') })),
+      note: record.note || '',
+    })
+    setShowRecordForm(true)
+  }
+
+  function deleteRecord(record) {
+    const confirmed = window.confirm(`Hapus catatan panen tanggal ${formatShortDate(record.date)}? Tindakan ini tidak dapat dibatalkan.`)
+    if (confirmed) deletePrivateHarvestRecord(selected.id, record.id)
   }
 
   if (selected) return <FarmDetail
@@ -100,10 +124,13 @@ export default function PrivateFarms() {
     onAdd={openRecordForm}
     showForm={showRecordForm}
     error={recordError}
-    onCloseForm={() => setShowRecordForm(false)}
+    onCloseForm={() => { setShowRecordForm(false); setEditingRecordId(null) }}
     form={recordForm}
     setForm={setRecordForm}
     onSubmit={addRecord}
+    editingRecordId={editingRecordId}
+    onEdit={editRecord}
+    onDelete={deleteRecord}
   />
 
   return <main className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
@@ -140,7 +167,7 @@ function FarmCard({ farm, onClick }) {
   </button>
 }
 
-function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit }) {
+function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit, editingRecordId, onEdit, onDelete }) {
   const rows = farm.records || []
   const todayRows = rows.filter((row) => row.date === todayKey())
   const today = todayRows.reduce((sum, row) => {
@@ -156,11 +183,11 @@ function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, s
     <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-plantation-700 hover:underline"><ArrowLeft size={16} /> Semua lahan</button>
     <header className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 p-6 text-white shadow-soft md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Rincian lahan</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl text-white">{farm.name}</h1><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90">{farm.owner && <span className="inline-flex items-center gap-1.5"><UserRound size={15} />{farm.owner}</span>}<span className="inline-flex items-center gap-1.5"><MapPin size={15} />{farm.location || 'Lokasi belum diisi'}</span>{farm.areaHa && <span>{farm.areaHa} hektare</span>}</div></div><button className="btn-gold" onClick={onAdd}><Plus size={17} /> Catat panen</button></div>{farm.note && <p className="mt-4 max-w-2xl rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">{farm.note}</p>}</header>
     <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat icon={<Weight size={17} />} label="Berat bersih hari ini" value={`${today.netKg.toLocaleString('id-ID')} kg`} delay={0} /><Stat icon={<CircleDollarSign size={17} />} label="Hasil panen hari ini" value={money(today.gross)} delay={70} /><Stat icon={<TrendingUp size={17} />} label="Pemakaian + upah hari ini" value={money(today.useTotal + today.wages)} delay={140} /><Stat icon={<BadgePercent size={17} />} label="Hasil akhir hari ini" value={money(today.result)} delay={210} /></section>
-    <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Hasil panen bersih × harga, dikurangi pemakaian, lalu upah pengurus 10% bila ada pengurus.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1120px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Catatan'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="9" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
+    <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Hasil panen bersih × harga, dikurangi pemakaian, lalu upah pengurus 10% bila ada pengurus.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1220px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Catatan','Aksi'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="10" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
       const totals = getFarmHarvestTotals(row)
-      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right">{money(row.pricePerKg)}</td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell text-ink-500">{row.note || '—'}</td></tr>
+      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right">{money(row.pricePerKg)}</td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
     })}</tbody></table></div></section>
-    {showForm && <HarvestDialog farmName={farm.name} form={form} setForm={setForm} error={error} onClose={onCloseForm} onSubmit={onSubmit} />}
+    {showForm && <HarvestDialog farmName={farm.name} form={form} setForm={setForm} error={error} onClose={onCloseForm} onSubmit={onSubmit} editing={Boolean(editingRecordId)} />}
   </main>
 }
 
@@ -170,7 +197,7 @@ function UseList({ uses, total }) {
   return <div className="min-w-40 space-y-1">{validUses.map((item, index) => <p key={item.id || index} className="flex justify-between gap-3 text-xs"><span className="max-w-32 truncate text-ink-600">{item.purpose}</span><span className="whitespace-nowrap text-ink-700">{money(item.amount)}</span></p>)}<p className="flex justify-between gap-3 border-t border-ink-900/10 pt-1 text-xs font-semibold"><span>Total</span><span>{money(total)}</span></p></div>
 }
 
-function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit }) {
+function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit, editing = false }) {
   const netKg = parseNumeric(form.netKg)
   const price = parseNumeric(form.pricePerKg)
   const uses = form.uses.map((item) => ({ ...item, amount: parseNumeric(item.amount) }))
@@ -180,7 +207,7 @@ function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit }) {
     setForm((current) => ({ ...current, uses: current.uses.map((item) => item.id === id ? { ...item, [key]: key === 'amount' ? formatNumericInput(value) : value } : item) }))
   }
 
-  return <Dialog title={`Catat panen · ${farmName}`} onClose={onClose} wide><form onSubmit={onSubmit} className="space-y-5">
+  return <Dialog title={`${editing ? 'Edit catatan panen' : 'Catat panen'} · ${farmName}`} onClose={onClose} wide><form onSubmit={onSubmit} className="space-y-5">
     <div className="rounded-xl bg-plantation-50 px-4 py-3 text-sm text-plantation-900">Upah pengurus 10% dihitung dari <strong>(berat bersih × harga) − pemakaian utama</strong>. Pemakaian tambahan mengurangi hasil akhir, tetapi tidak mengubah hitungan upah.</div>
     <div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal panen *"><input type="date" required className="input" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field><Field label="Pengurus panen *"><select required className="input" value={form.manager} onChange={(event) => setForm({ ...form, manager: event.target.value })}><option value="">Pilih pengurus</option>{MANAGERS.map((manager) => <option key={manager.value} value={manager.value}>{manager.label}</option>)}</select></Field></div>
     <div className="grid gap-4 sm:grid-cols-2"><Field label="Berat bersih (kg) *"><input inputMode="decimal" required className="input" value={form.netKg} onChange={(event) => setForm({ ...form, netKg: formatNumericInput(event.target.value) })} placeholder="Contoh: 1.250,5" /></Field><Field label="Harga per kg (Rp) *"><input inputMode="numeric" required className="input" value={form.pricePerKg} onChange={(event) => setForm({ ...form, pricePerKg: formatNumericInput(event.target.value) })} placeholder="Contoh: 2.850" /></Field></div>
@@ -190,7 +217,7 @@ function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit }) {
     <Field label="Catatan panen"><textarea className="input min-h-20" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Keterangan tambahan (opsional)" /></Field>
     <section className="overflow-hidden rounded-xl border border-plantation-900/10 bg-paper-50"><div className="border-b border-ink-900/10 px-4 py-3"><h3 className="font-semibold text-ink-800">Pratinjau pembagian hasil</h3><p className="mt-1 text-xs text-ink-500">Upah 10% dihitung setelah hasil panen dikurangi pemakaian utama. Pemakaian tambahan hanya mengurangi hasil akhir.</p></div><div className="space-y-2 px-4 py-3 text-sm"><PreviewRow label={`${netKg.toLocaleString('id-ID')} kg × ${money(price)}`} value={money(gross)} /><PreviewRow label="Total pemakaian (utama + tambahan)" value={`− ${money(primaryUse + additionalUseTotal)}`} /><PreviewRow label={`Upah pengurus · ${form.manager && form.manager !== 'none' ? '10% dari hasil setelah pemakaian utama' : 'tidak ada pengurus'}`} value={`− ${money(wage)}`} /><div className="mt-3 flex items-center justify-between border-t border-ink-900/10 pt-3"><span className="font-semibold text-ink-700">Hasil akhir</span><strong className={`font-display text-2xl ${result < 0 ? 'text-red-700' : 'text-plantation-900'}`}>{money(result)}</strong></div></div></section>
     {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-    <button className="btn-primary w-full"><Sprout size={16} /> Simpan catatan panen</button>
+    <button className="btn-primary w-full"><Sprout size={16} /> {editing ? 'Simpan perubahan' : 'Simpan catatan panen'}</button>
   </form></Dialog>
 }
 

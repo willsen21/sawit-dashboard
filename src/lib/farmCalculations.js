@@ -1,20 +1,28 @@
-export function calculateFarmHarvest({ netKg, pricePerKg, uses = [], manager }) {
-  const grossTotal = Math.round((Number(netKg) || 0) * (Number(pricePerKg) || 0))
+export function calculateFarmHarvest({ netKg, pricePerKg, fruitNetKg, fruitPricePerKg, brondolanNetKg, brondolanPricePerKg, uses = [], manager }) {
+  const hasSeparateYields = fruitNetKg != null || brondolanNetKg != null
+  const fruitKg = hasSeparateYields ? Number(fruitNetKg) || 0 : 0
+  const brondolanKg = hasSeparateYields ? Number(brondolanNetKg) || 0 : 0
+  const fruitTotal = Math.round((hasSeparateYields ? fruitKg : Number(netKg) || 0) * (hasSeparateYields ? Number(fruitPricePerKg) || 0 : Number(pricePerKg) || 0))
+  const brondolanTotal = hasSeparateYields ? Math.round(brondolanKg * (Number(brondolanPricePerKg) || 0)) : 0
+  const totalNetKg = hasSeparateYields ? fruitKg + brondolanKg : Number(netKg) || 0
+  const grossTotal = fruitTotal + brondolanTotal
   const useTotal = uses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
   const primaryUse = Number(uses[0]?.amount) || 0
   const wageBase = Math.max(0, grossTotal - primaryUse)
   const managerWage = manager && manager !== 'none'
     ? Math.round(wageBase * 0.1)
     : 0
-  return { grossTotal, primaryUse, wageBase, useTotal, additionalUseTotal: useTotal - primaryUse, managerWage, finalTotal: grossTotal - useTotal - managerWage }
+  return { grossTotal, fruitTotal, brondolanTotal, totalNetKg, primaryUse, wageBase, useTotal, additionalUseTotal: useTotal - primaryUse, managerWage, finalTotal: grossTotal - useTotal - managerWage }
 }
 
 export function getFarmHarvestTotals(record) {
   const calculated = calculateFarmHarvest(record)
-  const hasCalculationInputs = Number(record.netKg) > 0 && Number(record.pricePerKg) > 0
+  const hasCalculationInputs = record.fruitNetKg != null || record.brondolanNetKg != null || (Number(record.netKg) > 0 && Number(record.pricePerKg) > 0)
   if (hasCalculationInputs) {
     return {
       grossTotal: calculated.grossTotal,
+      fruitTotal: calculated.fruitTotal,
+      brondolanTotal: calculated.brondolanTotal,
       useTotal: calculated.useTotal,
       managerWage: calculated.managerWage,
       finalTotal: calculated.finalTotal,

@@ -640,7 +640,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const pricePerKg = Number(recordData.pricePerKg) || 0
     const uses = (Array.isArray(recordData.uses) ? recordData.uses : []).map((item) => ({ ...item, amount: Number(item.amount) || 0 }))
     const manager = recordData.manager || 'none'
-    const totals = calculateFarmHarvest({ netKg, pricePerKg, uses, manager })
+    const totals = calculateFarmHarvest({ ...recordData, netKg, pricePerKg, uses, manager })
     const record = { ...recordData, id: recordData.id || `harvest-${Date.now()}`, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
     setPrivateFarms((prev) => prev.map((item) => item.id === farmId ? { ...item, records: [record, ...(item.records || [])].sort((a, b) => b.date.localeCompare(a.date)) } : item))
     return record
@@ -651,7 +651,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const pricePerKg = Number(recordData.pricePerKg) || 0
     const uses = (Array.isArray(recordData.uses) ? recordData.uses : []).map((item) => ({ ...item, amount: Number(item.amount) || 0 }))
     const manager = recordData.manager || 'none'
-    const totals = calculateFarmHarvest({ netKg, pricePerKg, uses, manager })
+    const totals = calculateFarmHarvest({ ...recordData, netKg, pricePerKg, uses, manager })
     const updatedRecord = { ...recordData, id: recordId, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
     setPrivateFarms((prev) => prev.map((farm) => farm.id === farmId
       ? { ...farm, records: (farm.records || []).map((record) => record.id === recordId ? updatedRecord : record).sort((a, b) => b.date.localeCompare(a.date)) }

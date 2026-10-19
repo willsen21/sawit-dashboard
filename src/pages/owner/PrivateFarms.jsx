@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react'
 import { ArrowLeft, BadgePercent, CircleDollarSign, Leaf, MapPin, Plus, Sprout, TrendingUp, UserRound, Weight, X, Trash2, Pencil } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
-import { calculateFarmHarvest, getFarmHarvestTotals } from '../../lib/farmCalculations'
+import { calculateFarmHarvest, getFarmHarvestTotals, splitFarmResultEqually } from '../../lib/farmCalculations'
+import FarmShareFields from '../../components/FarmShareFields'
 
 const money = (value) => formatRupiah(Number(value) || 0)
 const parseNumeric = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
@@ -31,7 +32,7 @@ export default function PrivateFarms() {
   const [editingRecordId, setEditingRecordId] = useState(null)
   const [recordError, setRecordError] = useState('')
   const [farmForm, setFarmForm] = useState({ name: '', owner: '', location: '', areaHa: '', note: '' })
-  const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], note: '' })
+  const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
 
   const selected = farms.find((farm) => farm.id === selectedId)
   const todaySummary = useMemo(() => farms.flatMap((farm) => farm.records || []).filter((row) => row.date === todayKey())
@@ -71,6 +72,11 @@ export default function PrivateFarms() {
     const useTotal = uses.reduce((sum, item) => sum + item.amount, 0)
     const { grossTotal, managerWage, finalTotal } = calculateFarmHarvest({ netKg, pricePerKg, uses, manager: recordForm.manager })
     if (useTotal > grossTotal) return setRecordError('Total pemakaian tidak boleh melebihi hasil panen bersih.')
+    const shareCount = Number(recordForm.shareCount) || 0
+    const shareNames = (recordForm.shareNames || []).slice(0, shareCount).map((name) => name.trim())
+    if (shareCount && (finalTotal < 0 || shareNames.some((name) => !name))) return setRecordError('Isi semua nama penerima. Hasil akhir harus positif untuk dibagikan.')
+    if (new Set(shareNames.map((name) => name.toLocaleLowerCase('id-ID'))).size !== shareNames.length) return setRecordError('Nama penerima pembagian hasil harus berbeda.')
+    const distribution = splitFarmResultEqually(finalTotal, shareNames)
     const record = {
       id: `harvest-${Date.now()}`,
       date: recordForm.date,
@@ -83,11 +89,12 @@ export default function PrivateFarms() {
       managerWage,
       finalTotal,
       total: finalTotal,
+      distribution,
       note: recordForm.note.trim(),
     }
     if (editingRecordId) updatePrivateHarvestRecord(selected.id, editingRecordId, record)
     else addPrivateHarvestRecord(selected.id, record)
-    setRecordForm({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], note: '' })
+    setRecordForm({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
     setEditingRecordId(null)
     setShowRecordForm(false)
   }
@@ -95,7 +102,7 @@ export default function PrivateFarms() {
   function openRecordForm() {
     setRecordError('')
     setEditingRecordId(null)
-    setRecordForm({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], note: '' })
+    setRecordForm({ date: todayKey(), manager: '', netKg: '', pricePerKg: '', uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
     setShowRecordForm(true)
   }
 
@@ -108,6 +115,8 @@ export default function PrivateFarms() {
       netKg: formatNumericInput(record.netKg ?? ''),
       pricePerKg: formatNumericInput(record.pricePerKg ?? ''),
       uses: (record.uses?.length ? record.uses : [newUse()]).map((item) => ({ ...item, id: item.id || newUse().id, amount: formatNumericInput(item.amount ?? '') })),
+      shareCount: (record.distribution || []).length,
+      shareNames: (record.distribution || []).map((share) => share.name || ''),
       note: record.note || '',
     })
     setShowRecordForm(true)
@@ -183,9 +192,9 @@ function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, s
     <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-plantation-700 hover:underline"><ArrowLeft size={16} /> Semua lahan</button>
     <header className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 p-6 text-white shadow-soft md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Rincian lahan</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl text-white">{farm.name}</h1><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90">{farm.owner && <span className="inline-flex items-center gap-1.5"><UserRound size={15} />{farm.owner}</span>}<span className="inline-flex items-center gap-1.5"><MapPin size={15} />{farm.location || 'Lokasi belum diisi'}</span>{farm.areaHa && <span>{farm.areaHa} hektare</span>}</div></div><button className="btn-gold" onClick={onAdd}><Plus size={17} /> Catat panen</button></div>{farm.note && <p className="mt-4 max-w-2xl rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">{farm.note}</p>}</header>
     <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat icon={<Weight size={17} />} label="Berat bersih hari ini" value={`${today.netKg.toLocaleString('id-ID')} kg`} delay={0} /><Stat icon={<CircleDollarSign size={17} />} label="Hasil panen hari ini" value={money(today.gross)} delay={70} /><Stat icon={<TrendingUp size={17} />} label="Pemakaian + upah hari ini" value={money(today.useTotal + today.wages)} delay={140} /><Stat icon={<BadgePercent size={17} />} label="Hasil akhir hari ini" value={money(today.result)} delay={210} /></section>
-    <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Hasil panen bersih × harga, dikurangi pemakaian, lalu upah pengurus 10% bila ada pengurus.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1220px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Catatan','Aksi'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="10" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
+    <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Hasil akhir dapat dibagi rata kepada dua atau tiga penerima.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1400px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Pembagian hasil','Catatan','Aksi'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="11" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
       const totals = getFarmHarvestTotals(row)
-      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right">{money(row.pricePerKg)}</td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
+      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right">{money(row.pricePerKg)}</td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell"><ShareList shares={row.distribution || []} /></td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
     })}</tbody></table></div></section>
     {showForm && <HarvestDialog farmName={farm.name} form={form} setForm={setForm} error={error} onClose={onCloseForm} onSubmit={onSubmit} editing={Boolean(editingRecordId)} />}
   </main>
@@ -197,11 +206,17 @@ function UseList({ uses, total }) {
   return <div className="min-w-40 space-y-1">{validUses.map((item, index) => <p key={item.id || index} className="flex justify-between gap-3 text-xs"><span className="max-w-32 truncate text-ink-600">{item.purpose}</span><span className="whitespace-nowrap text-ink-700">{money(item.amount)}</span></p>)}<p className="flex justify-between gap-3 border-t border-ink-900/10 pt-1 text-xs font-semibold"><span>Total</span><span>{money(total)}</span></p></div>
 }
 
+function ShareList({ shares }) {
+  if (!shares.length) return <span className="text-ink-400">Tidak dibagi</span>
+  return <div className="min-w-36 space-y-1">{shares.map((share, index) => <p key={`${share.name}-${index}`} className="flex justify-between gap-3 text-xs"><span className="max-w-24 truncate text-ink-600">{share.name}</span><span className="whitespace-nowrap font-medium text-ink-700">{money(share.amount)}</span></p>)}</div>
+}
+
 function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit, editing = false }) {
   const netKg = parseNumeric(form.netKg)
   const price = parseNumeric(form.pricePerKg)
   const uses = form.uses.map((item) => ({ ...item, amount: parseNumeric(item.amount) }))
   const { grossTotal: gross, primaryUse, additionalUseTotal, managerWage: wage, finalTotal: result } = calculateFarmHarvest({ netKg, pricePerKg: price, uses, manager: form.manager })
+  const previewShares = splitFarmResultEqually(result, form.shareNames || [])
 
   function updateUse(id, key, value) {
     setForm((current) => ({ ...current, uses: current.uses.map((item) => item.id === id ? { ...item, [key]: key === 'amount' ? formatNumericInput(value) : value } : item) }))
@@ -214,8 +229,9 @@ function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit, edit
     <section className="rounded-xl border border-ink-900/10 p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-ink-800">Pemakaian hasil panen</h3><p className="mt-1 text-xs text-ink-500">Pemakaian utama wajib dan mengurangi hasil panen sebelum upah 10% dihitung. Pemakaian tambahan tidak masuk hitungan upah.</p></div><button type="button" className="btn-ghost !px-3 !py-2" onClick={() => setForm((current) => ({ ...current, uses: [...current.uses, newUse()] }))}><Plus size={15} /> Tambah pemakaian</button></div>
       <div className="space-y-3">{form.uses.map((item, index) => <div key={item.id} className="grid items-end gap-2 sm:grid-cols-[1fr_190px_auto]"><Field label={index === 0 ? 'Pemakaian utama *' : `Pemakaian tambahan · ${index + 1}`}><input required={index === 0} className="input" value={item.purpose} onChange={(event) => updateUse(item.id, 'purpose', event.target.value)} placeholder={index === 0 ? 'Wajib, contoh: hasil panen untuk kebutuhan utama' : 'Contoh: pupuk kebun'} /></Field><Field label="Nominal (Rp)"><input required={index === 0} inputMode="numeric" className="input" value={item.amount} onChange={(event) => updateUse(item.id, 'amount', event.target.value)} placeholder="Contoh: 500.000" /></Field><button type="button" disabled={index === 0} className="mb-1 inline-flex h-10 items-center justify-center rounded-lg px-3 text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-30" onClick={() => setForm((current) => ({ ...current, uses: current.uses.filter((use) => use.id !== item.id) }))} aria-label="Hapus pemakaian" title={index === 0 ? 'Pemakaian utama wajib' : 'Hapus pemakaian'}><Trash2 size={17} /></button></div>)}</div>
     </section>
+    <FarmShareFields count={form.shareCount} names={form.shareNames} onCountChange={(count) => setForm((current) => ({ ...current, shareCount: count, shareNames: Array.from({ length: count }, (_, index) => current.shareNames?.[index] || '') }))} onNameChange={(index, name) => setForm((current) => ({ ...current, shareNames: current.shareNames.map((value, itemIndex) => itemIndex === index ? name : value) }))} />
     <Field label="Catatan panen"><textarea className="input min-h-20" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Keterangan tambahan (opsional)" /></Field>
-    <section className="overflow-hidden rounded-xl border border-plantation-900/10 bg-paper-50"><div className="border-b border-ink-900/10 px-4 py-3"><h3 className="font-semibold text-ink-800">Pratinjau pembagian hasil</h3><p className="mt-1 text-xs text-ink-500">Upah 10% dihitung setelah hasil panen dikurangi pemakaian utama. Pemakaian tambahan hanya mengurangi hasil akhir.</p></div><div className="space-y-2 px-4 py-3 text-sm"><PreviewRow label={`${netKg.toLocaleString('id-ID')} kg × ${money(price)}`} value={money(gross)} /><PreviewRow label="Total pemakaian (utama + tambahan)" value={`− ${money(primaryUse + additionalUseTotal)}`} /><PreviewRow label={`Upah pengurus · ${form.manager && form.manager !== 'none' ? '10% dari hasil setelah pemakaian utama' : 'tidak ada pengurus'}`} value={`− ${money(wage)}`} /><div className="mt-3 flex items-center justify-between border-t border-ink-900/10 pt-3"><span className="font-semibold text-ink-700">Hasil akhir</span><strong className={`font-display text-2xl ${result < 0 ? 'text-red-700' : 'text-plantation-900'}`}>{money(result)}</strong></div></div></section>
+    <section className="overflow-hidden rounded-xl border border-plantation-900/10 bg-paper-50"><div className="border-b border-ink-900/10 px-4 py-3"><h3 className="font-semibold text-ink-800">Pratinjau pembagian hasil</h3><p className="mt-1 text-xs text-ink-500">Upah 10% dihitung setelah hasil panen dikurangi pemakaian utama. Pemakaian tambahan hanya mengurangi hasil akhir.</p></div><div className="space-y-2 px-4 py-3 text-sm"><PreviewRow label={`${netKg.toLocaleString('id-ID')} kg × ${money(price)}`} value={money(gross)} /><PreviewRow label="Total pemakaian (utama + tambahan)" value={`− ${money(primaryUse + additionalUseTotal)}`} /><PreviewRow label={`Upah pengurus · ${form.manager && form.manager !== 'none' ? '10% dari hasil setelah pemakaian utama' : 'tidak ada pengurus'}`} value={`− ${money(wage)}`} /><div className="mt-3 flex items-center justify-between border-t border-ink-900/10 pt-3"><span className="font-semibold text-ink-700">Hasil akhir</span><strong className={`font-display text-2xl ${result < 0 ? 'text-red-700' : 'text-plantation-900'}`}>{money(result)}</strong></div>{previewShares.length > 0 && <div className="space-y-1 border-t border-ink-900/10 pt-3">{previewShares.map((share, index) => <PreviewRow key={`${share.name}-${index}`} label={`Bagian ${share.name || `penerima ${index + 1}`}`} value={money(share.amount)} />)}</div>}</div></section>
     {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
     <button className="btn-primary w-full"><Sprout size={16} /> {editing ? 'Simpan perubahan' : 'Simpan catatan panen'}</button>
   </form></Dialog>

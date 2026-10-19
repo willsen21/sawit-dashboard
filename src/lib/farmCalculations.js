@@ -26,3 +26,12 @@ export function getFarmHarvestTotals(record) {
   const finalTotal = Number(record.finalTotal ?? record.total ?? (grossTotal - useTotal - managerWage)) || 0
   return { grossTotal, useTotal, managerWage, finalTotal }
 }
+
+export function splitFarmResultEqually(total, names = []) {
+  const recipients = names.map((name) => String(name || '').trim()).filter(Boolean)
+  if (!recipients.length) return []
+  const amount = Math.max(0, Math.round(Number(total) || 0))
+  const baseShare = Math.floor(amount / recipients.length)
+  const remainder = amount % recipients.length
+  return recipients.map((name, index) => ({ name, amount: baseShare + (index < remainder ? 1 : 0) }))
+}

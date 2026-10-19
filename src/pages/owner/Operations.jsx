@@ -6,7 +6,8 @@ import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
 import StatCard from '../../components/StatCard'
 import Modal from '../../components/Modal'
-import { calculateFarmHarvest } from '../../lib/farmCalculations'
+import FarmShareFields from '../../components/FarmShareFields'
+import { calculateFarmHarvest, splitFarmResultEqually } from '../../lib/farmCalculations'
 
 const TABS = [
   { id: 'harvest', label: 'Jadwal panen', icon: CalendarDays },
@@ -31,7 +32,7 @@ export default function Operations() {
   const [expense, setExpense] = useState({ date: today, category: 'Pupuk', amount: '', farmId: '', note: '' })
   const [payroll, setPayroll] = useState({ period: today.slice(0, 7), employeeName: '', workDays: '', dailyRate: '', bonus: '', deduction: '', note: '' })
   const [completeTarget, setCompleteTarget] = useState(null)
-  const [harvestForm, setHarvestForm] = useState({ farmId: '', grossKg: '', netKg: '', pricePerKg: '', manager: '', usePurpose: '', useAmount: '', note: '' })
+  const [harvestForm, setHarvestForm] = useState({ farmId: '', grossKg: '', netKg: '', pricePerKg: '', manager: '', usePurpose: '', useAmount: '', shareCount: 0, shareNames: [], note: '' })
   const [harvestError, setHarvestError] = useState('')
   const [expenseError, setExpenseError] = useState('')
 
@@ -61,7 +62,7 @@ export default function Operations() {
     if (!item) return
     if (status === 'completed') {
       const farm = privateFarms.find((entry) => entry.id === item.farmId) || privateFarms.find((entry) => entry.name === (item.farmName || item.block))
-      setHarvestForm({ farmId: farm?.id || '', grossKg: '', netKg: '', pricePerKg: '', manager: '', usePurpose: '', useAmount: '', note: item.note || '' })
+      setHarvestForm({ farmId: farm?.id || '', grossKg: '', netKg: '', pricePerKg: '', manager: '', usePurpose: '', useAmount: '', shareCount: 0, shareNames: [], note: item.note || '' })
       setHarvestError('')
       setCompleteTarget(item)
       return
@@ -83,7 +84,12 @@ export default function Operations() {
     const uses = [{ purpose: harvestForm.usePurpose.trim(), amount: useAmount }]
     const totals = calculateFarmHarvest({ netKg, pricePerKg, manager: harvestForm.manager, uses })
     if (useAmount > totals.grossTotal) return setHarvestError('Pemakaian tidak boleh melebihi hasil panen.')
-    addPrivateHarvestRecord(harvestForm.farmId, { date: completeTarget.date, grossKg, netKg, pricePerKg, manager: harvestForm.manager, uses, note: harvestForm.note.trim(), scheduleId: completeTarget.id })
+    const shareCount = Number(harvestForm.shareCount) || 0
+    const shareNames = (harvestForm.shareNames || []).slice(0, shareCount).map((name) => name.trim())
+    if (shareCount && (totals.finalTotal < 0 || shareNames.some((name) => !name))) return setHarvestError('Isi semua nama penerima. Hasil akhir harus positif untuk dibagikan.')
+    if (new Set(shareNames.map((name) => name.toLocaleLowerCase('id-ID'))).size !== shareNames.length) return setHarvestError('Nama penerima pembagian hasil harus berbeda.')
+    const distribution = splitFarmResultEqually(totals.finalTotal, shareNames)
+    addPrivateHarvestRecord(harvestForm.farmId, { date: completeTarget.date, grossKg, netKg, pricePerKg, manager: harvestForm.manager, uses, distribution, note: harvestForm.note.trim(), scheduleId: completeTarget.id })
     updateHarvestScheduleStatus(completeTarget.id, 'completed', currentUser.id)
     setCompleteTarget(null)
   }
@@ -124,6 +130,7 @@ export default function Operations() {
         <div className="grid grid-cols-2 gap-3"><Field label="Berat kotor (kg) *"><input required inputMode="decimal" className="input" value={harvestForm.grossKg} onChange={(event) => setHarvestForm({ ...harvestForm, grossKg: formatNumericInput(event.target.value) })} placeholder="mis. 1.250" /></Field><Field label="Berat bersih (kg) *"><input required inputMode="decimal" className="input" value={harvestForm.netKg} onChange={(event) => setHarvestForm({ ...harvestForm, netKg: formatNumericInput(event.target.value) })} placeholder="mis. 1.210" /></Field></div>
         <div className="grid grid-cols-2 gap-3"><Field label="Harga per kg (Rp) *"><input required inputMode="numeric" className="input" value={harvestForm.pricePerKg} onChange={(event) => setHarvestForm({ ...harvestForm, pricePerKg: formatNumericInput(event.target.value) })} placeholder="mis. 2.850" /></Field><Field label="Pengurus panen *"><select required className="input" value={harvestForm.manager} onChange={(event) => setHarvestForm({ ...harvestForm, manager: event.target.value })}><option value="">Pilih pengurus</option><option value="joni">Joni</option><option value="romi">Romi</option><option value="none">Tidak ada pengurus</option></select></Field></div>
         <div className="grid grid-cols-2 gap-3"><Field label="Pemakaian utama *"><input required className="input" value={harvestForm.usePurpose} onChange={(event) => setHarvestForm({ ...harvestForm, usePurpose: event.target.value })} placeholder="Contoh: hasil panen untuk kebutuhan utama" /></Field><Field label="Nominal pemakaian utama (Rp) *"><input required inputMode="numeric" className="input" value={harvestForm.useAmount} onChange={(event) => setHarvestForm({ ...harvestForm, useAmount: formatNumericInput(event.target.value) })} placeholder="Wajib diisi" /></Field></div>
+        <FarmShareFields count={harvestForm.shareCount} names={harvestForm.shareNames} onCountChange={(count) => setHarvestForm((current) => ({ ...current, shareCount: count, shareNames: Array.from({ length: count }, (_, index) => current.shareNames?.[index] || '') }))} onNameChange={(index, name) => setHarvestForm((current) => ({ ...current, shareNames: current.shareNames.map((value, itemIndex) => itemIndex === index ? name : value) }))} />
         <Field label="Catatan"><textarea className="input min-h-20" value={harvestForm.note} onChange={(event) => setHarvestForm({ ...harvestForm, note: event.target.value })} placeholder="Kondisi panen atau keterangan tambahan" /></Field>
         <div className="rounded-lg bg-plantation-700/8 px-4 py-3"><p className="text-xs text-ink-500">Upah 10% dihitung dari (berat bersih × harga) − pemakaian utama. Pemakaian tambahan, bila ada, hanya mengurangi hasil akhir.</p><p className="mt-1 font-display text-xl text-plantation-900">{formatRupiah(calculateFarmHarvest({ netKg: parseNumeric(harvestForm.netKg), pricePerKg: parseNumeric(harvestForm.pricePerKg), manager: harvestForm.manager, uses: [{ amount: parseNumeric(harvestForm.useAmount) }] }).finalTotal)}</p></div>
         {harvestError && <p role="alert" className="text-sm text-red-700">{harvestError}</p>}

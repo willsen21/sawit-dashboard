@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { ArrowLeft, BadgePercent, CircleDollarSign, Leaf, MapPin, Plus, Search, Sprout, TrendingUp, UserRound, Weight, X, Trash2, Pencil } from 'lucide-react'
+import { ArrowLeft, BadgePercent, CircleDollarSign, Download, Eye, Leaf, MapPin, Plus, Search, Sprout, TrendingUp, UserRound, Weight, X, Trash2, Pencil } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKey } from '../../lib/dateUtils'
 import { calculateFarmHarvest, getFarmHarvestTotals, splitFarmResultEqually } from '../../lib/farmCalculations'
@@ -25,6 +25,281 @@ function managerLabel(manager) {
   return MANAGERS.find((item) => item.value === manager)?.label || 'Belum dicatat'
 }
 
+function getYieldDetails(record) {
+  const legacyFruit = Number(record.fruitNetKg ?? record.netKg) > 0 ? [{ netKg: record.fruitNetKg ?? record.netKg, pricePerKg: record.fruitPricePerKg ?? record.pricePerKg }] : []
+  const legacyBrondolan = Number(record.brondolanNetKg) > 0 ? [{ netKg: record.brondolanNetKg, pricePerKg: record.brondolanPricePerKg }] : []
+  const legacyKetek = Number(record.ketekNetKg) > 0 ? [{ netKg: record.ketekNetKg, pricePerKg: record.ketekPricePerKg }] : []
+  return [
+    { name: 'Buah', rows: record.fruitRows?.length ? record.fruitRows : legacyFruit },
+    { name: 'Brondolan', rows: record.brondolanRows?.length ? record.brondolanRows : legacyBrondolan },
+    { name: 'Ketek', rows: record.ketekRows?.length ? record.ketekRows : legacyKetek },
+  ]
+}
+
+async function exportFarmDetailsPdf(farm) {
+  const { default: jsPDF } = await import('jspdf')
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const margin = 15
+  const contentWidth = pageWidth - margin * 2
+  const green = [20, 54, 43]
+  const midGreen = [44, 91, 72]
+  const gold = [194, 143, 62]
+  const muted = [104, 119, 111]
+  const cream = [248, 246, 239]
+  const records = [...(farm.records || [])].sort((a, b) => b.date.localeCompare(a.date))
+  const totals = records.reduce((sum, row) => {
+    const detail = getFarmHarvestTotals(row)
+    sum.netKg += Number(row.netKg) || 0
+    sum.gross += detail.grossTotal
+    sum.result += detail.finalTotal
+    return sum
+  }, { netKg: 0, gross: 0, result: 0 })
+  let y = 0
+
+  function drawPageHeader(subtitle = 'Laporan detail hasil panen') {
+    pdf.setFillColor(...green)
+    pdf.rect(0, 0, pageWidth, 37, 'F')
+    pdf.setFillColor(...gold)
+    pdf.circle(23, 18.5, 9, 'F')
+    pdf.setDrawColor(255, 255, 255)
+    pdf.setLineWidth(0.8)
+    pdf.line(23, 23, 23, 16)
+    pdf.line(23, 18, 19.5, 15)
+    pdf.line(23, 19, 26.5, 15.5)
+    pdf.setFillColor(255, 255, 255)
+    pdf.circle(19.5, 15, 1, 'F')
+    pdf.circle(26.5, 15.5, 1, 'F')
+    pdf.setTextColor(255, 255, 255)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(15)
+    pdf.text('KEBUN', 38, 16)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(9)
+    pdf.text(subtitle, 38, 23)
+    pdf.setTextColor(...green)
+  }
+
+  function nextPage() {
+    pdf.addPage()
+    drawPageHeader('Laporan detail hasil panen - lanjutan')
+    y = 48
+  }
+
+  function ensureSpace(height) {
+    if (y + height > pageHeight - 17) nextPage()
+  }
+
+  function labelValue(label, value, x, top, width) {
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(8)
+    pdf.setTextColor(...muted)
+    pdf.text(label, x, top)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(10)
+    pdf.setTextColor(...green)
+    const lines = pdf.splitTextToSize(String(value || '-'), width)
+    pdf.text(lines, x, top + 5)
+    return top + 5 + Math.max(1, lines.length) * 4.5
+  }
+
+  drawPageHeader()
+  y = 49
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(20)
+  pdf.setTextColor(...green)
+  pdf.text(String(farm.name || 'Lahan').slice(0, 70), margin, y)
+  y += 7
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(...muted)
+  pdf.text(`Dibuat ${formatShortDate(todayKey())} | ${records.length} catatan panen`, margin, y)
+  y += 8
+
+  pdf.setFillColor(...cream)
+  pdf.roundedRect(margin, y, contentWidth, 31, 3, 3, 'F')
+  labelValue('LOKASI', farm.location || 'Belum diisi', margin + 5, y + 7, 72)
+  labelValue('PEMILIK', farm.owner || 'Belum diisi', margin + 67, y + 7, 48)
+  labelValue('LUAS LAHAN', farm.areaHa ? `${farm.areaHa} hektare` : 'Belum diisi', margin + 127, y + 7, 42)
+  y += 37
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(11)
+  pdf.setTextColor(...green)
+  pdf.text('Ringkasan seluruh catatan', margin, y)
+  y += 3
+  const statGap = 3
+  const statWidth = (contentWidth - statGap * 2) / 3
+  const statItems = [
+    ['BERAT BERSIH', `${totals.netKg.toLocaleString('id-ID')} kg`],
+    ['TOTAL HASIL PANEN', money(totals.gross)],
+    ['TOTAL HASIL AKHIR', money(totals.result)],
+  ]
+  statItems.forEach(([label, value], index) => {
+    const x = margin + index * (statWidth + statGap)
+    pdf.setFillColor(246, 249, 246)
+    pdf.roundedRect(x, y, statWidth, 19, 2, 2, 'F')
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7)
+    pdf.setTextColor(...muted)
+    pdf.text(label, x + 3, y + 6)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(10)
+    pdf.setTextColor(...green)
+    pdf.text(value, x + 3, y + 13)
+  })
+  y += 27
+
+  if (farm.note) {
+    ensureSpace(20)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(9)
+    pdf.setTextColor(...muted)
+    const noteLines = pdf.splitTextToSize(`Catatan lahan: ${farm.note}`, contentWidth)
+    pdf.text(noteLines, margin, y)
+    y += noteLines.length * 4.5 + 5
+  }
+
+  records.forEach((record, index) => {
+    ensureSpace(49)
+    const rowTotals = getFarmHarvestTotals(record)
+    const boxTop = y
+    pdf.setFillColor(...green)
+    pdf.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F')
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(10)
+    pdf.setTextColor(255, 255, 255)
+    pdf.text(`PANEN ${String(index + 1).padStart(2, '0')}  |  ${formatShortDate(record.date)}`, margin + 4, y + 6.5)
+    y += 16
+
+    const col2 = margin + contentWidth / 2
+    const baseY = y
+    const a = labelValue('NAMA PENGURUS', managerLabel(record.manager), margin + 2, baseY, contentWidth / 2 - 8)
+    const b = labelValue('TOTAL BERAT BERSIH', `${Number(record.netKg || 0).toLocaleString('id-ID')} kg`, col2, baseY, contentWidth / 2 - 8)
+    y = Math.max(a, b) + 3
+
+    getYieldDetails(record).forEach(({ name, rows: yieldRows }) => {
+      yieldRows.forEach((yieldRow, rowIndex) => {
+        ensureSpace(10)
+        const amount = Math.round((Number(yieldRow.netKg) || 0) * (Number(yieldRow.pricePerKg) || 0))
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(8.5)
+        pdf.setTextColor(...muted)
+        pdf.text(`${name}${yieldRows.length > 1 ? ` ${rowIndex + 1}` : ''}: ${Number(yieldRow.netKg || 0).toLocaleString('id-ID')} kg x ${money(yieldRow.pricePerKg)}/kg`, margin + 2, y)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setTextColor(...green)
+        pdf.text(money(amount), pageWidth - margin, y, { align: 'right' })
+        y += 5
+      })
+    })
+    ensureSpace(17)
+    labelValue('TOTAL HASIL PANEN', money(rowTotals.grossTotal), margin + 2, y, contentWidth - 4)
+    y += 11
+
+    const uses = record.uses || []
+    if (uses.length) {
+      ensureSpace(12 + uses.length * 5)
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(...midGreen)
+      pdf.text('PEMAKAIAN HASIL PANEN', margin + 2, y)
+      y += 5
+      uses.forEach((use, useIndex) => {
+        pdf.setFont('helvetica', 'normal')
+        pdf.setTextColor(...muted)
+        const usageLabel = `${useIndex === 0 ? 'Utama' : `Tambahan ${useIndex}`} - ${use.purpose || 'Tanpa keterangan'}`
+        const usageLines = pdf.splitTextToSize(usageLabel, contentWidth - 48)
+        usageLines.forEach((line, lineIndex) => {
+          ensureSpace(7)
+          pdf.text(line, margin + 2, y)
+          if (lineIndex === 0) {
+            pdf.setFont('helvetica', 'bold')
+            pdf.setTextColor(...green)
+            pdf.text(money(use.amount), pageWidth - margin, y, { align: 'right' })
+            pdf.setFont('helvetica', 'normal')
+            pdf.setTextColor(...muted)
+          }
+          y += 5
+        })
+      })
+    }
+
+    const primaryUse = Number(uses[0]?.amount) || 0
+    const wageBase = Math.max(0, rowTotals.grossTotal - primaryUse)
+    pdf.setDrawColor(218, 224, 218)
+    pdf.line(margin + 2, y, pageWidth - margin - 2, y)
+    y += 5
+    labelValue('DASAR UPAH PENGURUS', money(wageBase), margin + 2, y, contentWidth / 2 - 8)
+    labelValue('UPAH PENGURUS (10%)', money(rowTotals.managerWage), col2, y, contentWidth / 2 - 8)
+    y = Math.max(y + 11, boxTop + 43)
+
+    pdf.setFillColor(...cream)
+    pdf.roundedRect(margin, y, contentWidth, 13, 2, 2, 'F')
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(9)
+    pdf.setTextColor(...green)
+    pdf.text('HASIL AKHIR', margin + 4, y + 8)
+    pdf.setFontSize(12)
+    pdf.setTextColor(...midGreen)
+    pdf.text(money(rowTotals.finalTotal), pageWidth - margin - 4, y + 8, { align: 'right' })
+    y += 17
+
+    if (record.distribution?.length) {
+      ensureSpace(8 + record.distribution.length * 5)
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(8)
+      pdf.setTextColor(...midGreen)
+      pdf.text('PEMBAGIAN HASIL', margin + 2, y)
+      y += 5
+      record.distribution.forEach((share) => {
+        pdf.setFont('helvetica', 'normal')
+        pdf.setTextColor(...muted)
+        const shareLines = pdf.splitTextToSize(`Nama: ${share.name}`, contentWidth - 48)
+        shareLines.forEach((line, lineIndex) => {
+          ensureSpace(7)
+          pdf.text(line, margin + 2, y)
+          if (lineIndex === 0) {
+            pdf.setFont('helvetica', 'bold')
+            pdf.setTextColor(...green)
+            pdf.text(money(share.amount), pageWidth - margin, y, { align: 'right' })
+            pdf.setFont('helvetica', 'normal')
+            pdf.setTextColor(...muted)
+          }
+          y += 5
+        })
+      })
+    }
+    if (record.note) {
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(8)
+      pdf.setTextColor(...muted)
+      const noteLines = pdf.splitTextToSize(`Catatan panen: ${record.note}`, contentWidth - 4)
+      noteLines.forEach((line) => {
+        ensureSpace(6)
+        pdf.text(line, margin + 2, y)
+        y += 4
+      })
+      y += 4
+    }
+    y += 5
+  })
+
+  const pages = pdf.getNumberOfPages()
+  for (let page = 1; page <= pages; page += 1) {
+    pdf.setPage(page)
+    pdf.setDrawColor(225, 229, 224)
+    pdf.line(margin, pageHeight - 11, pageWidth - margin, pageHeight - 11)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7)
+    pdf.setTextColor(...muted)
+    pdf.text('Dokumen dibuat dari data Kebun pada aplikasi Sawit', margin, pageHeight - 6)
+    pdf.text(`Halaman ${page} dari ${pages}`, pageWidth - margin, pageHeight - 6, { align: 'right' })
+  }
+  const safeName = String(farm.name || 'kebun').toLocaleLowerCase('id-ID').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'kebun'
+  pdf.save(`laporan-detail-${safeName}-${todayKey()}.pdf`)
+}
+
 export default function PrivateFarms() {
   const { privateFarms: farms, addPrivateFarm, updatePrivateFarm, addPrivateHarvestRecord, updatePrivateHarvestRecord, deletePrivateHarvestRecord } = useData()
   const [selectedId, setSelectedId] = useState(null)
@@ -34,6 +309,7 @@ export default function PrivateFarms() {
   const [farmSearch, setFarmSearch] = useState('')
   const [showRecordForm, setShowRecordForm] = useState(false)
   const [editingRecordId, setEditingRecordId] = useState(null)
+  const [viewRecord, setViewRecord] = useState(null)
   const [recordError, setRecordError] = useState('')
   const [farmForm, setFarmForm] = useState({ name: '', owner: '', location: '', areaHa: '', note: '' })
   const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], ketekRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
@@ -198,6 +474,9 @@ export default function PrivateFarms() {
     editingRecordId={editingRecordId}
     onEdit={editRecord}
     onDelete={deleteRecord}
+    onViewRecord={setViewRecord}
+    viewRecord={viewRecord}
+    onCloseViewRecord={() => setViewRecord(null)}
     showFarmForm={showFarmForm}
     farmForm={farmForm}
     setFarmForm={setFarmForm}
@@ -261,7 +540,38 @@ function FarmMetric({ label, value, tone }) {
   return <div className={`rounded-lg p-3 ${tone === 'gold' ? 'bg-gold-400/10' : 'bg-paper-100'}`}><p className="text-[10px] text-ink-500">{label}</p><p className="mt-1 truncate font-display text-base text-plantation-900">{value}</p></div>
 }
 
-function FarmDetail({ farm, onBack, onEditFarm, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit, editingRecordId, onEdit, onDelete, showFarmForm, farmForm, setFarmForm, farmError, onSaveFarm, onCloseFarmForm, editingFarm }) {
+function HarvestDetailDialog({ farm, record, onClose }) {
+  const totals = getFarmHarvestTotals(record)
+  const uses = record.uses || []
+  const primaryUse = Number(uses[0]?.amount) || 0
+  const yieldGroups = getYieldDetails(record)
+  return <Dialog title="Detail catatan panen" onClose={onClose} wide>
+    <div className="max-h-[72vh] space-y-4 overflow-y-auto pr-1">
+      <section className="rounded-xl bg-gradient-to-br from-plantation-950 to-plantation-700 p-5 text-white">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">{farm.name}</p>
+        <h3 className="mt-1 font-display text-2xl text-white">Panen {formatShortDate(record.date)}</h3>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/85"><span>Lokasi: {farm.location || 'Belum diisi'}</span><span>Nama pengurus: {managerLabel(record.manager)}</span></div>
+      </section>
+      <div className="grid gap-3 sm:grid-cols-2"><DetailValue label="Total berat bersih" value={`${Number(record.netKg || 0).toLocaleString('id-ID')} kg`} /><DetailValue label="Total hasil panen" value={money(totals.grossTotal)} /></div>
+      {yieldGroups.some((group) => group.rows.length) && <section className="rounded-xl border border-ink-900/10 p-4"><h3 className="mb-3 font-semibold text-plantation-950">Rincian hasil dan harga</h3><div className="space-y-2">{yieldGroups.flatMap(({ name, rows }) => rows.map((item, index) => <div key={`${name}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-900/8 pb-2 text-sm last:border-0 last:pb-0"><span className="text-ink-600">{name}{rows.length > 1 ? ` ${index + 1}` : ''}: {Number(item.netKg || 0).toLocaleString('id-ID')} kg × {money(item.pricePerKg)}/kg</span><strong className="text-plantation-900">{money(Math.round((Number(item.netKg) || 0) * (Number(item.pricePerKg) || 0)))}</strong></div>))}</div></section>}
+      <section className="rounded-xl border border-ink-900/10 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h3 className="font-semibold text-plantation-950">Pemakaian hasil panen</h3><p className="mt-1 text-xs text-ink-500">Pemakaian utama menjadi pengurang dasar upah.</p></div><strong className="whitespace-nowrap text-sm text-plantation-900">Total {money(totals.useTotal)}</strong></div>{uses.length ? <div className="space-y-2">{uses.map((use, index) => <div key={use.id || index} className="flex justify-between gap-3 text-sm"><span className="text-ink-600">{index === 0 ? 'Utama' : `Tambahan ${index}`} · {use.purpose || 'Tanpa keterangan'}</span><strong>{money(use.amount)}</strong></div>)}</div> : <p className="text-sm text-ink-500">Tidak ada pemakaian tercatat.</p>}</section>
+      <section className="rounded-xl bg-paper-50 p-4"><div className="space-y-2 text-sm"><DetailLine label="Dasar upah (hasil panen - pemakaian utama)" value={money(Math.max(0, totals.grossTotal - primaryUse))} /><DetailLine label="Upah pengurus 10%" value={`− ${money(totals.managerWage)}`} /><DetailLine label="Total pemakaian (utama + tambahan)" value={`− ${money(totals.useTotal)}`} /></div><div className="mt-3 flex items-center justify-between border-t border-ink-900/10 pt-3"><span className="font-semibold text-ink-700">Hasil akhir</span><strong className="font-display text-2xl text-plantation-950">{money(totals.finalTotal)}</strong></div></section>
+      <section className="rounded-xl border border-ink-900/10 p-4"><h3 className="mb-2 font-semibold text-plantation-950">Pembagian hasil</h3>{record.distribution?.length ? <div className="space-y-2">{record.distribution.map((share, index) => <DetailLine key={`${share.name}-${index}`} label={`Nama: ${share.name}`} value={money(share.amount)} />)}</div> : <p className="text-sm text-ink-500">Hasil tidak dibagi.</p>}</section>
+      {record.note && <section className="rounded-xl bg-gold-400/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-ink-500">Catatan panen</p><p className="mt-1 whitespace-pre-wrap text-sm text-ink-700">{record.note}</p></section>}
+    </div>
+    <div className="mt-4 flex justify-end"><button type="button" className="btn-ghost" onClick={onClose}>Tutup</button></div>
+  </Dialog>
+}
+
+function DetailValue({ label, value }) {
+  return <div className="rounded-xl bg-paper-100 p-4"><p className="text-xs text-ink-500">{label}</p><p className="mt-1 font-display text-xl text-plantation-950">{value}</p></div>
+}
+
+function DetailLine({ label, value }) {
+  return <div className="flex flex-wrap justify-between gap-3"><span className="text-ink-600">{label}</span><strong className="text-ink-800">{value}</strong></div>
+}
+
+function FarmDetail({ farm, onBack, onEditFarm, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit, editingRecordId, onEdit, onDelete, onViewRecord, viewRecord, onCloseViewRecord, showFarmForm, farmForm, setFarmForm, farmError, onSaveFarm, onCloseFarmForm, editingFarm }) {
   const rows = farm.records || []
   const todayRows = rows.filter((row) => row.date === todayKey())
   const today = todayRows.reduce((sum, row) => {
@@ -277,15 +587,16 @@ function FarmDetail({ farm, onBack, onEditFarm, onAdd, showForm, error, onCloseF
     <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-plantation-700 hover:underline"><ArrowLeft size={16} /> Semua lahan</button>
     <header className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 p-6 text-white shadow-soft md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Rincian lahan</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl text-white">{farm.name}</h1><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90">{farm.owner && <span className="inline-flex items-center gap-1.5"><UserRound size={15} />{farm.owner}</span>}<span className="inline-flex items-center gap-1.5"><MapPin size={15} />{farm.location || 'Lokasi belum diisi'}</span>{farm.areaHa && <span>{farm.areaHa} hektare</span>}</div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn border border-white/25 bg-white/10 text-white hover:bg-white/15" onClick={onEditFarm}><Pencil size={16} /> Edit data lahan</button><button className="btn-gold" onClick={onAdd}><Plus size={17} /> Catat panen</button></div></div>{farm.note && <p className="mt-4 max-w-2xl rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">{farm.note}</p>}</header>
     <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat icon={<Weight size={17} />} label="Berat bersih hari ini" value={`${today.netKg.toLocaleString('id-ID')} kg`} delay={0} /><Stat icon={<CircleDollarSign size={17} />} label="Hasil panen hari ini" value={money(today.gross)} delay={70} /><Stat icon={<TrendingUp size={17} />} label="Pemakaian + upah hari ini" value={money(today.useTotal + today.wages)} delay={140} /><Stat icon={<BadgePercent size={17} />} label="Hasil akhir hari ini" value={money(today.result)} delay={210} /></section>
-    <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Hasil akhir dapat dibagi rata kepada dua atau tiga penerima.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1400px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Pembagian hasil','Catatan','Aksi'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="11" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
+    <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Buka ikon mata untuk rincian lengkap. Unduh laporan berisi detail tiap catatan panen.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span><button type="button" className="btn-primary !px-3 !py-2 text-xs" onClick={() => exportFarmDetailsPdf(farm)} disabled={!rows.length}><Download size={15} /> Unduh laporan detail</button></div></div><div className="overflow-x-auto"><table className="w-full min-w-[1400px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Pembagian hasil','Catatan','Aksi'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="11" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
       const totals = getFarmHarvestTotals(row)
       const fruitRows = row.fruitRows?.length ? row.fruitRows : Number(row.fruitNetKg ?? row.netKg) > 0 ? [{ netKg: row.fruitNetKg ?? row.netKg, pricePerKg: row.fruitPricePerKg ?? row.pricePerKg }] : []
       const brondolanRows = row.brondolanRows?.length ? row.brondolanRows : Number(row.brondolanNetKg) > 0 ? [{ netKg: row.brondolanNetKg, pricePerKg: row.brondolanPricePerKg }] : []
       const ketekRows = row.ketekRows?.length ? row.ketekRows : Number(row.ketekNetKg) > 0 ? [{ netKg: row.ketekNetKg, pricePerKg: row.ketekPricePerKg }] : []
-      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right text-xs"><div className="space-y-1">{fruitRows.map((item, index) => <div key={`f-${index}`}>Buah {fruitRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{brondolanRows.map((item, index) => <div key={`b-${index}`}>Brondolan {brondolanRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{ketekRows.map((item, index) => <div key={`k-${index}`}>Ketek {ketekRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}</div></td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell"><ShareList shares={row.distribution || []} /></td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
+      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right text-xs"><div className="space-y-1">{fruitRows.map((item, index) => <div key={`f-${index}`}>Buah {fruitRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{brondolanRows.map((item, index) => <div key={`b-${index}`}>Brondolan {brondolanRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{ketekRows.map((item, index) => <div key={`k-${index}`}>Ketek {ketekRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}</div></td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell"><ShareList shares={row.distribution || []} /></td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onViewRecord(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Lihat detail panen ${formatShortDate(row.date)}`} title="Lihat detail"><Eye size={15} /> Lihat</button><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
     })}</tbody></table></div></section>
     {showForm && <HarvestDialog farmName={farm.name} form={form} setForm={setForm} error={error} onClose={onCloseForm} onSubmit={onSubmit} editing={Boolean(editingRecordId)} />}
     {showFarmForm && <FarmFormDialog title="Edit data lahan" form={farmForm} setForm={setFarmForm} error={farmError} onClose={onCloseFarmForm} onSubmit={onSaveFarm} editing={editingFarm} />}
+    {viewRecord && <HarvestDetailDialog farm={farm} record={viewRecord} onClose={onCloseViewRecord} />}
   </main>
 }
 

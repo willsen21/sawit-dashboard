@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
-import { ArrowLeft, BadgePercent, CircleDollarSign, Leaf, MapPin, Plus, Sprout, TrendingUp, UserRound, Weight, X, Trash2, Pencil } from 'lucide-react'
+import { ArrowLeft, BadgePercent, CircleDollarSign, Leaf, MapPin, Plus, Search, Sprout, TrendingUp, UserRound, Weight, X, Trash2, Pencil } from 'lucide-react'
 import { useData } from '../../context/DataContext'
-import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
+import { formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKey } from '../../lib/dateUtils'
 import { calculateFarmHarvest, getFarmHarvestTotals, splitFarmResultEqually } from '../../lib/farmCalculations'
 import FarmShareFields from '../../components/FarmShareFields'
 
@@ -31,6 +31,7 @@ export default function PrivateFarms() {
   const [showFarmForm, setShowFarmForm] = useState(false)
   const [editingFarmId, setEditingFarmId] = useState(null)
   const [farmError, setFarmError] = useState('')
+  const [farmSearch, setFarmSearch] = useState('')
   const [showRecordForm, setShowRecordForm] = useState(false)
   const [editingRecordId, setEditingRecordId] = useState(null)
   const [recordError, setRecordError] = useState('')
@@ -38,16 +39,29 @@ export default function PrivateFarms() {
   const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], ketekRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
 
   const selected = farms.find((farm) => farm.id === selectedId)
-  const todaySummary = useMemo(() => farms.flatMap((farm) => farm.records || []).filter((row) => row.date === todayKey())
-    .reduce((summary, row) => {
+  const currentDay = todayKey()
+  const currentWeekStart = toDateKey(startOfWeek(new Date()))
+  const currentMonthStart = `${currentDay.slice(0, 7)}-01`
+  const periodSummary = useMemo(() => {
+    const records = farms.flatMap((farm) => farm.records || [])
+    const summarize = (rows) => rows.reduce((summary, row) => {
       const totals = getFarmHarvestTotals(row)
       summary.netKg += Number(row.netKg) || 0
       summary.gross += totals.grossTotal
-      summary.uses += totals.useTotal
-      summary.wages += totals.managerWage
       summary.result += totals.finalTotal
       return summary
-    }, { netKg: 0, gross: 0, uses: 0, wages: 0, result: 0 }), [farms])
+    }, { netKg: 0, gross: 0, result: 0 })
+    return {
+      week: summarize(records.filter((row) => row.date >= currentWeekStart && row.date <= currentDay)),
+      month: summarize(records.filter((row) => row.date >= currentMonthStart && row.date <= currentDay)),
+    }
+  }, [farms, currentDay, currentWeekStart, currentMonthStart])
+  const visibleFarms = useMemo(() => {
+    const query = farmSearch.trim().toLocaleLowerCase('id-ID')
+    return [...farms]
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'id') || String(a.location || '').localeCompare(String(b.location || ''), 'id'))
+      .filter((farm) => !query || `${farm.name || ''} ${farm.location || ''} ${farm.owner || ''}`.toLocaleLowerCase('id-ID').includes(query))
+  }, [farms, farmSearch])
 
   function openFarmForm() {
     setEditingFarmId(null)
@@ -200,11 +214,13 @@ export default function PrivateFarms() {
     </header>
     <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Stat icon={<Sprout size={17} />} label="Total lahan" value={farms.length.toLocaleString('id-ID')} delay={0} />
-      <Stat icon={<Weight size={17} />} label="Berat bersih hari ini" value={`${todaySummary.netKg.toLocaleString('id-ID')} kg`} delay={70} />
-      <Stat icon={<CircleDollarSign size={17} />} label="Hasil panen hari ini" value={money(todaySummary.gross)} delay={140} />
-      <Stat icon={<TrendingUp size={17} />} label="Hasil akhir hari ini" value={money(todaySummary.result)} delay={210} />
+      <Stat icon={<Weight size={17} />} label="Berat bersih minggu ini" value={`${periodSummary.week.netKg.toLocaleString('id-ID')} kg`} delay={70} />
+      <Stat icon={<CircleDollarSign size={17} />} label="Hasil panen minggu ini" value={money(periodSummary.week.gross)} delay={140} />
+      <Stat icon={<TrendingUp size={17} />} label="Hasil akhir bulan ini" value={money(periodSummary.month.result)} delay={210} />
     </div>
-    {farms.length ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{farms.map((farm) => <FarmCard key={farm.id} farm={farm} onClick={() => setSelectedId(farm.id)} />)}</section> : <section className="card flex min-h-72 flex-col items-center justify-center px-6 text-center"><span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-plantation-700/10 text-plantation-700"><Leaf size={26} /></span><h2 className="font-display text-xl text-plantation-950">Mulai catat lahan</h2><p className="mt-2 max-w-md text-sm text-ink-500">Tambahkan lahan terlebih dahulu. Setiap lahan memiliki riwayat panen dan perhitungan hasil sendiri.</p><button className="btn-primary mt-5" onClick={openFarmForm}><Plus size={16} /> Tambah lahan pertama</button></section>}
+    <p className="-mt-3 mb-5 text-xs text-ink-500">Minggu berjalan: {formatShortDate(currentWeekStart)}–{formatShortDate(currentDay)}. Angka bulanan dihitung dari {formatShortDate(currentMonthStart)} sampai hari ini.</p>
+    {farms.length > 0 && <div className="mb-4"><label className="relative block max-w-xl"><Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400" /><input className="input pl-10" value={farmSearch} onChange={(event) => setFarmSearch(event.target.value)} placeholder="Cari nama lahan, lokasi, atau pemilik" /></label><p className="mt-2 text-xs text-ink-500">Nama lahan boleh sama; lokasi ditampilkan sebagai pembeda. {visibleFarms.length} dari {farms.length} lahan</p></div>}
+    {farms.length ? visibleFarms.length ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visibleFarms.map((farm) => <FarmCard key={farm.id} farm={farm} onClick={() => setSelectedId(farm.id)} />)}</section> : <section className="card flex min-h-48 flex-col items-center justify-center px-6 text-center"><h2 className="font-display text-xl text-plantation-950">Lahan tidak ditemukan</h2><p className="mt-2 text-sm text-ink-500">Coba cari dengan nama atau lokasi yang berbeda.</p><button type="button" className="btn-ghost mt-4" onClick={() => setFarmSearch('')}>Hapus pencarian</button></section> : <section className="card flex min-h-72 flex-col items-center justify-center px-6 text-center"><span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-plantation-700/10 text-plantation-700"><Leaf size={26} /></span><h2 className="font-display text-xl text-plantation-950">Mulai catat lahan</h2><p className="mt-2 max-w-md text-sm text-ink-500">Tambahkan lahan terlebih dahulu. Setiap lahan memiliki riwayat panen dan perhitungan hasil sendiri.</p><button className="btn-primary mt-5" onClick={openFarmForm}><Plus size={16} /> Tambah lahan pertama</button></section>}
     {showFarmForm && <FarmFormDialog title={editingFarmId ? 'Edit data lahan' : 'Tambah lahan kebun'} form={farmForm} setForm={setFarmForm} error={farmError} onClose={() => { setShowFarmForm(false); setEditingFarmId(null); setFarmError('') }} onSubmit={saveFarm} editing={Boolean(editingFarmId)} />}
   </main>
 }
@@ -222,14 +238,27 @@ function FarmFormDialog({ title, form, setForm, error, onClose, onSubmit, editin
 
 function FarmCard({ farm, onClick }) {
   const rows = farm.records || []
-  const todayRows = rows.filter((row) => row.date === todayKey())
-  const netToday = todayRows.reduce((sum, row) => sum + (Number(row.netKg) || 0), 0)
-  const resultToday = todayRows.reduce((sum, row) => sum + getFarmHarvestTotals(row).finalTotal, 0)
+  const today = todayKey()
+  const weekStart = toDateKey(startOfWeek(new Date()))
+  const todaySummary = summarizeFarmRecords(rows.filter((row) => row.date === today))
+  const weekSummary = summarizeFarmRecords(rows.filter((row) => row.date >= weekStart && row.date <= today))
   const last = rows[0]
   return <button onClick={onClick} style={{ '--stat-delay': `${Math.min(rows.length * 60, 240)}ms` }} className="stat-card stat-card-action group overflow-hidden rounded-xl border border-ink-900/10 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-plantation-700/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-plantation-700/30">
     <div className="relative bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 px-5 pb-5 pt-6 text-white"><div className="absolute right-4 top-3 opacity-10"><Leaf size={76} /></div><div className="relative flex items-start justify-between"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10"><Sprout size={20} /></span><span className="rounded-full bg-gold-400/15 px-2.5 py-1 text-[11px] font-medium text-gold-300">Lahan</span></div><h2 className="relative mt-5 font-display text-2xl text-white">{farm.name}</h2><p className="relative mt-1 flex items-center gap-1.5 text-sm text-white/85"><MapPin size={14} />{farm.location || 'Lokasi belum diisi'}</p></div>
-    <div className="p-5">{farm.owner && <div className="flex items-center gap-2 text-sm text-ink-600"><UserRound size={15} className="text-plantation-700" /><span>Pemilik: <strong className="font-medium text-ink-800">{farm.owner}</strong></span></div>}{farm.areaHa && <p className={`${farm.owner ? 'mt-2' : ''} text-xs text-ink-500`}>Luas lahan {farm.areaHa} hektare</p>}<div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-lg bg-paper-100 p-3 transition-transform duration-300 group-hover:-translate-y-1"><p className="text-[11px] text-ink-500">Panen bersih hari ini</p><p className="mt-1 font-display text-lg text-plantation-900">{netToday.toLocaleString('id-ID')} kg</p></div><div className="rounded-lg bg-gold-400/10 p-3 transition-transform duration-300 group-hover:-translate-y-1"><p className="text-[11px] text-ink-500">Hasil akhir hari ini</p><p className="mt-1 truncate font-display text-lg text-plantation-900">{money(resultToday)}</p></div></div><div className="mt-4 flex items-center justify-between border-t border-ink-900/8 pt-3 text-xs text-ink-500"><span>{rows.length ? `Panen terakhir · ${formatShortDate(last.date)}` : 'Belum ada catatan panen'}</span><span className="font-medium text-plantation-700 group-hover:underline">Buka lahan →</span></div></div>
+    <div className="p-5">{farm.owner && <div className="flex items-center gap-2 text-sm text-ink-600"><UserRound size={15} className="text-plantation-700" /><span>Pemilik: <strong className="font-medium text-ink-800">{farm.owner}</strong></span></div>}{farm.areaHa && <p className={`${farm.owner ? 'mt-2' : ''} text-xs text-ink-500`}>Luas lahan {farm.areaHa} hektare</p>}<div className="mt-5 grid grid-cols-2 gap-2"><FarmMetric label="Berat bersih · hari ini" value={`${todaySummary.netKg.toLocaleString('id-ID')} kg`} tone="paper" /><FarmMetric label="Hasil akhir · hari ini" value={money(todaySummary.result)} tone="gold" /><FarmMetric label="Berat bersih · minggu ini" value={`${weekSummary.netKg.toLocaleString('id-ID')} kg`} tone="paper" /><FarmMetric label="Hasil akhir · minggu ini" value={money(weekSummary.result)} tone="gold" /></div><div className="mt-4 flex items-center justify-between border-t border-ink-900/8 pt-3 text-xs text-ink-500"><span>{rows.length ? `Panen terakhir · ${formatShortDate(last.date)}` : 'Belum ada catatan panen'}</span><span className="font-medium text-plantation-700 group-hover:underline">Buka lahan →</span></div></div>
   </button>
+}
+
+function summarizeFarmRecords(rows) {
+  return rows.reduce((summary, row) => {
+    summary.netKg += Number(row.netKg) || 0
+    summary.result += getFarmHarvestTotals(row).finalTotal
+    return summary
+  }, { netKg: 0, result: 0 })
+}
+
+function FarmMetric({ label, value, tone }) {
+  return <div className={`rounded-lg p-3 ${tone === 'gold' ? 'bg-gold-400/10' : 'bg-paper-100'}`}><p className="text-[10px] text-ink-500">{label}</p><p className="mt-1 truncate font-display text-base text-plantation-900">{value}</p></div>
 }
 
 function FarmDetail({ farm, onBack, onEditFarm, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit, editingRecordId, onEdit, onDelete, showFarmForm, farmForm, setFarmForm, farmError, onSaveFarm, onCloseFarmForm, editingFarm }) {

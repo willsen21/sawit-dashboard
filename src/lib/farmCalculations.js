@@ -1,10 +1,21 @@
-export function calculateFarmHarvest({ netKg, pricePerKg, fruitNetKg, fruitPricePerKg, brondolanNetKg, brondolanPricePerKg, uses = [], manager }) {
-  const hasSeparateYields = fruitNetKg != null || brondolanNetKg != null
-  const fruitKg = hasSeparateYields ? Number(fruitNetKg) || 0 : 0
-  const brondolanKg = hasSeparateYields ? Number(brondolanNetKg) || 0 : 0
-  const fruitTotal = Math.round((hasSeparateYields ? fruitKg : Number(netKg) || 0) * (hasSeparateYields ? Number(fruitPricePerKg) || 0 : Number(pricePerKg) || 0))
-  const brondolanTotal = hasSeparateYields ? Math.round(brondolanKg * (Number(brondolanPricePerKg) || 0)) : 0
-  const totalNetKg = hasSeparateYields ? fruitKg + brondolanKg : Number(netKg) || 0
+export function calculateFarmHarvest({ netKg, pricePerKg, fruitNetKg, fruitPricePerKg, brondolanNetKg, brondolanPricePerKg, fruitRows, brondolanRows, uses = [], manager }) {
+  const hasYieldRows = Array.isArray(fruitRows) || Array.isArray(brondolanRows)
+  const hasSeparateYields = hasYieldRows || fruitNetKg != null || brondolanNetKg != null
+  const fruitYieldRows = Array.isArray(fruitRows)
+    ? fruitRows
+    : fruitNetKg == null ? [] : [{ netKg: fruitNetKg, pricePerKg: fruitPricePerKg }]
+  const brondolanYieldRows = Array.isArray(brondolanRows)
+    ? brondolanRows
+    : brondolanNetKg == null ? [] : [{ netKg: brondolanNetKg, pricePerKg: brondolanPricePerKg }]
+  const fruitKg = hasYieldRows ? fruitYieldRows.reduce((sum, row) => sum + (Number(row.netKg) || 0), 0) : Number(fruitNetKg) || 0
+  const brondolanKg = hasYieldRows ? brondolanYieldRows.reduce((sum, row) => sum + (Number(row.netKg) || 0), 0) : Number(brondolanNetKg) || 0
+  const fruitTotal = hasYieldRows
+    ? fruitYieldRows.reduce((sum, row) => sum + Math.round((Number(row.netKg) || 0) * (Number(row.pricePerKg) || 0)), 0)
+    : Math.round((hasSeparateYields ? fruitKg : Number(netKg) || 0) * (hasSeparateYields ? Number(fruitPricePerKg) || 0 : Number(pricePerKg) || 0))
+  const brondolanTotal = hasYieldRows
+    ? brondolanYieldRows.reduce((sum, row) => sum + Math.round((Number(row.netKg) || 0) * (Number(row.pricePerKg) || 0)), 0)
+    : hasSeparateYields ? Math.round(brondolanKg * (Number(brondolanPricePerKg) || 0)) : 0
+  const totalNetKg = hasYieldRows ? fruitKg + brondolanKg : hasSeparateYields ? fruitKg + brondolanKg : Number(netKg) || 0
   const grossTotal = fruitTotal + brondolanTotal
   const useTotal = uses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
   const primaryUse = Number(uses[0]?.amount) || 0
@@ -17,7 +28,7 @@ export function calculateFarmHarvest({ netKg, pricePerKg, fruitNetKg, fruitPrice
 
 export function getFarmHarvestTotals(record) {
   const calculated = calculateFarmHarvest(record)
-  const hasCalculationInputs = record.fruitNetKg != null || record.brondolanNetKg != null || (Number(record.netKg) > 0 && Number(record.pricePerKg) > 0)
+  const hasCalculationInputs = Array.isArray(record.fruitRows) || Array.isArray(record.brondolanRows) || record.fruitNetKg != null || record.brondolanNetKg != null || (Number(record.netKg) > 0 && Number(record.pricePerKg) > 0)
   if (hasCalculationInputs) {
     return {
       grossTotal: calculated.grossTotal,

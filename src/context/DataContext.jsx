@@ -763,29 +763,6 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     }
   }
 
-  // Closing amounts are a snapshot when the admin locks cash. If an owner later
-  // corrects a purchase, loan, top-up, or stone entry, refresh the system-side
-  // closing balance and recompute its difference against the admin's physical
-  // count so all owner reports stay consistent with the corrected records.
-  useEffect(() => {
-    if (currentUser?.role !== 'owner') return
-    const lockedDays = dailyCash.filter((day) => day.status === 'locked' && day.countedCash !== null && day.countedCash !== undefined && Number.isFinite(Number(day.countedCash)))
-    if (!lockedDays.length) return
-    const corrections = new Map()
-    for (const day of lockedDays) {
-      const systemCashAtClose = getCashSummary(day.date).remaining
-      const cashDifference = Number(day.countedCash) - systemCashAtClose
-      if (Number(day.systemCashAtClose) !== systemCashAtClose || Number(day.cashDifference) !== cashDifference) {
-        corrections.set(day.date, { systemCashAtClose, cashDifference })
-      }
-    }
-    if (!corrections.size) return
-    setDailyCash((previous) => previous.map((day) => {
-      const correction = corrections.get(day.date)
-      return correction ? { ...day, ...correction } : day
-    }))
-  }, [currentUser?.role, dailyCash, transactions, topups, cashLoans, stoneStock, suppliers])
-
   const supplierMap = useMemo(() => {
     const map = {}
     suppliers.forEach((s) => (map[s.id] = s))

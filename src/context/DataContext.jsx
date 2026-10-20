@@ -687,9 +687,10 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const uses = (Array.isArray(recordData.uses) ? recordData.uses : []).map((item) => ({ ...item, amount: Number(item.amount) || 0 }))
     const fruitRows = Array.isArray(recordData.fruitRows) ? recordData.fruitRows.map((row) => ({ ...row, netKg: Number(row.netKg) || 0, pricePerKg: Number(row.pricePerKg) || 0 })) : recordData.fruitRows
     const brondolanRows = Array.isArray(recordData.brondolanRows) ? recordData.brondolanRows.map((row) => ({ ...row, netKg: Number(row.netKg) || 0, pricePerKg: Number(row.pricePerKg) || 0 })) : recordData.brondolanRows
+    const ketekRows = Array.isArray(recordData.ketekRows) ? recordData.ketekRows.map((row) => ({ ...row, netKg: Number(row.netKg) || 0, pricePerKg: Number(row.pricePerKg) || 0 })) : recordData.ketekRows
     const manager = recordData.manager || 'none'
-    const totals = calculateFarmHarvest({ ...recordData, fruitRows, brondolanRows, netKg, pricePerKg, uses, manager })
-    const record = { ...recordData, fruitRows, brondolanRows, id: recordData.id || `harvest-${Date.now()}`, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
+    const totals = calculateFarmHarvest({ ...recordData, fruitRows, brondolanRows, ketekRows, netKg, pricePerKg, uses, manager })
+    const record = { ...recordData, fruitRows, brondolanRows, ketekRows, id: recordData.id || `harvest-${Date.now()}`, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
     setPrivateFarms((prev) => prev.map((item) => item.id === farmId ? { ...item, records: [record, ...(item.records || [])].sort((a, b) => b.date.localeCompare(a.date)) } : item))
     return record
   }
@@ -700,9 +701,10 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const uses = (Array.isArray(recordData.uses) ? recordData.uses : []).map((item) => ({ ...item, amount: Number(item.amount) || 0 }))
     const fruitRows = Array.isArray(recordData.fruitRows) ? recordData.fruitRows.map((row) => ({ ...row, netKg: Number(row.netKg) || 0, pricePerKg: Number(row.pricePerKg) || 0 })) : recordData.fruitRows
     const brondolanRows = Array.isArray(recordData.brondolanRows) ? recordData.brondolanRows.map((row) => ({ ...row, netKg: Number(row.netKg) || 0, pricePerKg: Number(row.pricePerKg) || 0 })) : recordData.brondolanRows
+    const ketekRows = Array.isArray(recordData.ketekRows) ? recordData.ketekRows.map((row) => ({ ...row, netKg: Number(row.netKg) || 0, pricePerKg: Number(row.pricePerKg) || 0 })) : recordData.ketekRows
     const manager = recordData.manager || 'none'
-    const totals = calculateFarmHarvest({ ...recordData, fruitRows, brondolanRows, netKg, pricePerKg, uses, manager })
-    const updatedRecord = { ...recordData, fruitRows, brondolanRows, id: recordId, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
+    const totals = calculateFarmHarvest({ ...recordData, fruitRows, brondolanRows, ketekRows, netKg, pricePerKg, uses, manager })
+    const updatedRecord = { ...recordData, fruitRows, brondolanRows, ketekRows, id: recordId, netKg, pricePerKg, manager, uses, ...totals, total: totals.finalTotal }
     setPrivateFarms((prev) => prev.map((farm) => farm.id === farmId
       ? { ...farm, records: (farm.records || []).map((record) => record.id === recordId ? updatedRecord : record).sort((a, b) => b.date.localeCompare(a.date)) }
       : farm))

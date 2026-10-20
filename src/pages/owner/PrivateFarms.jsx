@@ -35,7 +35,7 @@ export default function PrivateFarms() {
   const [editingRecordId, setEditingRecordId] = useState(null)
   const [recordError, setRecordError] = useState('')
   const [farmForm, setFarmForm] = useState({ name: '', owner: '', location: '', areaHa: '', note: '' })
-  const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
+  const [recordForm, setRecordForm] = useState({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], ketekRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
 
   const selected = farms.find((farm) => farm.id === selectedId)
   const todaySummary = useMemo(() => farms.flatMap((farm) => farm.records || []).filter((row) => row.date === todayKey())
@@ -84,14 +84,16 @@ export default function PrivateFarms() {
     event.preventDefault()
     const fruitRows = recordForm.fruitRows.map((row) => ({ ...row, netKg: parseNumeric(row.netKg), pricePerKg: parseNumeric(row.pricePerKg) })).filter((row) => row.netKg || row.pricePerKg)
     const brondolanRows = recordForm.brondolanRows.map((row) => ({ ...row, netKg: parseNumeric(row.netKg), pricePerKg: parseNumeric(row.pricePerKg) })).filter((row) => row.netKg || row.pricePerKg)
+    const ketekRows = recordForm.ketekRows.map((row) => ({ ...row, netKg: parseNumeric(row.netKg), pricePerKg: parseNumeric(row.pricePerKg) })).filter((row) => row.netKg || row.pricePerKg)
     const fruitNetKg = fruitRows.reduce((sum, row) => sum + row.netKg, 0)
     const brondolanNetKg = brondolanRows.reduce((sum, row) => sum + row.netKg, 0)
+    const ketekNetKg = ketekRows.reduce((sum, row) => sum + row.netKg, 0)
     const fruitPricePerKg = fruitRows[0]?.pricePerKg || 0
     const brondolanPricePerKg = brondolanRows[0]?.pricePerKg || 0
-    const netKg = fruitNetKg + brondolanNetKg
+    const netKg = fruitNetKg + brondolanNetKg + ketekNetKg
     const uses = recordForm.uses.map((item) => ({ ...item, purpose: item.purpose.trim(), amount: parseNumeric(item.amount) })).filter((item) => item.purpose || item.amount)
     setRecordError('')
-    if (!selected || !recordForm.date || !recordForm.manager || netKg <= 0 || [...fruitRows, ...brondolanRows].some((row) => row.netKg <= 0 || row.pricePerKg <= 0)) {
+    if (!selected || !recordForm.date || !recordForm.manager || netKg <= 0 || [...fruitRows, ...brondolanRows, ...ketekRows].some((row) => row.netKg <= 0 || row.pricePerKg <= 0)) {
       return setRecordError('Tanggal, pengurus, dan setiap baris hasil panen yang diisi harus memiliki berat serta harga per kg lebih dari 0.')
     }
     if (fruitNetKg < 0 || brondolanNetKg < 0) return setRecordError('Berat bersih buah dan brondolan tidak boleh negatif.')
@@ -101,7 +103,7 @@ export default function PrivateFarms() {
     const primaryUse = recordForm.uses[0]
     if (!primaryUse?.purpose?.trim() || parseNumeric(primaryUse.amount) <= 0) return setRecordError('Pemakaian utama pertama wajib diisi dengan keterangan dan nominal lebih dari 0.')
     const useTotal = uses.reduce((sum, item) => sum + item.amount, 0)
-    const { grossTotal, managerWage, finalTotal } = calculateFarmHarvest({ fruitRows, brondolanRows, uses, manager: recordForm.manager })
+    const { grossTotal, managerWage, finalTotal } = calculateFarmHarvest({ fruitRows, brondolanRows, ketekRows, uses, manager: recordForm.manager })
     if (useTotal > grossTotal) return setRecordError('Total pemakaian tidak boleh melebihi hasil panen bersih.')
     const shareCount = Number(recordForm.shareCount) || 0
     const shareNames = (recordForm.shareNames || []).slice(0, shareCount).map((name) => name.trim())
@@ -119,6 +121,9 @@ export default function PrivateFarms() {
       pricePerKg: brondolanNetKg > 0 ? 0 : fruitPricePerKg,
       fruitRows,
       brondolanRows,
+      ketekRows,
+      ketekNetKg,
+      ketekPricePerKg: ketekRows[0]?.pricePerKg || 0,
       manager: recordForm.manager,
       grossTotal,
       uses,
@@ -131,7 +136,7 @@ export default function PrivateFarms() {
     }
     if (editingRecordId) updatePrivateHarvestRecord(selected.id, editingRecordId, record)
     else addPrivateHarvestRecord(selected.id, record)
-    setRecordForm({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
+    setRecordForm({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], ketekRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
     setEditingRecordId(null)
     setShowRecordForm(false)
   }
@@ -139,7 +144,7 @@ export default function PrivateFarms() {
   function openRecordForm() {
     setRecordError('')
     setEditingRecordId(null)
-    setRecordForm({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
+    setRecordForm({ date: todayKey(), manager: '', fruitRows: [newYield()], brondolanRows: [newYield()], ketekRows: [newYield()], uses: [newUse()], shareCount: 0, shareNames: [], note: '' })
     setShowRecordForm(true)
   }
 
@@ -151,6 +156,7 @@ export default function PrivateFarms() {
       manager: record.manager || '',
       fruitRows: (record.fruitRows?.length ? record.fruitRows : (Number(record.fruitNetKg ?? record.netKg) > 0 ? [{ netKg: record.fruitNetKg ?? record.netKg, pricePerKg: record.fruitPricePerKg ?? record.pricePerKg }] : [])).map((row) => ({ ...row, id: row.id || newYield().id, netKg: formatNumericInput(row.netKg ?? ''), pricePerKg: formatNumericInput(row.pricePerKg ?? '') })).concat(record.fruitRows?.length || Number(record.fruitNetKg ?? record.netKg) > 0 ? [] : [newYield()]),
       brondolanRows: (record.brondolanRows?.length ? record.brondolanRows : (Number(record.brondolanNetKg) > 0 ? [{ netKg: record.brondolanNetKg, pricePerKg: record.brondolanPricePerKg }] : [])).map((row) => ({ ...row, id: row.id || newYield().id, netKg: formatNumericInput(row.netKg ?? ''), pricePerKg: formatNumericInput(row.pricePerKg ?? '') })).concat(record.brondolanRows?.length || Number(record.brondolanNetKg) > 0 ? [] : [newYield()]),
+      ketekRows: (record.ketekRows?.length ? record.ketekRows : (Number(record.ketekNetKg) > 0 ? [{ netKg: record.ketekNetKg, pricePerKg: record.ketekPricePerKg }] : [])).map((row) => ({ ...row, id: row.id || newYield().id, netKg: formatNumericInput(row.netKg ?? ''), pricePerKg: formatNumericInput(row.pricePerKg ?? '') })).concat(record.ketekRows?.length || Number(record.ketekNetKg) > 0 ? [] : [newYield()]),
       uses: (record.uses?.length ? record.uses : [newUse()]).map((item) => ({ ...item, id: item.id || newUse().id, amount: formatNumericInput(item.amount ?? '') })),
       shareCount: (record.distribution || []).length,
       shareNames: (record.distribution || []).map((share) => share.name || ''),
@@ -246,7 +252,8 @@ function FarmDetail({ farm, onBack, onEditFarm, onAdd, showForm, error, onCloseF
       const totals = getFarmHarvestTotals(row)
       const fruitRows = row.fruitRows?.length ? row.fruitRows : Number(row.fruitNetKg ?? row.netKg) > 0 ? [{ netKg: row.fruitNetKg ?? row.netKg, pricePerKg: row.fruitPricePerKg ?? row.pricePerKg }] : []
       const brondolanRows = row.brondolanRows?.length ? row.brondolanRows : Number(row.brondolanNetKg) > 0 ? [{ netKg: row.brondolanNetKg, pricePerKg: row.brondolanPricePerKg }] : []
-      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right text-xs"><div className="space-y-1">{fruitRows.map((item, index) => <div key={`f-${index}`}>Buah {fruitRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{brondolanRows.map((item, index) => <div key={`b-${index}`}>Brondolan {brondolanRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}</div></td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell"><ShareList shares={row.distribution || []} /></td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
+      const ketekRows = row.ketekRows?.length ? row.ketekRows : Number(row.ketekNetKg) > 0 ? [{ netKg: row.ketekNetKg, pricePerKg: row.ketekPricePerKg }] : []
+      return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right text-xs"><div className="space-y-1">{fruitRows.map((item, index) => <div key={`f-${index}`}>Buah {fruitRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{brondolanRows.map((item, index) => <div key={`b-${index}`}>Brondolan {brondolanRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}{ketekRows.map((item, index) => <div key={`k-${index}`}>Ketek {ketekRows.length > 1 ? index + 1 : ''} · {Number(item.netKg || 0).toLocaleString('id-ID')} kg @ {money(item.pricePerKg)}</div>)}</div></td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell"><ShareList shares={row.distribution || []} /></td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
     })}</tbody></table></div></section>
     {showForm && <HarvestDialog farmName={farm.name} form={form} setForm={setForm} error={error} onClose={onCloseForm} onSubmit={onSubmit} editing={Boolean(editingRecordId)} />}
     {showFarmForm && <FarmFormDialog title="Edit data lahan" form={farmForm} setForm={setFarmForm} error={farmError} onClose={onCloseFarmForm} onSubmit={onSaveFarm} editing={editingFarm} />}
@@ -267,11 +274,13 @@ function ShareList({ shares }) {
 function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit, editing = false }) {
   const fruitRows = (form.fruitRows || []).map((row) => ({ ...row, netKg: parseNumeric(row.netKg), pricePerKg: parseNumeric(row.pricePerKg) }))
   const brondolanRows = (form.brondolanRows || []).map((row) => ({ ...row, netKg: parseNumeric(row.netKg), pricePerKg: parseNumeric(row.pricePerKg) }))
+  const ketekRows = (form.ketekRows || []).map((row) => ({ ...row, netKg: parseNumeric(row.netKg), pricePerKg: parseNumeric(row.pricePerKg) }))
   const fruitNetKg = fruitRows.reduce((sum, row) => sum + row.netKg, 0)
   const brondolanNetKg = brondolanRows.reduce((sum, row) => sum + row.netKg, 0)
-  const netKg = fruitNetKg + brondolanNetKg
+  const ketekNetKg = ketekRows.reduce((sum, row) => sum + row.netKg, 0)
+  const netKg = fruitNetKg + brondolanNetKg + ketekNetKg
   const uses = form.uses.map((item) => ({ ...item, amount: parseNumeric(item.amount) }))
-  const { grossTotal: gross, primaryUse, additionalUseTotal, managerWage: wage, finalTotal: result } = calculateFarmHarvest({ fruitRows, brondolanRows, uses, manager: form.manager })
+  const { grossTotal: gross, primaryUse, additionalUseTotal, managerWage: wage, finalTotal: result } = calculateFarmHarvest({ fruitRows, brondolanRows, ketekRows, uses, manager: form.manager })
   const previewShares = splitFarmResultEqually(result, form.shareNames || [])
 
   function updateUse(id, key, value) {
@@ -288,15 +297,15 @@ function HarvestDialog({ farmName, form, setForm, error, onClose, onSubmit, edit
   }
 
   return <Dialog title={`${editing ? 'Edit catatan panen' : 'Catat panen'} · ${farmName}`} onClose={onClose} wide><form onSubmit={onSubmit} className="space-y-5">
-    <div className="rounded-xl bg-plantation-50 px-4 py-3 text-sm text-plantation-900">Upah pengurus 10% dihitung dari <strong>(hasil buah + hasil brondolan) − pemakaian utama</strong>. Pemakaian tambahan mengurangi hasil akhir, tetapi tidak mengubah hitungan upah.</div>
+    <div className="rounded-xl bg-plantation-50 px-4 py-3 text-sm text-plantation-900">Upah pengurus 10% dihitung dari <strong>(hasil buah + hasil brondolan + hasil ketek) − pemakaian utama</strong>. Pemakaian tambahan mengurangi hasil akhir, tetapi tidak mengubah hitungan upah.</div>
     <div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal panen *"><input type="date" required className="input" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field><Field label="Pengurus panen *"><select required className="input" value={form.manager} onChange={(event) => setForm({ ...form, manager: event.target.value })}><option value="">Pilih pengurus</option>{MANAGERS.map((manager) => <option key={manager.value} value={manager.value}>{manager.label}</option>)}</select></Field></div>
-    <div className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-display text-xl text-plantation-950">Hasil panen</h3><p className="mt-1 text-sm text-ink-500">Tambahkan baris sebanyak yang diperlukan. Setiap baris punya harga per kg sendiri.</p></div><p className="text-sm text-ink-500">Total bersih <strong className="text-ink-800">{netKg.toLocaleString('id-ID')} kg</strong></p></div>{renderYieldRows('fruitRows', 'Buah')}{renderYieldRows('brondolanRows', 'Brondolan')}</div>
+    <div className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-display text-xl text-plantation-950">Hasil panen</h3><p className="mt-1 text-sm text-ink-500">Tambahkan baris sebanyak yang diperlukan. Setiap baris punya harga per kg sendiri.</p></div><p className="text-sm text-ink-500">Total bersih <strong className="text-ink-800">{netKg.toLocaleString('id-ID')} kg</strong></p></div>{renderYieldRows('fruitRows', 'Buah')}{renderYieldRows('brondolanRows', 'Brondolan')}{renderYieldRows('ketekRows', 'Ketek')}</div>
     <section className="rounded-xl border border-ink-900/10 p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-ink-800">Pemakaian hasil panen</h3><p className="mt-1 text-xs text-ink-500">Pemakaian utama wajib dan mengurangi hasil panen sebelum upah 10% dihitung. Pemakaian tambahan tidak masuk hitungan upah.</p></div><button type="button" className="btn-ghost !px-3 !py-2" onClick={() => setForm((current) => ({ ...current, uses: [...current.uses, newUse()] }))}><Plus size={15} /> Tambah pemakaian</button></div>
       <div className="space-y-3">{form.uses.map((item, index) => <div key={item.id} className="grid items-end gap-2 sm:grid-cols-[1fr_190px_auto]"><Field label={index === 0 ? 'Pemakaian utama *' : `Pemakaian tambahan · ${index + 1}`}><input required={index === 0} className="input" value={item.purpose} onChange={(event) => updateUse(item.id, 'purpose', event.target.value)} placeholder={index === 0 ? 'Wajib, contoh: hasil panen untuk kebutuhan utama' : 'Contoh: pupuk kebun'} /></Field><Field label="Nominal (Rp)"><input required={index === 0} inputMode="numeric" className="input" value={item.amount} onChange={(event) => updateUse(item.id, 'amount', event.target.value)} placeholder="Contoh: 500.000" /></Field><button type="button" disabled={index === 0} className="mb-1 inline-flex h-10 items-center justify-center rounded-lg px-3 text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-30" onClick={() => setForm((current) => ({ ...current, uses: current.uses.filter((use) => use.id !== item.id) }))} aria-label="Hapus pemakaian" title={index === 0 ? 'Pemakaian utama wajib' : 'Hapus pemakaian'}><Trash2 size={17} /></button></div>)}</div>
     </section>
     <FarmShareFields count={form.shareCount} names={form.shareNames} onCountChange={(count) => setForm((current) => ({ ...current, shareCount: count, shareNames: Array.from({ length: count }, (_, index) => current.shareNames?.[index] || '') }))} onNameChange={(index, name) => setForm((current) => ({ ...current, shareNames: current.shareNames.map((value, itemIndex) => itemIndex === index ? name : value) }))} />
     <Field label="Catatan panen"><textarea className="input min-h-20" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Keterangan tambahan (opsional)" /></Field>
-    <section className="overflow-hidden rounded-xl border border-plantation-900/10 bg-paper-50"><div className="border-b border-ink-900/10 px-4 py-3"><h3 className="font-semibold text-ink-800">Pratinjau pembagian hasil</h3><p className="mt-1 text-xs text-ink-500">Upah 10% dihitung dari hasil buah dan brondolan setelah dikurangi pemakaian utama.</p></div><div className="space-y-2 px-4 py-3 text-sm">{fruitRows.filter((row) => row.netKg || row.pricePerKg).map((row, index) => <PreviewRow key={row.id} label={`Buah ${index + 1} · ${row.netKg.toLocaleString('id-ID')} kg × ${money(row.pricePerKg)}`} value={money(Math.round(row.netKg * row.pricePerKg))} />)}{brondolanRows.filter((row) => row.netKg || row.pricePerKg).map((row, index) => <PreviewRow key={row.id} label={`Brondolan ${index + 1} · ${row.netKg.toLocaleString('id-ID')} kg × ${money(row.pricePerKg)}`} value={money(Math.round(row.netKg * row.pricePerKg))} />)}<PreviewRow label="Total hasil panen" value={money(gross)} /><PreviewRow label="Total pemakaian (utama + tambahan)" value={`− ${money(primaryUse + additionalUseTotal)}`} /><PreviewRow label={`Upah pengurus · ${form.manager && form.manager !== 'none' ? '10% dari hasil setelah pemakaian utama' : 'tidak ada pengurus'}`} value={`− ${money(wage)}`} /><div className="mt-3 flex items-center justify-between border-t border-ink-900/10 pt-3"><span className="font-semibold text-ink-700">Hasil akhir</span><strong className={`font-display text-2xl ${result < 0 ? 'text-red-700' : 'text-plantation-900'}`}>{money(result)}</strong></div>{previewShares.length > 0 && <div className="space-y-1 border-t border-ink-900/10 pt-3">{previewShares.map((share, index) => <PreviewRow key={`${share.name}-${index}`} label={`Bagian ${share.name || `penerima ${index + 1}`}`} value={money(share.amount)} />)}</div>}</div></section>
+    <section className="overflow-hidden rounded-xl border border-plantation-900/10 bg-paper-50"><div className="border-b border-ink-900/10 px-4 py-3"><h3 className="font-semibold text-ink-800">Pratinjau pembagian hasil</h3><p className="mt-1 text-xs text-ink-500">Upah 10% dihitung dari total hasil panen setelah dikurangi pemakaian utama.</p></div><div className="space-y-2 px-4 py-3 text-sm">{fruitRows.filter((row) => row.netKg || row.pricePerKg).map((row, index) => <PreviewRow key={row.id} label={`Buah ${index + 1} · ${row.netKg.toLocaleString('id-ID')} kg × ${money(row.pricePerKg)}`} value={money(Math.round(row.netKg * row.pricePerKg))} />)}{brondolanRows.filter((row) => row.netKg || row.pricePerKg).map((row, index) => <PreviewRow key={row.id} label={`Brondolan ${index + 1} · ${row.netKg.toLocaleString('id-ID')} kg × ${money(row.pricePerKg)}`} value={money(Math.round(row.netKg * row.pricePerKg))} />)}{ketekRows.filter((row) => row.netKg || row.pricePerKg).map((row, index) => <PreviewRow key={row.id} label={`Ketek ${index + 1} · ${row.netKg.toLocaleString('id-ID')} kg × ${money(row.pricePerKg)}`} value={money(Math.round(row.netKg * row.pricePerKg))} />)}<PreviewRow label="Total hasil panen" value={money(gross)} /><PreviewRow label="Total pemakaian (utama + tambahan)" value={`− ${money(primaryUse + additionalUseTotal)}`} /><PreviewRow label={`Upah pengurus · ${form.manager && form.manager !== 'none' ? '10% dari hasil setelah pemakaian utama' : 'tidak ada pengurus'}`} value={`− ${money(wage)}`} /><div className="mt-3 flex items-center justify-between border-t border-ink-900/10 pt-3"><span className="font-semibold text-ink-700">Hasil akhir</span><strong className={`font-display text-2xl ${result < 0 ? 'text-red-700' : 'text-plantation-900'}`}>{money(result)}</strong></div>{previewShares.length > 0 && <div className="space-y-1 border-t border-ink-900/10 pt-3">{previewShares.map((share, index) => <PreviewRow key={`${share.name}-${index}`} label={`Bagian ${share.name || `penerima ${index + 1}`}`} value={money(share.amount)} />)}</div>}</div></section>
     {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
     <button className="btn-primary w-full"><Sprout size={16} /> {editing ? 'Simpan perubahan' : 'Simpan catatan panen'}</button>
   </form></Dialog>

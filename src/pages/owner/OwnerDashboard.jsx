@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { Clock3 } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, CalendarDays, Clock3, Leaf, Package, ShieldCheck, Wallet } from 'lucide-react'
 import { useData } from '../../context/DataContext'
+import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
 import { addDays, formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKey } from '../../lib/dateUtils'
 import { STONE_TYPES, canonicalStoneType } from '../../lib/stoneUtils'
@@ -13,6 +14,7 @@ const RANGES = [{ label: '7 hari', value: 7 }, { label: '15 hari', value: 15 }, 
 const kgText = (kg) => `${Number(kg || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg`
 
 export default function OwnerDashboard() {
+  const { currentUser } = useAuth()
   const { transactions, supplierMap, stoneSales, getCashSummary } = useData()
   const navigate = useNavigate()
   const [chartRange, setChartRange] = useState(7)
@@ -39,19 +41,50 @@ export default function OwnerDashboard() {
   const stoneKgToday = stoneSaleBreakdown.reduce((total, item) => total + item.kg, 0)
   const unpaidToday = stats.today.filter((transaction) => transaction.paymentStatus === 'unpaid')
   const unpaidTotal = unpaidToday.reduce((total, item) => total + reportedPurchaseTotal(item, supplierMap, item.kind || 'buah'), 0)
-  return <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10">
-    <div className="mb-6"><h1 className="text-2xl font-display">Ringkasan</h1><p className="text-sm text-ink-500 mt-1">{formatShortDate(today)}</p></div>
-    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <StatCard label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih hari ini`} numericValue={stats.today.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={0} sub="Lihat detail" onClick={() => navigate('/owner/pembelian/hari-ini')} />
-      <StatCard label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih minggu ini`} numericValue={stats.week.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={120} sub="Lihat detail" onClick={() => navigate('/owner/pembelian/minggu-ini')} />
-      <StatCard label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih bulan ini`} numericValue={stats.month.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={240} sub="Lihat detail" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
-      <StatCard label="Sisa kas hari ini" numericValue={cashToday.remaining} formatValue={formatRupiah} delay={360} tone={cashToday.remaining < 0 ? 'danger' : 'gold'} sub={`dari ${formatRupiah(cashToday.initialAmount + cashToday.totalTopup)}`} />
+  const greeting = greetingForHour(new Date().getHours())
+  const transactionCount = stats.today.length
+  return <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-9">
+    <section className="dashboard-hero relative mb-6 overflow-hidden rounded-[1.75rem] bg-plantation-950 px-5 py-7 text-white shadow-soft sm:px-8 sm:py-9 lg:px-10">
+      <div className="dashboard-hero-glow pointer-events-none absolute -right-16 -top-36 h-96 w-96 rounded-full border border-white/10" />
+      <div className="dashboard-hero-glow dashboard-hero-glow-delay pointer-events-none absolute -right-2 -top-24 h-72 w-72 rounded-full border border-gold-300/20" />
+      <Leaf className="pointer-events-none absolute -right-5 bottom-[-3.5rem] h-64 w-64 rotate-[-25deg] text-white/[0.045]" strokeWidth={1} aria-hidden="true" />
+      <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs text-white/80"><CalendarDays size={14} className="text-gold-300" />{formatShortDate(today)}</span>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[.2em] text-gold-300">Ringkasan pemilik</p>
+          <h1 className="mt-2 max-w-2xl font-display text-3xl leading-tight text-white sm:text-4xl lg:text-[2.75rem]">{greeting}, {currentUser?.name || 'Pemilik'}.</h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-white/65 sm:text-base">Pantau pembelian, arus kas, dan kegiatan kebun Anda dari satu tempat.</p>
+          <div className="mt-6 flex flex-wrap gap-2.5">
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-gold-400 px-4 py-2.5 text-sm font-semibold text-plantation-950 shadow-sm transition hover:-translate-y-0.5 hover:bg-gold-300" onClick={() => navigate('/owner/laporan')}>Buka laporan <ArrowRight size={16} /></button>
+            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/15" onClick={() => navigate('/owner/operasional')}><Wallet size={16} /> Operasional kebun</button>
+          </div>
+        </div>
+        <div className="dashboard-today-card relative min-w-52 rounded-2xl border border-white/15 bg-white/[0.08] p-4 backdrop-blur-sm sm:min-w-60 sm:p-5">
+          <div className="flex items-center justify-between gap-3"><span className="text-xs font-medium text-white/65">Transaksi hari ini</span><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold-300/15 text-gold-300"><ShieldCheck size={18} /></span></div>
+          <p className="mt-2 font-display text-4xl text-white">{transactionCount.toLocaleString('id-ID')}</p>
+          <p className="mt-1 text-xs text-white/55">{transactionCount ? 'Transaksi tercatat hari ini' : 'Belum ada transaksi hari ini'}</p>
+          <div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-3 text-xs text-white/75"><span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,.8)]" /> Data ringkasan diperbarui</div>
+        </div>
+      </div>
+    </section>
+
+    <div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-gold-700">Performa pembelian</p><h2 className="mt-1 font-display text-xl text-plantation-950">Angka penting</h2></div><span className="hidden text-xs text-ink-400 sm:inline">Pilih kartu untuk melihat rinciannya</span></div>
+    <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <StatCard icon={<Leaf size={17} />} label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih hari ini`} numericValue={stats.today.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={0} sub="Lihat transaksi hari ini" onClick={() => navigate('/owner/pembelian/hari-ini')} />
+      <StatCard icon={<ArrowUpRight size={17} />} label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih minggu ini`} numericValue={stats.week.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={100} sub="Lihat transaksi minggu ini" onClick={() => navigate('/owner/pembelian/minggu-ini')} />
+      <StatCard icon={<CalendarDays size={17} />} label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih bulan ini`} numericValue={stats.month.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={200} sub="Lihat transaksi bulan ini" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
+      <StatCard icon={<Wallet size={17} />} label="Sisa kas hari ini" numericValue={cashToday.remaining} formatValue={formatRupiah} delay={300} tone={cashToday.remaining < 0 ? 'danger' : 'gold'} sub={`dari ${formatRupiah(cashToday.initialAmount + cashToday.totalTopup)}`} />
     </div>
-    <section className="card mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-plantation-700 px-5 py-4"><div><p className="text-sm font-medium text-ink-800">Catatan batu terjual hari ini</p><p className="mt-1 font-display text-xl text-plantation-900">{kgText(stoneKgToday)}</p><p className="mt-1 text-sm text-ink-500">{stoneSaleBreakdown.length ? stoneSaleBreakdown.map((item) => `${item.type}: ${kgText(item.kg)}`).join(' · ') : 'Belum ada penjualan batu hari ini.'}</p></div><button type="button" className="btn-ghost" onClick={() => navigate('/owner/batu')}>Lihat stok dan riwayat batu</button></section>
+    <section className="dashboard-stone-card mb-6 flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white p-5 shadow-sm sm:px-6">
+      <div className="flex min-w-0 items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-plantation-50 text-plantation-800"><Package size={21} /></span><div><p className="text-sm font-semibold text-plantation-950">Penjualan batu hari ini</p><p className="mt-1 font-display text-2xl text-plantation-900">{kgText(stoneKgToday)}</p><p className="mt-1 text-sm text-ink-500">{stoneSaleBreakdown.length ? stoneSaleBreakdown.map((item) => `${item.type}: ${kgText(item.kg)}`).join(' · ') : 'Belum ada penjualan batu hari ini.'}</p></div></div>
+      <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-plantation-900/15 px-4 py-2.5 text-sm font-medium text-plantation-900 transition hover:border-plantation-700/30 hover:bg-plantation-50" onClick={() => navigate('/owner/batu')}>Stok dan riwayat batu <ArrowRight size={16} /></button>
+    </section>
     {unpaidToday.length > 0 && <button type="button" onClick={() => navigate('/owner/laporan')} className="mb-6 flex w-full flex-col items-start justify-between gap-3 rounded-lg border border-gold-500/35 bg-gold-400/10 px-4 py-4 text-left transition hover:bg-gold-400/15 sm:flex-row sm:items-center sm:px-5"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-500/15 text-gold-600"><Clock3 size={18} /></span><div><p className="font-medium text-plantation-900">Ada {unpaidToday.length} pembelian yang belum dibayar hari ini</p><p className="text-sm text-ink-500 mt-0.5">Perlu tindak lanjut pembayaran kepada pemasok.</p></div></div><span className="font-display text-lg text-gold-600 sm:shrink-0">{formatRupiah(unpaidTotal)}</span></button>}
-    <div className="grid lg:grid-cols-2 gap-4"><ChartCard title={`Volume ${SHOW_FRUIT_PURCHASES ? 'pembelian' : 'brondolan'}`} range={chartRange} setRange={setChartRange} data={chartData} type="volume"><BarChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="volume" />} /><Bar dataKey="volume" fill="#3A6B58" activeBar={{ fill: '#2A5245' }} radius={[4, 4, 0, 0]} /></BarChart></ChartCard><ChartCard title={`Total ${SHOW_FRUIT_PURCHASES ? 'pembelian' : 'brondolan'}`} range={chartRange} setRange={setChartRange} data={chartData} type="total"><LineChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="total" />} /><Line type="monotone" dataKey="total" stroke="#C98A2E" strokeWidth={2.5} dot={false} /></LineChart></ChartCard></div>
+    <div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-gold-700">Tren transaksi</p><h2 className="mt-1 font-display text-xl text-plantation-950">Pergerakan pembelian</h2></div><span className="hidden text-xs text-ink-400 sm:inline">Pilih periode di tiap grafik</span></div>
+    <div className="grid gap-4 lg:grid-cols-2"><ChartCard title={`Volume ${SHOW_FRUIT_PURCHASES ? 'pembelian' : 'brondolan'}`} range={chartRange} setRange={setChartRange} data={chartData} type="volume"><BarChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="volume" />} /><Bar dataKey="volume" fill="#3A6B58" activeBar={{ fill: '#2A5245' }} radius={[4, 4, 0, 0]} /></BarChart></ChartCard><ChartCard title={`Nilai ${SHOW_FRUIT_PURCHASES ? 'pembelian' : 'brondolan'}`} range={chartRange} setRange={setChartRange} data={chartData} type="total"><LineChart data={chartData} margin={{ top: 12, right: 14, bottom: 0, left: 4 }}><ChartBase /><Tooltip content={<ChartTooltip type="total" />} /><Line type="monotone" dataKey="total" stroke="#C98A2E" strokeWidth={2.5} dot={false} /></LineChart></ChartCard></div>
   </div>
 }
+function greetingForHour(hour) { return hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 18 ? 'Selamat sore' : 'Selamat malam' }
 function ChartBase() { return <CartesianGrid strokeDasharray="3 3" stroke="#3A6B5826" vertical /> }
 function ChartCard({ title, range: activeRange, setRange, data, type, children }) { const values = data.map(item => item[type]); const max = niceMax(Math.max(...values, 0)); const yLabels = [max, max * .75, max * .5, max * .25, 0]; const every = Math.ceil(data.length / 6); return <div className="card p-5"><div className="flex flex-wrap justify-between gap-3 mb-4"><h2 className="text-sm font-medium text-ink-700">{title}</h2><div className="flex rounded-md border border-ink-900/10 p-0.5">{RANGES.map((range) => <button key={range.value} type="button" onClick={() => setRange(range.value)} className={`px-2 py-1 text-xs rounded ${activeRange === range.value ? 'bg-plantation-900 text-paper-50' : 'text-ink-500'}`}>{range.label}</button>)}</div></div><div className="chart-shell"><div className="chart-y-labels">{yLabels.map((value, index) => <span key={index}>{type === 'total' ? formatCompactRupiah(value) : kgAxis(value)}</span>)}</div><div className="chart-surface"><ResponsiveContainer width="100%" height={220}>{children}</ResponsiveContainer></div><div className="chart-x-labels" style={{ '--chart-points': data.length }}>{data.map((item, index) => <span key={item.key}>{index % every === 0 || index === data.length - 1 ? <><b>{item.label.split(' ').slice(0, 2).join(' ')}</b><small>{item.label.split(' ')[2]}</small></> : null}</span>)}</div></div></div> }
 function niceMax(value) { if (!value) return 1; const power = 10 ** Math.floor(Math.log10(value)); return Math.ceil(value / power / 5) * 5 * power }

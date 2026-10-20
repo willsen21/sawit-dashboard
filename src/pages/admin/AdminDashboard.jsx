@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Lock, Plus, Unlock, Wallet, X, ShieldCheck } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Leaf, Lock, Plus, Unlock, Wallet, X, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
@@ -100,11 +100,24 @@ export default function AdminDashboard() {
     setUnlockError('')
   }
 
-  return <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10">
-    <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-      <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-600">Operasional</p><h1 className="text-2xl font-display mt-1">Kas Hari Ini</h1><p className="text-sm text-ink-500 mt-1">{formatShortDate(date)} — {currentUser.name}</p></div>
-      {summary.exists && <button disabled={isLocked && hasPendingUnlock} onClick={() => (isLocked ? setShowUnlockRequest(true) : openCloseCash())} className={isLocked ? 'btn-ghost' : 'btn-primary'}>{isLocked ? <Unlock size={16} /> : <Lock size={16} />}{isLocked ? (hasPendingUnlock ? 'Menunggu Persetujuan Owner' : 'Ajukan Buka Kas') : 'Tutup Kas Harian'}</button>}
-    </div>
+  return <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-9">
+    <section className="dashboard-hero relative mb-6 overflow-hidden rounded-[1.75rem] bg-plantation-950 px-5 py-6 text-white shadow-soft sm:px-8 sm:py-8">
+      <div className="dashboard-hero-glow pointer-events-none absolute -right-16 -top-36 h-96 w-96 rounded-full border border-white/10" />
+      <div className="dashboard-hero-glow dashboard-hero-glow-delay pointer-events-none absolute -right-2 -top-24 h-72 w-72 rounded-full border border-gold-300/20" />
+      <Leaf className="pointer-events-none absolute -right-4 bottom-[-3.5rem] h-56 w-56 rotate-[-25deg] text-white/[0.045]" strokeWidth={1} aria-hidden="true" />
+      <div className="relative flex flex-wrap items-end justify-between gap-6">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs text-white/80"><CalendarDays size={14} className="text-gold-300" />{formatShortDate(date)}</span>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[.2em] text-gold-300">Ruang operasional admin</p>
+          <h1 className="mt-2 font-display text-3xl text-white sm:text-4xl">Kas hari ini</h1>
+          <p className="mt-2 text-sm text-white/65">Selamat bertugas, {currentUser.name}. Kelola saldo dan penutupan kas harian.</p>
+        </div>
+        <div className="relative flex flex-wrap items-center gap-3">
+          <div className="min-w-40 rounded-xl border border-white/15 bg-white/[0.08] px-4 py-3 backdrop-blur-sm"><p className="text-xs text-white/60">Status kas</p><p className="mt-1 flex items-center gap-2 text-sm font-semibold text-white">{isLocked ? <CheckCircle2 size={16} className="text-emerald-300" /> : <span className="h-2 w-2 rounded-full bg-gold-300 shadow-[0_0_10px_rgba(252,211,77,.8)]" />}{isLocked ? 'Sudah ditutup' : summary.exists ? 'Kas aktif' : 'Belum diatur'}</p><p className="mt-1 text-xs text-white/55">Sisa {formatRupiah(summary.remaining)}</p></div>
+          {summary.exists && <button disabled={isLocked && hasPendingUnlock} onClick={() => (isLocked ? setShowUnlockRequest(true) : openCloseCash())} className={isLocked ? 'inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/15 disabled:opacity-50' : 'inline-flex min-h-11 items-center gap-2 rounded-xl bg-gold-400 px-4 py-2.5 text-sm font-semibold text-plantation-950 shadow-sm transition hover:-translate-y-0.5 hover:bg-gold-300'}>{isLocked ? <Unlock size={16} /> : <Lock size={16} />}{isLocked ? (hasPendingUnlock ? 'Menunggu owner' : 'Ajukan buka kas') : 'Tutup kas harian'}</button>}
+        </div>
+      </div>
+    </section>
     {isLocked && <div className="mb-6 rounded-md border border-gold-500/30 bg-gold-400/10 px-4 py-3 text-sm text-plantation-900">Kas hari ini sudah ditutup. Transaksi baru dan penghapusan transaksi tidak tersedia sampai kas dibuka kembali.</div>}
     {!summary.exists && pendingCashEdit && <div className="mb-6 rounded-md border border-gold-500/30 bg-gold-400/10 px-4 py-3 text-sm text-plantation-900">Pengajuan kas awal sudah dikirim. Saldo akan tersedia setelah owner menyetujuinya.</div>}
     <section className="cash-summary card p-5">

@@ -18,6 +18,7 @@ import {
 import { PAGE_SIZE, Pagination } from './PurchaseDetails'
 import StatCard from '../../components/StatCard'
 import { reportedPurchasePrice, reportedPurchaseTotal } from '../../lib/purchaseCalculations'
+import { formatRupiahInput, parseRupiahInput } from '../../lib/currencyInput'
 
 const CVS = ['Sinar Mandiri', 'Jaya Agung']
 const parseNumber = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
@@ -115,7 +116,7 @@ export default function Reports() {
   const { pathname } = useLocation()
   const reportKind = pathname.endsWith('/brondolan') ? 'brondolan' : 'buah'
   const { currentUser } = useAuth()
-  const { transactions, cashLoans, dailyCash, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction } = useData()
+  const { transactions, cashLoans, dailyCash, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction, editDailyCashCount } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Hari ini'))
   const [activeQuick, setActiveQuick] = useState('Hari ini')
   const [page, setPage] = useState(1)
@@ -124,6 +125,9 @@ export default function Reports() {
   const [paymentTarget, setPaymentTarget] = useState(null)
   const [dailyDetailFilter, setDailyDetailFilter] = useState(null)
   const [showCashDifferenceDetails, setShowCashDifferenceDetails] = useState(false)
+  const [cashEditTarget, setCashEditTarget] = useState(null)
+  const [cashEditValue, setCashEditValue] = useState('')
+  const [cashEditError, setCashEditError] = useState('')
   const [editTarget, setEditTarget] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const [editError, setEditError] = useState('')
@@ -230,6 +234,25 @@ export default function Reports() {
     if (!paymentTarget) return
     updateTransaction(paymentTarget.id, { paymentStatus: 'paid' }, currentUser.id)
     setPaymentTarget(null)
+  }
+
+  function openCashCountEdit(day) {
+    setCashEditTarget(day)
+    setCashEditValue(formatRupiahInput(day.countedCash))
+    setCashEditError('')
+  }
+
+  function saveCashCountEdit(event) {
+    event.preventDefault()
+    if (!cashEditTarget) return
+    const result = editDailyCashCount(cashEditTarget.date, currentUser?.id, parseRupiahInput(cashEditValue))
+    if (!result.ok) {
+      setCashEditError(result.message)
+      return
+    }
+    setCashEditTarget(null)
+    setCashEditValue('')
+    setCashEditError('')
   }
 
   function openEdit(transaction) {
@@ -473,7 +496,7 @@ export default function Reports() {
         {showCashDifferenceDetails && <div className="border-t border-ink-900/8">
           {cashDifferenceSummary.count === 0 ? <p className="px-5 py-8 text-center text-sm text-ink-500">Belum ada penutupan kas dengan selisih tercatat pada rentang tanggal ini.</p> : <>
             <div className="px-5 py-3 text-xs leading-relaxed text-ink-500">Total bersih adalah total kelebihan dikurangi total kekurangan. Tabel mempertahankan angka tiap hari agar selisih antarhari tidak saling menyamarkan.</div>
-            <div className="overflow-x-auto"><table className="w-full"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Sisa menurut sistem</th><th className="table-head text-right">Uang fisik admin</th><th className="table-head text-right">Selisih kas</th><th className="table-head">Keterangan</th></tr></thead><tbody>{cashDifferenceSummary.days.map((day) => <tr key={day.id || day.date}><td className="table-cell">{formatShortDate(day.date)}</td><td className="table-cell text-right">{formatRupiah(day.systemCashAtClose)}</td><td className="table-cell text-right">{formatRupiah(day.countedCash)}</td><td className={`table-cell text-right font-semibold ${day.numericDifference < 0 ? 'text-red-700' : day.numericDifference > 0 ? 'text-plantation-700' : 'text-ink-700'}`}>{formatSignedRupiah(day.numericDifference)}</td><td className="table-cell text-ink-500">{day.numericDifference < 0 ? 'Uang fisik kurang dari saldo sistem' : day.numericDifference > 0 ? 'Uang fisik lebih dari saldo sistem' : 'Uang fisik sesuai saldo sistem'}</td></tr>)}</tbody><tfoot><tr className="bg-paper-100"><td className="table-cell font-semibold">Total · {cashDifferenceSummary.count} hari</td><td className="table-cell" colSpan="2"><span className="text-xs text-ink-500">Kelebihan {formatRupiah(cashDifferenceSummary.excess)} · Kekurangan {formatRupiah(cashDifferenceSummary.shortage)}</span></td><td className="table-cell text-right font-semibold">{formatSignedRupiah(cashDifferenceSummary.net)}</td><td className="table-cell text-xs text-ink-500">Selisih bersih seluruh hari</td></tr></tfoot></table></div>
+            <div className="overflow-x-auto"><table className="w-full"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Sisa menurut sistem</th><th className="table-head text-right">Uang fisik admin</th><th className="table-head text-right">Selisih kas</th><th className="table-head">Keterangan</th>{currentUser?.role === 'owner' && <th className="table-head text-right">Aksi</th>}</tr></thead><tbody>{cashDifferenceSummary.days.map((day) => <tr key={day.id || day.date}><td className="table-cell">{formatShortDate(day.date)}</td><td className="table-cell text-right">{formatRupiah(day.systemCashAtClose)}</td><td className="table-cell text-right">{formatRupiah(day.countedCash)}</td><td className={`table-cell text-right font-semibold ${day.numericDifference < 0 ? 'text-red-700' : day.numericDifference > 0 ? 'text-plantation-700' : 'text-ink-700'}`}>{formatSignedRupiah(day.numericDifference)}</td><td className="table-cell text-ink-500">{day.numericDifference < 0 ? 'Uang fisik kurang dari saldo sistem' : day.numericDifference > 0 ? 'Uang fisik lebih dari saldo sistem' : 'Uang fisik sesuai saldo sistem'}</td>{currentUser?.role === 'owner' && <td className="table-cell text-right"><button type="button" onClick={() => openCashCountEdit(day)} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-plantation-800 transition hover:bg-plantation-50" aria-label={`Koreksi hitungan kas ${formatShortDate(day.date)}`}><Pencil size={14} /> Koreksi</button></td>}</tr>)}</tbody><tfoot><tr className="bg-paper-100"><td className="table-cell font-semibold">Total · {cashDifferenceSummary.count} hari</td><td className="table-cell" colSpan="2"><span className="text-xs text-ink-500">Kelebihan {formatRupiah(cashDifferenceSummary.excess)} · Kekurangan {formatRupiah(cashDifferenceSummary.shortage)}</span></td><td className="table-cell text-right font-semibold">{formatSignedRupiah(cashDifferenceSummary.net)}</td><td className="table-cell text-xs text-ink-500" colSpan={currentUser?.role === 'owner' ? 2 : 1}>Selisih bersih seluruh hari</td></tr></tfoot></table></div>
           </>}
         </div>}
       </section>}
@@ -528,6 +551,15 @@ export default function Reports() {
         </div>
         {tableRows.length > PAGE_SIZE && <Pagination page={page} pages={pageCount} setPage={setPage} />}
       </div>
+      <Modal open={!!cashEditTarget} onClose={() => { setCashEditTarget(null); setCashEditValue(''); setCashEditError('') }} title="Koreksi hitungan kas admin">
+        {cashEditTarget && <form onSubmit={saveCashCountEdit} className="space-y-4">
+          <p className="text-sm leading-relaxed text-ink-600">Koreksi uang fisik yang dicatat admin untuk <b>{formatShortDate(cashEditTarget.date)}</b>. Sisa menurut sistem tetap, sedangkan selisih kas dan rekap total akan dihitung ulang.</p>
+          <div className="rounded-xl bg-paper-100 p-4 text-sm"><div className="flex justify-between gap-3"><span className="text-ink-500">Sisa menurut sistem</span><b>{formatRupiah(cashEditTarget.systemCashAtClose)}</b></div><div className="mt-2 flex justify-between gap-3"><span className="text-ink-500">Hitungan fisik sebelumnya</span><b>{formatRupiah(cashEditTarget.countedCash)}</b></div></div>
+          <Field label="Uang fisik admin yang benar (Rp)"><input inputMode="numeric" autoFocus required className="input" value={cashEditValue} onChange={(event) => { setCashEditValue(formatRupiahInput(event.target.value)); setCashEditError('') }} placeholder="Contoh: 25.115.000" /></Field>
+          {cashEditError && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{cashEditError}</p>}
+          <div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => { setCashEditTarget(null); setCashEditValue(''); setCashEditError('') }}>Batal</button><button type="submit" className="btn-primary"><Save size={16} /> Simpan koreksi</button></div>
+        </form>}
+      </Modal>
       <Modal open={!!paymentTarget} onClose={() => setPaymentTarget(null)} title="Konfirmasi pembayaran">
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-ink-700">Apakah pembelian dari <b>{paymentTarget?.name || supplierMap[paymentTarget?.supplierId]?.name || 'pemasok ini'}</b> sebesar <b>{formatRupiah(paymentTarget?.total)}</b> sudah dibayar?</p>

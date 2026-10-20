@@ -424,6 +424,33 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     return { ok: true }
   }
 
+  function editDailyCashCount(dateKey, actorId, countedCash) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengoreksi hitungan kas admin.' }
+    const amount = Number(countedCash)
+    if (!Number.isFinite(amount) || amount < 0) return { ok: false, message: 'Uang fisik harus berupa angka 0 atau lebih.' }
+    const existing = dailyCash.find((item) => item.date === dateKey)
+    if (!existing || existing.status !== 'locked') return { ok: false, message: 'Data penutupan kas tidak ditemukan atau belum ditutup.' }
+    const previousAmount = Number(existing.countedCash)
+    if (!Number.isFinite(previousAmount)) return { ok: false, message: 'Data hitungan fisik admin belum tersedia untuk dikoreksi.' }
+    const systemCash = Number(existing.systemCashAtClose)
+    if (!Number.isFinite(systemCash)) return { ok: false, message: 'Sisa menurut sistem tidak tersedia; koreksi tidak dapat disimpan.' }
+
+    const editedAt = new Date().toISOString()
+    setDailyCash((prev) => prev.map((item) => item.date === dateKey ? {
+      ...item,
+      countedCash: amount,
+      cashDifference: amount - systemCash,
+      countedCashEditedAt: editedAt,
+      countedCashEditedBy: actorId,
+    } : item))
+    addAuditLog({
+      action: 'Mengoreksi hitungan fisik kas admin',
+      actorId,
+      detail: `${dateKey}: Rp${previousAmount.toLocaleString('id-ID')} → Rp${amount.toLocaleString('id-ID')} · selisih diperbarui menjadi Rp${(amount - systemCash).toLocaleString('id-ID')}`,
+    })
+    return { ok: true }
+  }
+
   function unlockDay(dateKey, actorId) {
     setDailyCash((prev) => prev.map((d) => (d.date === dateKey ? { ...d, status: 'open' } : d)))
     addAuditLog({ action: 'Membuka kembali kas', actorId, detail: dateKey })
@@ -760,6 +787,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     getDailyCash,
     setInitialCash,
     lockDay,
+    editDailyCashCount,
     unlockDay,
     requestCashUnlock,
     resolveCashUnlock,

@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Leaf } from 'lucide-react'
+import { ArrowRight, CircleAlert, Eye, EyeOff, Leaf, LoaderCircle, LockKeyhole, Mail, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import LoadingScreen from '../components/LoadingScreen'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 export default function Login() {
@@ -10,31 +11,38 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [recoveryEmail, setRecoveryEmail] = useState('')
   const [recoveryMessage, setRecoveryMessage] = useState('')
   const [recoveryError, setRecoveryError] = useState('')
   const [sendingRecovery, setSendingRecovery] = useState(false)
 
-  if (!authReady) return <div className="flex min-h-screen items-center justify-center text-sm text-ink-500">Memeriksa sesi...</div>
-  if (currentUser) {
-    return <Navigate to={currentUser.role === 'owner' ? '/owner' : '/admin'} replace />
-  }
+  if (!authReady) return <LoadingScreen />
+  if (currentUser) return <Navigate to={currentUser.role === 'owner' ? '/owner' : '/admin'} replace />
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (isSubmitting) return
     setError('')
-    const result = await login(username, password)
-    if (!result.ok) {
-      setError(result.message)
-      return
+    setIsSubmitting(true)
+    try {
+      const result = await login(username.trim(), password)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      sessionStorage.setItem('welcome-user', result.user.name)
+      navigate(result.user.role === 'owner' ? '/owner' : '/admin')
+    } catch {
+      setError('Login belum berhasil. Periksa koneksi internet lalu coba lagi.')
+    } finally {
+      setIsSubmitting(false)
     }
-    sessionStorage.setItem('welcome-user', result.user.name)
-    navigate(result.user.role === 'owner' ? '/owner' : '/admin')
   }
 
-  async function handlePasswordRecovery(e) {
-    e.preventDefault()
+  async function handlePasswordRecovery(event) {
+    event.preventDefault()
     setRecoveryError('')
     setRecoveryMessage('')
     if (!isSupabaseConfigured) {
@@ -65,76 +73,90 @@ export default function Login() {
     }
   }
 
-  return (
-    <div className="min-h-screen grid md:grid-cols-2 bg-paper-50">
-      <div className="login-visual relative hidden overflow-hidden md:flex flex-col justify-between bg-plantation-950 text-paper-50 p-12">
-        <img src="https://images.unsplash.com/photo-1672385896578-470b10319a67?auto=format&fit=crop&w=1400&q=85" alt="Hamparan kebun sawit" className="absolute inset-0 h-full w-full object-cover opacity-45" />
-        <div className="absolute inset-0 bg-gradient-to-b from-plantation-950/75 via-plantation-950/60 to-plantation-950/90" />
-        <div className="login-brand relative flex items-center gap-2.5">
-          <Leaf className="text-gold-400" size={22} />
-          <span className="font-display text-xl">Kebun Kas</span>
-        </div>
-        <div className="login-copy relative max-w-sm">
-          <h1 className="font-display text-4xl leading-[1.15] text-paper-50">
-            “Setiap panen yang tercatat rapi, menumbuhkan usaha yang lebih pasti.”
-          </h1>
-          <p className="mt-4 text-paper-100/60 text-[15px] leading-relaxed">
-            Catat setiap pembelian dengan mudah, pantau kas dengan jelas, dan jalankan kebun dengan lebih percaya diri.
-          </p>
-        </div>
-        <p className="relative text-xs text-paper-100/55">Pencatatan pembelian sawit yang lebih teratur.</p>
+  return <main className="login-page min-h-screen bg-paper-50 md:grid md:grid-cols-[1.05fr_.95fr]">
+    <section className="login-visual relative hidden min-h-screen overflow-hidden bg-plantation-950 p-10 text-white md:flex md:flex-col md:justify-between lg:p-14">
+      <img src="https://images.unsplash.com/photo-1672385896578-470b10319a67?auto=format&fit=crop&w=1600&q=85" alt="Hamparan kebun sawit" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+      <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(9,34,26,.42),rgba(9,34,26,.88))]" />
+      <div className="relative flex items-center gap-3">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-gold-300 backdrop-blur"><Leaf size={22} /></span>
+        <div><p className="font-display text-xl">Kebun Kas</p><p className="mt-0.5 text-[11px] tracking-[.18em] text-white/55">SAWIT MANAGEMENT</p></div>
       </div>
+      <div className="relative max-w-xl py-12">
+        <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs text-white/80 backdrop-blur"><SparkleMark /> Catat rapi, kelola pasti</span>
+        <h1 className="mt-7 max-w-lg font-display text-5xl leading-[1.08] text-white lg:text-6xl">Semua hasil kebun, <span className="text-gold-300">lebih mudah dipantau.</span></h1>
+        <p className="mt-5 max-w-md text-base leading-7 text-white/70">Satu ruang kerja untuk transaksi, laporan, stok, dan catatan panen harian.</p>
+        <div className="mt-9 flex flex-wrap gap-3">
+          <FeaturePill icon={<ShieldCheck size={15} />} label="Akses akun terlindungi" />
+          <FeaturePill icon={<Leaf size={15} />} label="Data kebun teratur" />
+        </div>
+      </div>
+      <p className="relative text-xs text-white/50">Ruang kerja digital untuk usaha kebun Anda.</p>
+      <div className="login-orbit pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full border border-white/10" />
+      <div className="login-orbit login-orbit-delay pointer-events-none absolute -bottom-24 -right-16 h-64 w-64 rounded-full border border-gold-300/20" />
+    </section>
 
-      <div className="flex items-center justify-center bg-paper-100/60 p-6 md:p-10">
-        <div className="login-panel w-full max-w-sm rounded-2xl border border-ink-900/10 bg-white p-6 shadow-soft md:p-8">
-          <div className="md:hidden flex items-center gap-2.5 mb-8">
-            <Leaf className="text-gold-500" size={22} />
-            <span className="font-display text-xl text-plantation-950">Kebun Kas</span>
-          </div>
+    <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10 sm:px-8 md:px-10 lg:px-16">
+      <div className="login-glow pointer-events-none absolute -right-20 top-8 h-64 w-64 rounded-full bg-gold-400/10 blur-3xl" />
+      <div className="login-panel relative w-full max-w-md">
+        <div className="mb-8 flex items-center gap-3 md:hidden">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-plantation-950 text-gold-300 shadow-sm"><Leaf size={22} /></span>
+          <div><p className="font-display text-xl text-plantation-950">Kebun Kas</p><p className="text-[10px] tracking-[.16em] text-ink-400">SAWIT MANAGEMENT</p></div>
+        </div>
 
-          <h2 className="text-2xl font-display text-plantation-950">Selamat datang</h2>
-          <p className="text-sm text-ink-500 mt-1.5 mb-6">Masukkan akun Anda untuk melanjutkan.</p>
+        <div className="mb-7">
+          <p className="mb-3 text-[11px] font-bold uppercase tracking-[.22em] text-gold-700">Ruang kerja Anda</p>
+          <h2 className="font-display text-4xl leading-tight text-plantation-950 sm:text-[2.65rem]">Selamat datang.</h2>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-ink-500">Masuk untuk melihat kegiatan dan laporan kebun hari ini.</p>
+        </div>
 
-          <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="rounded-[1.75rem] border border-ink-900/8 bg-white p-5 shadow-[0_24px_70px_rgba(17,45,35,.08)] sm:p-7">
+          <div className="space-y-5">
             <div>
-              <label className="label">Nama pengguna</label>
-              <input
-                type="text"
-                className="input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="mis. admin1 atau papa"
-                autoFocus
-              />
+              <label className="label mb-2" htmlFor="login-username">Nama pengguna</label>
+              <div className="relative">
+                <UserRound size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+                <input id="login-username" type="text" autoComplete="username" className="input h-[3.25rem] pl-11" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Masukkan nama pengguna" autoFocus required disabled={isSubmitting} />
+              </div>
             </div>
             <div>
-              <label className="label">Kata sandi</label>
+              <label className="label mb-2" htmlFor="login-password">Kata sandi</label>
               <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} className="input pr-11" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-                <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-500 hover:text-plantation-700" aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'} title={showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+                <LockKeyhole size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+                <input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" className="input h-[3.25rem] pl-11 pr-12" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Masukkan kata sandi" required disabled={isSubmitting} />
+                <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-1 flex w-11 items-center justify-center rounded-xl text-ink-400 transition hover:text-plantation-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plantation-700" aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'} title={showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}><span className="sr-only">{showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}</span>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
               </div>
             </div>
           </div>
 
-          {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+          {error && <p role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm leading-5 text-red-800"><CircleAlert size={17} className="mt-0.5 shrink-0" />{error}</p>}
 
-          <button type="submit" className="btn-primary w-full mt-6">
-            Masuk
+          <button type="submit" className="login-submit mt-6 flex h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-plantation-950 px-4 font-semibold text-white shadow-[0_8px_18px_rgba(17,45,35,.16)] transition hover:-translate-y-0.5 hover:bg-plantation-800 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plantation-700 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-75" disabled={isSubmitting || !username.trim() || !password}>
+            {isSubmitting ? <><LoaderCircle size={18} className="animate-spin" />Memeriksa akun...</> : <>Masuk ke dashboard <ArrowRight size={18} /></>}
           </button>
-          </form>
-          <details className="mt-5 border-t border-ink-900/10 pt-4">
-            <summary className="cursor-pointer text-center text-sm font-medium text-plantation-700 hover:text-plantation-900">Lupa kata sandi?</summary>
+          <div className="mt-5 flex items-center justify-center gap-2 text-xs text-ink-400"><ShieldCheck size={14} className="text-plantation-700" />{cloudMode ? 'Akun Anda tersimpan dengan aman' : 'Akses ruang kerja Kebun Kas'}</div>
+
+          <details className="mt-6 border-t border-ink-900/8 pt-4">
+            <summary className="cursor-pointer list-none text-center text-sm font-medium text-plantation-800 transition hover:text-plantation-950"><span className="inline-flex items-center gap-2"><Mail size={15} /> Lupa kata sandi?</span></summary>
             <form onSubmit={handlePasswordRecovery} className="mt-4 space-y-3">
-              <p className="text-sm leading-relaxed text-ink-500">Masukkan email yang terdaftar pada akun owner. Kami akan mengirim tautan untuk membuat kata sandi baru.</p>
-              <input type="email" className="input" value={recoveryEmail} onChange={(e) => setRecoveryEmail(e.target.value)} placeholder="Email akun owner" required />
-              {recoveryError && <p className="text-sm text-red-700">{recoveryError}</p>}
-              {recoveryMessage && <p className="text-sm text-plantation-700">{recoveryMessage}</p>}
-              <button type="submit" className="btn-secondary w-full" disabled={sendingRecovery}>{sendingRecovery ? 'Mengirim...' : 'Kirim tautan pemulihan'}</button>
+              <p className="text-sm leading-relaxed text-ink-500">Masukkan email yang terdaftar pada akun owner untuk menerima tautan pemulihan.</p>
+              <label className="sr-only" htmlFor="recovery-email">Email akun owner</label>
+              <input id="recovery-email" type="email" autoComplete="email" className="input" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="Email akun owner" required />
+              {recoveryError && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{recoveryError}</p>}
+              {recoveryMessage && <p role="status" className="rounded-xl bg-plantation-50 px-3 py-2 text-sm text-plantation-800">{recoveryMessage}</p>}
+              <button type="submit" className="btn-secondary w-full" disabled={sendingRecovery}>{sendingRecovery ? <><LoaderCircle size={16} className="animate-spin" />Mengirim...</> : 'Kirim tautan pemulihan'}</button>
             </form>
           </details>
-        </div>
+        </form>
+        <p className="mt-6 text-center text-[11px] text-ink-400">Dengan masuk, Anda menggunakan akun resmi Kebun Kas.</p>
       </div>
-    </div>
-  )
+    </section>
+  </main>
+}
+
+function FeaturePill({ icon, label }) {
+  return <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 text-xs text-white/85 backdrop-blur">{icon}{label}</span>
+}
+
+function SparkleMark() {
+  return <span className="h-1.5 w-1.5 rounded-full bg-gold-300 shadow-[0_0_10px_rgba(227,177,85,.9)]" aria-hidden="true" />
 }

@@ -265,6 +265,11 @@
 @keyframes section-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes login-panel-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes light-sweep { 0%, 65%, 100% { background-position: 180% 0; } 82% { background-position: -80% 0; } }
+@keyframes login-orbit { 0%, 100% { transform: translate(0, 0) scale(1); opacity: .55; } 50% { transform: translate(-14px, -10px) scale(1.04); opacity: 1; } }
+@keyframes loading-progress { 0% { transform: translateX(-110%); } 55% { transform: translateX(85%); } 100% { transform: translateX(220%); } }
+.login-orbit { animation: login-orbit 11s ease-in-out infinite; }
+.login-orbit-delay { animation-delay: -5s; }
+.loading-progress { animation: loading-progress 1.6s ease-in-out infinite; }
 
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }

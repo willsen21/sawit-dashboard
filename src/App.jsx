@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppLayout from './components/AppLayout'
+import LoadingScreen from './components/LoadingScreen'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -25,7 +26,7 @@ const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 
 function RootRedirect() {
   const { currentUser, authReady } = useAuth()
-  if (!authReady) return <div className="flex min-h-screen items-center justify-center text-sm text-ink-500">Memeriksa sesi...</div>
+  if (!authReady) return <LoadingScreen />
   if (!currentUser) return <Navigate to="/login" replace />
   return <Navigate to={currentUser.role === 'owner' ? '/owner' : '/admin'} replace />
 }

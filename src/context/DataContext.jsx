@@ -660,6 +660,25 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     return farm
   }
 
+  function updatePrivateFarm(farmId, farmData, actorId = currentUser?.id) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah data lahan.' }
+    const existing = privateFarms.find((farm) => farm.id === farmId)
+    if (!existing) return { ok: false, message: 'Data lahan tidak ditemukan.' }
+    const name = String(farmData.name || '').trim()
+    if (!name) return { ok: false, message: 'Nama lahan wajib diisi.' }
+    setPrivateFarms((prev) => prev.map((farm) => farm.id === farmId ? {
+      ...farm,
+      ...farmData,
+      name,
+      owner: String(farmData.owner || '').trim(),
+      location: String(farmData.location || '').trim(),
+      note: String(farmData.note || '').trim(),
+      updatedAt: new Date().toISOString(),
+    } : farm))
+    addAuditLog({ action: 'Mengedit data lahan kebun', actorId, detail: `${existing.name} → ${name}` })
+    return { ok: true }
+  }
+
   function addPrivateHarvestRecord(farmId, recordData) {
     const farm = privateFarms.find((item) => item.id === farmId)
     if (!farm) return null
@@ -810,6 +829,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     deleteStoneSale,
     markStoneSalePaid,
     addPrivateFarm,
+    updatePrivateFarm,
     addPrivateHarvestRecord,
     updatePrivateHarvestRecord,
     deletePrivateHarvestRecord,

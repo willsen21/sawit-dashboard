@@ -25,9 +25,11 @@ function managerLabel(manager) {
 }
 
 export default function PrivateFarms() {
-  const { privateFarms: farms, addPrivateFarm, addPrivateHarvestRecord, updatePrivateHarvestRecord, deletePrivateHarvestRecord } = useData()
+  const { privateFarms: farms, addPrivateFarm, updatePrivateFarm, addPrivateHarvestRecord, updatePrivateHarvestRecord, deletePrivateHarvestRecord } = useData()
   const [selectedId, setSelectedId] = useState(null)
   const [showFarmForm, setShowFarmForm] = useState(false)
+  const [editingFarmId, setEditingFarmId] = useState(null)
+  const [farmError, setFarmError] = useState('')
   const [showRecordForm, setShowRecordForm] = useState(false)
   const [editingRecordId, setEditingRecordId] = useState(null)
   const [recordError, setRecordError] = useState('')
@@ -46,13 +48,35 @@ export default function PrivateFarms() {
       return summary
     }, { netKg: 0, gross: 0, uses: 0, wages: 0, result: 0 }), [farms])
 
-  function addFarm(event) {
+  function openFarmForm() {
+    setEditingFarmId(null)
+    setFarmError('')
+    setFarmForm({ name: '', owner: '', location: '', areaHa: '', note: '' })
+    setShowFarmForm(true)
+  }
+
+  function openFarmEdit(farm) {
+    setEditingFarmId(farm.id)
+    setFarmError('')
+    setFarmForm({ name: farm.name || '', owner: farm.owner || '', location: farm.location || '', areaHa: farm.areaHa || '', note: farm.note || '' })
+    setShowFarmForm(true)
+  }
+
+  function saveFarm(event) {
     event.preventDefault()
-    if (!farmForm.name.trim()) return
-    const farm = addPrivateFarm({ ...farmForm, name: farmForm.name.trim(), owner: farmForm.owner.trim(), location: farmForm.location.trim() })
-    setSelectedId(farm.id)
+    if (!farmForm.name.trim()) return setFarmError('Nama lahan wajib diisi.')
+    const payload = { ...farmForm, name: farmForm.name.trim(), owner: farmForm.owner.trim(), location: farmForm.location.trim(), note: farmForm.note.trim() }
+    if (editingFarmId) {
+      const result = updatePrivateFarm(editingFarmId, payload)
+      if (!result.ok) return setFarmError(result.message)
+    } else {
+      const farm = addPrivateFarm(payload)
+      setSelectedId(farm.id)
+    }
     setFarmForm({ name: '', owner: '', location: '', areaHa: '', note: '' })
     setShowFarmForm(false)
+    setEditingFarmId(null)
+    setFarmError('')
   }
 
   function addRecord(event) {
@@ -140,6 +164,7 @@ export default function PrivateFarms() {
   if (selected) return <FarmDetail
     farm={selected}
     onBack={() => setSelectedId(null)}
+    onEditFarm={() => openFarmEdit(selected)}
     onAdd={openRecordForm}
     showForm={showRecordForm}
     error={recordError}
@@ -150,12 +175,19 @@ export default function PrivateFarms() {
     editingRecordId={editingRecordId}
     onEdit={editRecord}
     onDelete={deleteRecord}
+    showFarmForm={showFarmForm}
+    farmForm={farmForm}
+    setFarmForm={setFarmForm}
+    farmError={farmError}
+    onSaveFarm={saveFarm}
+    onCloseFarmForm={() => { setShowFarmForm(false); setEditingFarmId(null); setFarmError('') }}
+    editingFarm={Boolean(editingFarmId)}
   />
 
   return <main className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
     <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-600">Owner workspace</p><h1 className="mt-1 font-display text-3xl text-plantation-950">Kebun</h1><p className="mt-2 max-w-xl text-sm text-ink-500">Kelola lahan, catat panen, pemakaian hasil, dan pembagian upah pengurus.</p></div>
-      <button className="btn-primary" onClick={() => setShowFarmForm(true)}><Plus size={17} /> Tambah lahan</button>
+      <button className="btn-primary" onClick={openFarmForm}><Plus size={17} /> Tambah lahan</button>
     </header>
     <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Stat icon={<Sprout size={17} />} label="Total lahan" value={farms.length.toLocaleString('id-ID')} delay={0} />
@@ -163,15 +195,20 @@ export default function PrivateFarms() {
       <Stat icon={<CircleDollarSign size={17} />} label="Hasil panen hari ini" value={money(todaySummary.gross)} delay={140} />
       <Stat icon={<TrendingUp size={17} />} label="Hasil akhir hari ini" value={money(todaySummary.result)} delay={210} />
     </div>
-    {farms.length ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{farms.map((farm) => <FarmCard key={farm.id} farm={farm} onClick={() => setSelectedId(farm.id)} />)}</section> : <section className="card flex min-h-72 flex-col items-center justify-center px-6 text-center"><span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-plantation-700/10 text-plantation-700"><Leaf size={26} /></span><h2 className="font-display text-xl text-plantation-950">Mulai catat lahan</h2><p className="mt-2 max-w-md text-sm text-ink-500">Tambahkan lahan terlebih dahulu. Setiap lahan memiliki riwayat panen dan perhitungan hasil sendiri.</p><button className="btn-primary mt-5" onClick={() => setShowFarmForm(true)}><Plus size={16} /> Tambah lahan pertama</button></section>}
-    {showFarmForm && <Dialog title="Tambah lahan kebun" onClose={() => setShowFarmForm(false)}><form onSubmit={addFarm} className="space-y-4">
-      <Field label="Nama lahan *"><input className="input" required autoFocus placeholder="Contoh: Lahan Utara" value={farmForm.name} onChange={(event) => setFarmForm({ ...farmForm, name: event.target.value })} /></Field>
-      <Field label="Lokasi"><input className="input" placeholder="Desa atau keterangan lokasi · opsional" value={farmForm.location} onChange={(event) => setFarmForm({ ...farmForm, location: event.target.value })} /></Field>
-      <div className="grid gap-3 sm:grid-cols-2"><Field label="Pemilik lahan"><input className="input" placeholder="Opsional" value={farmForm.owner} onChange={(event) => setFarmForm({ ...farmForm, owner: event.target.value })} /></Field><Field label="Luas (hektare)"><input type="number" min="0" step="0.1" className="input" placeholder="Opsional" value={farmForm.areaHa} onChange={(event) => setFarmForm({ ...farmForm, areaHa: event.target.value })} /></Field></div>
-      <Field label="Catatan lahan"><textarea className="input min-h-20" placeholder="Opsional" value={farmForm.note} onChange={(event) => setFarmForm({ ...farmForm, note: event.target.value })} /></Field>
-      <button className="btn-primary w-full"><Plus size={16} /> Simpan lahan</button>
-    </form></Dialog>}
+    {farms.length ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{farms.map((farm) => <FarmCard key={farm.id} farm={farm} onClick={() => setSelectedId(farm.id)} />)}</section> : <section className="card flex min-h-72 flex-col items-center justify-center px-6 text-center"><span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-plantation-700/10 text-plantation-700"><Leaf size={26} /></span><h2 className="font-display text-xl text-plantation-950">Mulai catat lahan</h2><p className="mt-2 max-w-md text-sm text-ink-500">Tambahkan lahan terlebih dahulu. Setiap lahan memiliki riwayat panen dan perhitungan hasil sendiri.</p><button className="btn-primary mt-5" onClick={openFarmForm}><Plus size={16} /> Tambah lahan pertama</button></section>}
+    {showFarmForm && <FarmFormDialog title={editingFarmId ? 'Edit data lahan' : 'Tambah lahan kebun'} form={farmForm} setForm={setFarmForm} error={farmError} onClose={() => { setShowFarmForm(false); setEditingFarmId(null); setFarmError('') }} onSubmit={saveFarm} editing={Boolean(editingFarmId)} />}
   </main>
+}
+
+function FarmFormDialog({ title, form, setForm, error, onClose, onSubmit, editing = false }) {
+  return <Dialog title={title} onClose={onClose}><form onSubmit={onSubmit} className="space-y-4">
+      <Field label="Nama lahan *"><input className="input" required autoFocus placeholder="Contoh: Lahan Utara" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
+      <Field label="Lokasi"><input className="input" placeholder="Desa atau keterangan lokasi · opsional" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
+      <div className="grid gap-3 sm:grid-cols-2"><Field label="Pemilik lahan"><input className="input" placeholder="Opsional" value={form.owner} onChange={(event) => setForm({ ...form, owner: event.target.value })} /></Field><Field label="Luas (hektare)"><input type="number" min="0" step="0.1" className="input" placeholder="Opsional" value={form.areaHa} onChange={(event) => setForm({ ...form, areaHa: event.target.value })} /></Field></div>
+      <Field label="Catatan lahan"><textarea className="input min-h-20" placeholder="Opsional" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></Field>
+      {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <button className="btn-primary w-full">{editing ? <Pencil size={16} /> : <Plus size={16} />} {editing ? 'Simpan perubahan' : 'Simpan lahan'}</button>
+    </form></Dialog>
 }
 
 function FarmCard({ farm, onClick }) {
@@ -186,7 +223,7 @@ function FarmCard({ farm, onClick }) {
   </button>
 }
 
-function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit, editingRecordId, onEdit, onDelete }) {
+function FarmDetail({ farm, onBack, onEditFarm, onAdd, showForm, error, onCloseForm, form, setForm, onSubmit, editingRecordId, onEdit, onDelete, showFarmForm, farmForm, setFarmForm, farmError, onSaveFarm, onCloseFarmForm, editingFarm }) {
   const rows = farm.records || []
   const todayRows = rows.filter((row) => row.date === todayKey())
   const today = todayRows.reduce((sum, row) => {
@@ -200,13 +237,14 @@ function FarmDetail({ farm, onBack, onAdd, showForm, error, onCloseForm, form, s
   }, { netKg: 0, gross: 0, useTotal: 0, wages: 0, result: 0 })
   return <main className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10">
     <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-plantation-700 hover:underline"><ArrowLeft size={16} /> Semua lahan</button>
-    <header className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 p-6 text-white shadow-soft md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Rincian lahan</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl text-white">{farm.name}</h1><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90">{farm.owner && <span className="inline-flex items-center gap-1.5"><UserRound size={15} />{farm.owner}</span>}<span className="inline-flex items-center gap-1.5"><MapPin size={15} />{farm.location || 'Lokasi belum diisi'}</span>{farm.areaHa && <span>{farm.areaHa} hektare</span>}</div></div><button className="btn-gold" onClick={onAdd}><Plus size={17} /> Catat panen</button></div>{farm.note && <p className="mt-4 max-w-2xl rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">{farm.note}</p>}</header>
+    <header className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 p-6 text-white shadow-soft md:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Rincian lahan</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-3xl text-white">{farm.name}</h1><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90">{farm.owner && <span className="inline-flex items-center gap-1.5"><UserRound size={15} />{farm.owner}</span>}<span className="inline-flex items-center gap-1.5"><MapPin size={15} />{farm.location || 'Lokasi belum diisi'}</span>{farm.areaHa && <span>{farm.areaHa} hektare</span>}</div></div><div className="flex flex-wrap gap-2"><button type="button" className="btn border border-white/25 bg-white/10 text-white hover:bg-white/15" onClick={onEditFarm}><Pencil size={16} /> Edit data lahan</button><button className="btn-gold" onClick={onAdd}><Plus size={17} /> Catat panen</button></div></div>{farm.note && <p className="mt-4 max-w-2xl rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white">{farm.note}</p>}</header>
     <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat icon={<Weight size={17} />} label="Berat bersih hari ini" value={`${today.netKg.toLocaleString('id-ID')} kg`} delay={0} /><Stat icon={<CircleDollarSign size={17} />} label="Hasil panen hari ini" value={money(today.gross)} delay={70} /><Stat icon={<TrendingUp size={17} />} label="Pemakaian + upah hari ini" value={money(today.useTotal + today.wages)} delay={140} /><Stat icon={<BadgePercent size={17} />} label="Hasil akhir hari ini" value={money(today.result)} delay={210} /></section>
     <section className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-display text-xl text-plantation-950">Riwayat panen dan pembagian hasil</h2><p className="mt-1 text-xs text-ink-500">Hasil akhir dapat dibagi rata kepada dua atau tiga penerima.</p></div><span className="rounded-full bg-plantation-700/10 px-3 py-1 text-xs font-medium text-plantation-700">{rows.length} catatan</span></div><div className="overflow-x-auto"><table className="w-full min-w-[1400px]"><thead><tr>{['Tanggal','Pengurus','Berat bersih','Harga / kg','Hasil panen','Pemakaian','Upah 10%','Hasil akhir','Pembagian hasil','Catatan','Aksi'].map((label) => <th className="table-head" key={label}>{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan="11" className="py-12 text-center text-sm text-ink-500">Belum ada catatan panen di lahan ini. Pilih “Catat panen” untuk menambahkan.</td></tr> : rows.map((row) => {
       const totals = getFarmHarvestTotals(row)
       return <tr key={row.id}><td className="table-cell whitespace-nowrap">{formatShortDate(row.date)}</td><td className="table-cell">{managerLabel(row.manager)}</td><td className="table-cell text-right">{Number(row.netKg || 0).toLocaleString('id-ID')} kg</td><td className="table-cell text-right text-xs"><div>Buah · {money(row.fruitPricePerKg ?? row.pricePerKg)}</div><div className="mt-1">Brondolan · {row.brondolanPricePerKg ? money(row.brondolanPricePerKg) : '—'}</div></td><td className="table-cell text-right font-medium">{money(totals.grossTotal)}</td><td className="table-cell"><UseList uses={row.uses || []} total={totals.useTotal} /></td><td className="table-cell text-right">{money(totals.managerWage)}</td><td className="table-cell text-right font-semibold text-plantation-900">{money(totals.finalTotal)}</td><td className="table-cell"><ShareList shares={row.distribution || []} /></td><td className="table-cell text-ink-500">{row.note || '—'}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => onEdit(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-plantation-800 hover:bg-plantation-50" aria-label={`Edit panen ${formatShortDate(row.date)}`}><Pencil size={14} /> Edit</button><button type="button" onClick={() => onDelete(row)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label={`Hapus panen ${formatShortDate(row.date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr>
     })}</tbody></table></div></section>
     {showForm && <HarvestDialog farmName={farm.name} form={form} setForm={setForm} error={error} onClose={onCloseForm} onSubmit={onSubmit} editing={Boolean(editingRecordId)} />}
+    {showFarmForm && <FarmFormDialog title="Edit data lahan" form={farmForm} setForm={setFarmForm} error={farmError} onClose={onCloseFarmForm} onSubmit={onSaveFarm} editing={editingFarm} />}
   </main>
 }
 

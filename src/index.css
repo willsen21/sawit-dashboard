@@ -189,7 +189,14 @@
   .table-scroll tbody tr:hover,
   .card > .overflow-x-auto tbody tr:hover { background-color: rgb(58 107 88 / 0.035); }
 
-  .app-canvas { @apply min-h-screen bg-paper-50; }
+  .app-canvas {
+    @apply min-h-screen;
+    background-color: #F8F6EF;
+    background-image:
+      radial-gradient(ellipse at 8% 0%, rgb(227 177 85 / .11), transparent 30rem),
+      radial-gradient(ellipse at 96% 15%, rgb(58 107 88 / .075), transparent 34rem),
+      linear-gradient(155deg, #FBF9F3 0%, #F8F6EF 48%, #F5F2E9 100%);
+  }
   .app-sidebar {
     background-image: linear-gradient(155deg, #0F241B 0%, #16302A 58%, #1E3F36 100%);
     box-shadow: 8px 0 30px rgb(15 36 27 / 0.10);
@@ -267,6 +274,13 @@
 @keyframes light-sweep { 0%, 65%, 100% { background-position: 180% 0; } 82% { background-position: -80% 0; } }
 @keyframes login-orbit { 0%, 100% { transform: translate(0, 0) scale(1); opacity: .55; } 50% { transform: translate(-14px, -10px) scale(1.04); opacity: 1; } }
 @keyframes loading-progress { 0% { transform: translateX(-110%); } 55% { transform: translateX(85%); } 100% { transform: translateX(220%); } }
+@keyframes loading-drift { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(18px, -12px, 0) scale(1.08); } }
+@keyframes loading-orbit { to { transform: rotate(360deg); } }
+@keyframes loading-sprout { 0%, 100% { transform: rotate(-4deg) translateY(1px); } 50% { transform: rotate(4deg) translateY(-3px); } }
+@keyframes loading-leaf-left { 0%, 100% { transform: rotate(-18deg) translateY(2px); } 50% { transform: rotate(-4deg) translateY(-5px); } }
+@keyframes loading-leaf-right { 0%, 100% { transform: rotate(15deg) translateY(1px); } 50% { transform: rotate(30deg) translateY(-5px); } }
+@keyframes loading-leaf-top { 0%, 100% { transform: rotate(-13deg) translateY(1px); } 50% { transform: rotate(5deg) translateY(-4px); } }
+@keyframes loading-seed { 0%, 100% { transform: scale(.8); opacity: .55; } 50% { transform: scale(1.2); opacity: 1; } }
 .login-orbit { animation: login-orbit 11s ease-in-out infinite; }
 .login-orbit-delay { animation-delay: -5s; }
 .loading-progress { animation: loading-progress 1.6s ease-in-out infinite; }
@@ -274,6 +288,20 @@
 .dashboard-hero-glow-delay { animation-delay: -6s; }
 .dashboard-today-card { animation: section-enter 600ms cubic-bezier(.22, 1, .36, 1) 120ms both; }
 .dashboard-stone-card { animation: section-enter 500ms cubic-bezier(.22, 1, .36, 1) 180ms both; }
+.loading-screen {
+  background-color: #F8F6EF;
+  background-image: radial-gradient(ellipse at 16% 12%, rgb(227 177 85 / .15), transparent 27rem), radial-gradient(ellipse at 86% 78%, rgb(58 107 88 / .13), transparent 30rem), linear-gradient(145deg, #FBF9F3 0%, #F4F1E7 100%);
+}
+.loading-glow-left { background: rgb(201 138 46 / .13); animation: loading-drift 8s ease-in-out infinite; }
+.loading-glow-right { background: rgb(58 107 88 / .12); animation: loading-drift 10s ease-in-out -4s infinite reverse; }
+.loading-ring-outer { animation: loading-orbit 18s linear infinite; }
+.loading-ring-inner { animation: loading-orbit 12s linear infinite reverse; }
+.loading-sprout { animation: loading-sprout 2.4s ease-in-out infinite; transform-origin: 50% 85%; }
+.loading-leaf-left { animation: loading-leaf-left 2.8s ease-in-out infinite; transform-origin: 90% 90%; }
+.loading-leaf-right { animation: loading-leaf-right 3.2s ease-in-out -1s infinite; transform-origin: 10% 90%; }
+.loading-leaf-top { animation: loading-leaf-top 2.6s ease-in-out -.6s infinite; transform-origin: 50% 90%; }
+.loading-seed { animation: loading-seed 2.1s ease-in-out infinite; }
+.loading-progress-track { background: rgb(20 54 43 / .09); }
 
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }

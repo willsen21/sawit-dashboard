@@ -276,9 +276,7 @@
 @keyframes palm-sway { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(2deg); } }
 @keyframes fruit-sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(5deg); } }
 @keyframes truck-drive { 0% { opacity: 0; transform: translateX(0); } 2% { opacity: 1; } 68% { opacity: 1; transform: translateX(calc(100vw + 1500px)); } 70%, 100% { opacity: 0; transform: translateX(calc(100vw + 1500px)); } }
-@keyframes woman-chase { 0%, 62% { opacity: 1; transform: translateY(0) rotate(0); } 65% { opacity: 1; transform: translateY(2px) rotate(5deg); } 69%, 100% { opacity: 0; transform: translateY(7px) rotate(8deg); } }
-@keyframes woman-tire { 0%, 65% { opacity: 0; transform: translateY(5px); } 69%, 74% { opacity: 1; transform: translateY(0); } 79%, 100% { opacity: 0; transform: translateY(2px); } }
-@keyframes woman-rest { 0%, 75% { opacity: 0; transform: translateY(5px) scale(.96); } 80%, 96% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-2px) scale(.98); } }
+@keyframes woman-chase { from { transform: translateY(0) scale(.76); } to { transform: translateY(-2px) scale(.76); } }
 @keyframes woman-arm-run { from { transform: rotate(-22deg); } to { transform: rotate(23deg); } }
 @keyframes woman-leg-run { from { transform: rotate(17deg) translateY(-1px); } to { transform: rotate(-19deg) translateY(1px); } }
 @keyframes firefly { 0%, 100% { opacity: .25; transform: translateY(0) scale(.8); } 50% { opacity: .9; transform: translateY(-9px) scale(1.2); } }
@@ -298,10 +296,8 @@
 .dashboard-palm { transform-box: fill-box; transform-origin: 50% 100%; animation: palm-sway 5.5s ease-in-out infinite; }
 .dashboard-palm-small { animation-delay: -2.8s; animation-duration: 6.5s; }
 .dashboard-fruit { transform-box: fill-box; transform-origin: 50% 0%; animation: fruit-sway 3.6s ease-in-out infinite; }
-.dashboard-truck { z-index: 1; bottom: 5px; left: -126px; width: 108px; filter: drop-shadow(0 3px 4px rgb(0 0 0 / .18)); animation: truck-drive 34s linear infinite; }
-.woman-chasing { animation: woman-chase 34s linear infinite; }
-.woman-tired { opacity: 0; animation: woman-tire 34s linear infinite; }
-.woman-resting { opacity: 0; animation: woman-rest 34s linear infinite; }
+.dashboard-truck { z-index: 1; bottom: 5px; left: -126px; width: 108px; filter: drop-shadow(0 3px 4px rgb(0 0 0 / .18)); animation: truck-drive 18s linear infinite; }
+.woman-chasing { transform-box: fill-box; transform-origin: 50% 100%; animation: woman-chase .42s ease-in-out infinite alternate; }
 .woman-run-arms { transform-box: fill-box; transform-origin: 50% 10%; animation: woman-arm-run .38s ease-in-out infinite alternate; }
 .woman-run-legs { transform-box: fill-box; transform-origin: 50% 0%; animation: woman-leg-run .38s ease-in-out infinite alternate; }
 .woman-leg-b { animation-delay: -.19s; }

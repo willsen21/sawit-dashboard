@@ -26,50 +26,24 @@ export default function DashboardScene() {
       </g>
 
       <g className="dashboard-woman dashboard-woman-one" transform="translate(650 331)">
-        <g className="woman-chasing">
-          <g className="woman-run-arms" fill="none" stroke="#F1B48F" strokeWidth="5" strokeLinecap="round"><path d="M-2 27 Q-17 34 -20 45"/><path d="M4 27 Q17 17 21 7"/></g>
-          <path d="M-4 23 Q0 19 5 23 L10 43 Q2 49 -7 43Z" fill="#E8A37E"/>
-          <circle cx="1" cy="10" r="8" fill="#D99B78"/><path d="M-7 10 Q-8 -1 1 0 Q10 0 10 11 L7 7 Q1 3 -5 8Z" fill="#342820"/>
-          <g className="woman-run-legs" fill="none" stroke="#D7D8C6" strokeWidth="5" strokeLinecap="round"><path className="woman-leg-a" d="M-3 43 Q-12 53 -18 60"/><path className="woman-leg-b" d="M5 43 Q14 52 19 58"/></g>
-          <path d="M-17 61h-6M18 59h7" stroke="#B9C58E" strokeWidth="4" strokeLinecap="round"/>
-        </g>
-        <g className="woman-tired">
-          <circle cx="1" cy="10" r="8" fill="#D99B78"/><path d="M-7 10 Q-8 -1 1 0 Q10 0 10 11 L7 7 Q1 3 -5 8Z" fill="#342820"/>
-          <path d="M-4 23 Q0 21 5 24 L10 40 Q3 44 -5 39Z" fill="#E8A37E"/>
-          <path d="M-4 27 Q-10 35 -11 44M6 29 Q12 36 15 44" fill="none" stroke="#D99B78" strokeWidth="4" strokeLinecap="round"/>
-          <path d="M-5 40 Q-12 48 -17 55M7 40 Q13 48 20 53" fill="none" stroke="#D7D8C6" strokeWidth="5" strokeLinecap="round"/>
-        </g>
-        <g className="woman-resting">
-          <path d="M-14 63h46" stroke="#B88E5B" strokeWidth="5" strokeLinecap="round"/>
-          <circle cx="1" cy="10" r="8" fill="#D99B78"/><path d="M-7 10 Q-8 -1 1 0 Q10 0 10 11 L7 7 Q1 3 -5 8Z" fill="#342820"/>
-          <path d="M-4 23 Q1 20 6 24 L12 40 Q5 47 -4 43 L-10 34Z" fill="#E8A37E"/>
-          <path d="M-4 27 Q-13 33 -10 40M6 28 Q13 33 15 39" fill="none" stroke="#D99B78" strokeWidth="4" strokeLinecap="round"/>
-          <path d="M-2 43 Q-8 50 -2 53 L12 53 Q18 53 16 49 L7 42Z" fill="#D7D8C6"/>
-          <path d="M4 51 Q13 55 19 53" fill="none" stroke="#D7D8C6" strokeWidth="5" strokeLinecap="round"/>
+        <g className="woman-chasing woman-small">
+          <g className="woman-run-arms" fill="none" stroke="#D99B78" strokeWidth="4" strokeLinecap="round"><path d="M-3 28 Q-14 32 -17 42"/><path d="M5 28 Q15 22 18 13"/></g>
+          <path d="M-8 23 Q0 19 8 23 L10 39 Q1 44 -9 39Z" fill="#E78E79"/>
+          <circle cx="0" cy="11" r="11" fill="#D99B78"/><path d="M-11 11 Q-12 -2 0 -2 Q12 -1 11 13 L7 7 Q0 3 -7 9Z" fill="#342820"/><circle cx="-10" cy="2" r="4" fill="#342820"/><path d="M-4 12h1M4 12h1" stroke="#382820" strokeWidth="2.5" strokeLinecap="round"/><path d="M-2 17q2 2 4 0" fill="none" stroke="#9B5F53" strokeWidth="1.5" strokeLinecap="round"/>
+          <g className="woman-run-legs" fill="none" stroke="#F0D9B4" strokeWidth="4" strokeLinecap="round"><path className="woman-leg-a" d="M-4 39 Q-12 47 -17 54"/><path className="woman-leg-b" d="M5 39 Q13 47 17 53"/></g>
+          <path d="M-17 55h-5M16 54h5" stroke="#D99B78" strokeWidth="3.5" strokeLinecap="round"/>
+          <path d="M-8 28h16" stroke="#F5C66F" strokeWidth="2.5" strokeLinecap="round"/>
         </g>
       </g>
 
       <g className="dashboard-woman dashboard-woman-two" transform="translate(704 337)">
-        <g className="woman-chasing">
-          <g className="woman-run-arms" fill="none" stroke="#B98160" strokeWidth="5" strokeLinecap="round"><path d="M-3 27 Q-16 18 -21 8"/><path d="M5 27 Q18 34 20 44"/></g>
-          <path d="M-5 23 Q0 19 5 23 L11 43 Q2 48 -7 43Z" fill="#83A78A"/>
-          <circle cx="1" cy="10" r="8" fill="#C68B6C"/><path d="M-7 10 Q-7 0 2 0 Q11 0 9 12 Q7 5 2 6 L-5 12Z" fill="#25241E"/>
-          <g className="woman-run-legs" fill="none" stroke="#E4D8BD" strokeWidth="5" strokeLinecap="round"><path className="woman-leg-a" d="M-3 43 Q-13 50 -20 56"/><path className="woman-leg-b" d="M5 43 Q11 52 17 62"/></g>
-          <path d="M-20 57h-6M16 63h7" stroke="#C9A86B" strokeWidth="4" strokeLinecap="round"/>
-        </g>
-        <g className="woman-tired">
-          <circle cx="1" cy="10" r="8" fill="#C68B6C"/><path d="M-7 10 Q-7 0 2 0 Q11 0 9 12 Q7 5 2 6 L-5 12Z" fill="#25241E"/>
-          <path d="M-5 23 Q0 20 5 24 L10 40 Q3 44 -6 39Z" fill="#83A78A"/>
-          <path d="M-5 28 Q-12 35 -12 44M6 29 Q13 36 15 44" fill="none" stroke="#C68B6C" strokeWidth="4" strokeLinecap="round"/>
-          <path d="M-5 40 Q-12 48 -18 53M7 40 Q14 48 20 56" fill="none" stroke="#E4D8BD" strokeWidth="5" strokeLinecap="round"/>
-        </g>
-        <g className="woman-resting">
-          <path d="M-14 63h46" stroke="#B88E5B" strokeWidth="5" strokeLinecap="round"/>
-          <circle cx="1" cy="10" r="8" fill="#C68B6C"/><path d="M-7 10 Q-7 0 2 0 Q11 0 9 12 Q7 5 2 6 L-5 12Z" fill="#25241E"/>
-          <path d="M-5 23 Q0 19 5 23 L12 40 Q4 47 -5 43 L-11 34Z" fill="#83A78A"/>
-          <path d="M-5 27 Q-13 32 -10 40M6 28 Q13 32 15 39" fill="none" stroke="#C68B6C" strokeWidth="4" strokeLinecap="round"/>
-          <path d="M-2 43 Q-8 50 -2 53 L12 53 Q18 53 16 49 L7 42Z" fill="#E4D8BD"/>
-          <path d="M4 51 Q13 55 19 53" fill="none" stroke="#E4D8BD" strokeWidth="5" strokeLinecap="round"/>
+        <g className="woman-chasing woman-small">
+          <g className="woman-run-arms" fill="none" stroke="#C68B6C" strokeWidth="4" strokeLinecap="round"><path d="M-3 28 Q-14 23 -18 14"/><path d="M5 28 Q15 34 17 43"/></g>
+          <path d="M-8 23 Q0 19 8 23 L10 39 Q1 44 -9 39Z" fill="#82A98D"/>
+          <circle cx="0" cy="11" r="11" fill="#C68B6C"/><path d="M-11 11 Q-12 -1 0 -2 Q12 -1 11 13 L7 7 Q0 3 -7 9Z" fill="#25241E"/><path d="M-9 4q8-10 17 0" fill="none" stroke="#F2C76D" strokeWidth="3" strokeLinecap="round"/><path d="M-4 12h1M4 12h1" stroke="#382820" strokeWidth="2.5" strokeLinecap="round"/><path d="M-2 17q2 2 4 0" fill="none" stroke="#8F594A" strokeWidth="1.5" strokeLinecap="round"/>
+          <g className="woman-run-legs" fill="none" stroke="#E6DFCE" strokeWidth="4" strokeLinecap="round"><path className="woman-leg-a" d="M-4 39 Q-13 46 -18 52"/><path className="woman-leg-b" d="M5 39 Q12 48 17 56"/></g>
+          <path d="M-18 53h-5M16 57h5" stroke="#C68B6C" strokeWidth="3.5" strokeLinecap="round"/>
+          <path d="M-8 28h16" stroke="#B9D6A8" strokeWidth="2.5" strokeLinecap="round"/>
         </g>
       </g>
 

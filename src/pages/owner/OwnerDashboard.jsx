@@ -5,6 +5,7 @@ import { ArrowRight, ArrowUpRight, CalendarDays, Clock3, Leaf, Package, ShieldCh
 import { useData } from '../../context/DataContext'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
+import DashboardScene from '../../components/DashboardScene'
 import { addDays, formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKey } from '../../lib/dateUtils'
 import { STONE_TYPES, canonicalStoneType } from '../../lib/stoneUtils'
 import { SHOW_FRUIT_PURCHASES } from '../../config/features'
@@ -83,42 +84,6 @@ export default function OwnerDashboard() {
   </div>
 }
 function greetingForHour(hour) { return hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 18 ? 'Selamat sore' : 'Selamat malam' }
-function DashboardScene() {
-  return <div className="dashboard-scene pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-    <svg className="dashboard-palms absolute inset-y-0 right-0 h-full w-[78%]" viewBox="0 0 1200 440" preserveAspectRatio="xMidYMax slice">
-      <defs><linearGradient id="palmLeaf" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#A7C58C" stopOpacity=".48"/><stop offset="1" stopColor="#76A17C" stopOpacity=".1"/></linearGradient></defs>
-      <path d="M0 408 C220 385 350 425 570 403 S940 385 1200 410 V440 H0Z" fill="#071A13" fillOpacity=".55"/>
-      <path d="M0 416 H1200" stroke="#D8BB75" strokeOpacity=".16" strokeWidth="2"/>
-      <path d="M30 425 H1170" stroke="#F4E5B8" strokeOpacity=".14" strokeWidth="2" strokeDasharray="26 24"/>
-      <g className="dashboard-palm">
-        <path d="M874 413 Q914 300 900 150" fill="none" stroke="#C9A86B" strokeOpacity=".52" strokeWidth="13" strokeLinecap="round"/>
-        <g fill="none" stroke="url(#palmLeaf)" strokeWidth="8" strokeLinecap="round">
-          <path d="M900 151 Q824 95 758 105 Q819 127 875 163"/><path d="M900 151 Q828 136 775 158 Q844 163 887 168"/>
-          <path d="M900 151 Q849 73 795 52 Q831 96 887 158"/><path d="M900 151 Q890 70 862 34 Q867 92 894 158"/>
-          <path d="M900 151 Q923 68 966 31 Q946 95 907 159"/><path d="M900 151 Q977 84 1044 91 Q987 119 911 163"/>
-          <path d="M900 151 Q1001 131 1061 159 Q1002 165 914 169"/>
-        </g>
-        <g className="dashboard-fruit" fill="#D99A43"><circle cx="910" cy="165" r="7"/><circle cx="920" cy="172" r="7"/><circle cx="908" cy="179" r="7"/><circle cx="919" cy="186" r="7"/></g>
-      </g>
-      <g className="dashboard-palm dashboard-palm-small" opacity=".62">
-        <path d="M1090 415 Q1107 338 1096 248" fill="none" stroke="#C9A86B" strokeOpacity=".48" strokeWidth="9" strokeLinecap="round"/>
-        <g fill="none" stroke="url(#palmLeaf)" strokeWidth="6" strokeLinecap="round">
-          <path d="M1096 249 Q1046 212 1002 220 Q1040 239 1084 257"/><path d="M1096 249 Q1068 195 1038 178 Q1053 218 1091 256"/>
-          <path d="M1096 249 Q1110 193 1142 173 Q1127 217 1101 256"/><path d="M1096 249 Q1151 214 1190 223 Q1155 239 1104 258"/>
-        </g>
-      </g>
-      <circle className="dashboard-firefly dashboard-firefly-one" cx="775" cy="245" r="3" fill="#F2CC70"/><circle className="dashboard-firefly dashboard-firefly-two" cx="1080" cy="300" r="2.5" fill="#A7E4B8"/><circle className="dashboard-firefly dashboard-firefly-three" cx="710" cy="315" r="2" fill="#F2CC70"/>
-    </svg>
-    <svg className="dashboard-truck absolute" viewBox="0 0 120 58">
-      <g>
-        <rect x="8" y="13" width="55" height="28" rx="4" fill="#D6A14B"/><path d="M14 19h43M14 26h43M14 33h43" stroke="#F5D991" strokeWidth="2" strokeOpacity=".78"/>
-        <path d="M63 24h23l15 12v5H63z" fill="#E8B65D"/><path d="M78 27h7l10 9H78z" fill="#C6E4D8"/>
-        <rect x="67" y="38" width="34" height="4" rx="2" fill="#F3D486"/><circle cx="30" cy="44" r="8" fill="#10271E"/><circle cx="30" cy="44" r="3.5" fill="#DDE3D8"/><circle cx="83" cy="44" r="8" fill="#10271E"/><circle cx="83" cy="44" r="3.5" fill="#DDE3D8"/>
-        <path d="M5 43h103" stroke="#F7E7B5" strokeOpacity=".38" strokeWidth="2"/>
-      </g>
-    </svg>
-  </div>
-}
 function ChartBase() { return <CartesianGrid strokeDasharray="3 3" stroke="#3A6B5826" vertical /> }
 function ChartCard({ title, range: activeRange, setRange, data, type, children }) { const values = data.map(item => item[type]); const max = niceMax(Math.max(...values, 0)); const yLabels = [max, max * .75, max * .5, max * .25, 0]; const every = Math.ceil(data.length / 6); return <div className="card p-5"><div className="flex flex-wrap justify-between gap-3 mb-4"><h2 className="text-sm font-medium text-ink-700">{title}</h2><div className="flex rounded-md border border-ink-900/10 p-0.5">{RANGES.map((range) => <button key={range.value} type="button" onClick={() => setRange(range.value)} className={`px-2 py-1 text-xs rounded ${activeRange === range.value ? 'bg-plantation-900 text-paper-50' : 'text-ink-500'}`}>{range.label}</button>)}</div></div><div className="chart-shell"><div className="chart-y-labels">{yLabels.map((value, index) => <span key={index}>{type === 'total' ? formatCompactRupiah(value) : kgAxis(value)}</span>)}</div><div className="chart-surface"><ResponsiveContainer width="100%" height={220}>{children}</ResponsiveContainer></div><div className="chart-x-labels" style={{ '--chart-points': data.length }}>{data.map((item, index) => <span key={item.key}>{index % every === 0 || index === data.length - 1 ? <><b>{item.label.split(' ').slice(0, 2).join(' ')}</b><small>{item.label.split(' ')[2]}</small></> : null}</span>)}</div></div></div> }
 function niceMax(value) { if (!value) return 1; const power = 10 ** Math.floor(Math.log10(value)); return Math.ceil(value / power / 5) * 5 * power }

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { CalendarDays, CheckCircle2, Leaf, Lock, Plus, Unlock, Wallet, X, ShieldCheck } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Lock, Plus, Unlock, Wallet, X, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
 import Modal from '../../components/Modal'
+import DashboardScene from '../../components/DashboardScene'
 
 const parseAmount = (value) => Number(String(value || '').replaceAll('.', '').replace(',', '.')) || 0
 const formatNumericInput = (value) => {
@@ -102,10 +103,8 @@ export default function AdminDashboard() {
 
   return <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-9">
     <section className="dashboard-hero relative mb-6 overflow-hidden rounded-[1.75rem] bg-plantation-950 px-5 py-6 text-white shadow-soft sm:px-8 sm:py-8">
-      <div className="dashboard-hero-glow pointer-events-none absolute -right-16 -top-36 h-96 w-96 rounded-full border border-white/10" />
-      <div className="dashboard-hero-glow dashboard-hero-glow-delay pointer-events-none absolute -right-2 -top-24 h-72 w-72 rounded-full border border-gold-300/20" />
-      <Leaf className="pointer-events-none absolute -right-4 bottom-[-3.5rem] h-56 w-56 rotate-[-25deg] text-white/[0.045]" strokeWidth={1} aria-hidden="true" />
-      <div className="relative flex flex-wrap items-end justify-between gap-6">
+      <DashboardScene />
+      <div className="relative z-10 flex flex-wrap items-end justify-between gap-6 pb-12 sm:pb-14">
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs text-white/80"><CalendarDays size={14} className="text-gold-300" />{formatShortDate(date)}</span>
           <p className="mt-5 text-xs font-semibold uppercase tracking-[.2em] text-gold-300">Ruang operasional admin</p>

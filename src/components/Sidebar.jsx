@@ -1,6 +1,6 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout, Mountain, KeyRound } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Users, LogOut, Wallet, PanelLeftClose, PanelLeftOpen, ReceiptText, ShieldCheck, CalendarDays, Sprout, Mountain, KeyRound, Droplets } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { SHOW_FRUIT_PURCHASES } from '../config/features'
 import ChangePasswordModal from './ChangePasswordModal'
@@ -19,6 +19,7 @@ const OWNER_LINKS = [
   { to: `/owner/laporan/${defaultPurchaseKind}`, label: 'Laporan', icon: ClipboardList, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/owner/laporan/buah', label: 'Buah' }] : []), { to: '/owner/laporan/brondolan', label: 'Brondolan' }, { to: '/owner/laporan/pinjaman', label: 'Pinjaman Kas' }] },
   { to: '/owner/operasional', label: 'Operasional Kebun', icon: CalendarDays },
   { to: '/owner/kebun-pribadi', label: 'Kebun', icon: Sprout },
+  { to: '/owner/getah', label: 'Getah', icon: Droplets },
   { to: '/owner/kontrol-transaksi', label: 'Kontrol Transaksi', icon: ShieldCheck },
   { to: '/owner/admin', label: 'Kelola Admin', icon: Users },
 ]

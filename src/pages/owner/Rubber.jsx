@@ -1,0 +1,175 @@
+import React, { useMemo, useState } from 'react'
+import { CalendarDays, Check, CircleDollarSign, Droplets, Eye, Pencil, Plus, Scale, Trash2, X } from 'lucide-react'
+import { useData } from '../../context/DataContext'
+import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
+import { formatKgInput, parseKgInput } from '../../lib/kgUtils'
+import { formatRupiahInput, parseRupiahInput } from '../../lib/currencyInput'
+import Modal from '../../components/Modal'
+
+const blankForm = () => ({ name: '', date: todayKey(), bags: [''], pricePerKg: '' })
+const kg = (value) => `${Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })} kg`
+const bagWeight = (bags) => bags.reduce((total, value) => total + parseKgInput(value), 0)
+const calculate = (weight, price) => {
+  const payableWeight = Math.floor(weight * 0.9 + 0.5)
+  const total = payableWeight * price
+  return { payableWeight, deduction: weight - payableWeight, total, half: Math.round(total / 2) }
+}
+
+export default function Rubber() {
+  const { rubberRecords, addRubberRecord, updateRubberRecord, deleteRubberRecord } = useData()
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(blankForm)
+  const [formError, setFormError] = useState('')
+  const [viewRecord, setViewRecord] = useState(null)
+  const [notice, setNotice] = useState('')
+
+  const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
+  const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
+  const totalHalf = records.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
+  const todayRecords = records.filter((item) => item.date === todayKey())
+  const previewWeight = bagWeight(form.bags)
+  const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
+
+  function openCreate() {
+    setEditingId(null)
+    setForm(blankForm())
+    setFormError('')
+    setNotice('')
+    setFormOpen(true)
+  }
+
+  function openEdit(record) {
+    setEditingId(record.id)
+    setForm({ name: record.name, date: record.date, bags: record.bags.map((value) => formatKgInput(String(value).replace('.', ','))), pricePerKg: formatRupiahInput(record.pricePerKg) })
+    setFormError('')
+    setNotice('')
+    setFormOpen(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function save(event) {
+    event.preventDefault()
+    setFormError('')
+    const result = editingId ? updateRubberRecord(editingId, form) : addRubberRecord(form)
+    if (!result.ok) return setFormError(result.message)
+    setFormOpen(false)
+    setForm(blankForm())
+    setEditingId(null)
+    setNotice(editingId ? 'Catatan getah berhasil diperbarui.' : 'Catatan getah berhasil disimpan.')
+  }
+
+  function remove(record) {
+    if (!window.confirm(`Hapus catatan getah ${record.name} tanggal ${formatShortDate(record.date)}?`)) return
+    const result = deleteRubberRecord(record.id)
+    if (!result.ok) return setNotice(result.message)
+    if (viewRecord?.id === record.id) setViewRecord(null)
+    setNotice('Catatan getah berhasil dihapus.')
+  }
+
+  function setBag(index, value) {
+    setForm((current) => ({ ...current, bags: current.bags.map((bag, bagIndex) => bagIndex === index ? formatKgInput(value) : bag) }))
+  }
+
+  return <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-600">Owner workspace</p>
+        <h1 className="mt-1 font-display text-3xl text-plantation-950">Getah</h1>
+        <p className="mt-2 max-w-2xl text-sm text-ink-500">Catat berat tiap karung, potongan 10%, harga, dan pembagian hasil dengan hitungan otomatis.</p>
+      </div>
+      {!formOpen && <button type="button" className="btn-primary" onClick={openCreate}><Plus size={17} /> Catat getah</button>}
+    </header>
+
+    {notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-plantation-700/15 bg-plantation-700/5 px-4 py-3 text-sm text-plantation-900"><span className="flex items-center gap-2"><Check size={16} />{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Tutup pemberitahuan"><X size={16} /></button></div>}
+
+    <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <SummaryCard icon={<Droplets size={18} />} label="Jumlah catatan" value={records.length.toLocaleString('id-ID')} detail="Semua catatan getah" />
+      <SummaryCard icon={<Scale size={18} />} label="Berat total" value={kg(totalWeight)} detail="Akumulasi semua karung" />
+      <SummaryCard icon={<CalendarDays size={18} />} label="Catatan hari ini" value={todayRecords.length.toLocaleString('id-ID')} detail={kg(todayRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0))} />
+      <SummaryCard icon={<CircleDollarSign size={18} />} label="Bagian ½ hasil" value={formatRupiah(totalHalf)} detail="Akumulasi semua catatan" accent />
+    </section>
+
+    {formOpen && <section className="card mb-6 overflow-hidden">
+      <div className="flex items-start justify-between gap-4 border-b border-ink-900/8 px-5 py-4 sm:px-6">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-600">{editingId ? 'Perbarui catatan' : 'Catatan baru'}</p><h2 className="mt-1 font-display text-xl text-plantation-950">Data getah</h2></div>
+        <button type="button" className="btn-ghost !min-h-9 !px-3 !py-2 text-xs" onClick={() => { setFormOpen(false); setFormError('') }}><X size={15} /> Tutup</button>
+      </div>
+      <form onSubmit={save} className="space-y-5 p-5 sm:p-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Nama *"><input className="input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Contoh: Ani" autoFocus required /></Field>
+          <Field label="Tanggal *"><input type="date" className="input" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} required /></Field>
+        </div>
+
+        <div className="rounded-2xl border border-plantation-900/10 bg-paper-50/70 p-4 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div><h3 className="font-semibold text-plantation-950">Berat per karung</h3><p className="mt-1 text-xs text-ink-500">Masukkan berat satu per satu; jumlahnya dihitung otomatis.</p></div>
+            <button type="button" className="btn-ghost !min-h-9 !px-3 !py-2 text-xs" onClick={() => setForm((current) => ({ ...current, bags: [...current.bags, ''] }))}><Plus size={15} /> Tambah karung</button>
+          </div>
+          <div className="space-y-3">
+            {form.bags.map((weight, index) => <div key={index} className="grid items-end gap-2 sm:grid-cols-[1fr_auto]">
+              <Field label={`Berat karung ${index + 1} (kg) *`}><input inputMode="decimal" className="input" value={weight} onChange={(event) => setBag(index, event.target.value)} placeholder="Contoh: 25,5" required /></Field>
+              <button type="button" disabled={form.bags.length === 1} className="mb-1 inline-flex h-11 w-11 items-center justify-center rounded-xl text-ink-400 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-30" onClick={() => setForm((current) => ({ ...current, bags: current.bags.filter((_, bagIndex) => bagIndex !== index) }))} aria-label={`Hapus berat karung ${index + 1}`} title="Hapus karung"><Trash2 size={17} /></button>
+            </div>)}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink-900/8 pt-4 text-sm"><span className="text-ink-500">Jumlah berat semua karung</span><strong className="font-display text-xl text-plantation-950">{kg(previewWeight)}</strong></div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
+          <Field label="Harga per kg (Rp) *"><input inputMode="numeric" className="input" value={form.pricePerKg} onChange={(event) => setForm({ ...form, pricePerKg: formatRupiahInput(event.target.value) })} placeholder="Contoh: 12.000" required /><p className="mt-1 text-xs text-ink-500">Harga dimasukkan manual untuk catatan ini.</p></Field>
+          <div className="rounded-2xl bg-plantation-950 px-4 py-4 text-white sm:px-5">
+            <p className="text-xs font-medium text-white/60">Pratinjau perhitungan</p>
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <CalcLine label="Berat setelah potongan 10%" value={kg(preview.payableWeight)} />
+              <CalcLine label="Harga per kg" value={formatRupiah(parseRupiahInput(form.pricePerKg))} />
+              <CalcLine label="Total sebelum dibagi" value={formatRupiah(preview.total)} />
+              <CalcLine label="Hasil dibagi dua" value={formatRupiah(preview.half)} highlight />
+            </div>
+            <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-white/55">Berat gabungan × 90%, dibulatkan ke kg penuh (desimal 0,5 ke atas), lalu dikali harga dan dibagi dua.</p>
+          </div>
+        </div>
+
+        {formError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">{formError}</p>}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-ink-900/8 pt-4"><button type="button" className="btn-ghost" onClick={() => { setFormOpen(false); setFormError('') }}>Batal</button><button type="submit" className="btn-primary"><Check size={16} /> {editingId ? 'Simpan perubahan' : 'Simpan catatan'}</button></div>
+      </form>
+    </section>}
+
+    <section className="card overflow-hidden">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-900/8 px-5 py-4 sm:px-6">
+        <div><h2 className="font-display text-xl text-plantation-950">Riwayat getah</h2><p className="mt-1 text-xs text-ink-500">Rincian berat, potongan, nilai hasil, dan bagian setengah.</p></div>
+        <span className="rounded-full bg-plantation-700/8 px-3 py-1.5 text-xs font-medium text-plantation-800">{records.length} catatan</span>
+      </div>
+      {records.length === 0 ? <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-plantation-700/8 text-plantation-700"><Droplets size={22} /></span><h3 className="font-display text-lg text-plantation-950">Belum ada catatan getah</h3><p className="mt-1 max-w-sm text-sm text-ink-500">Mulai dengan mencatat nama, berat tiap karung, dan harga per kg.</p><button type="button" className="btn-primary mt-4" onClick={openCreate}><Plus size={16} /> Catat getah pertama</button></div> : <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[1060px]">
+        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal / nama</th><th className="table-head">Berat per karung</th><th className="table-head text-right">Berat total</th><th className="table-head text-right">Setelah -10%</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total hasil</th><th className="table-head text-right">Bagian ½</th><th className="table-head">Aksi</th></tr></thead>
+        <tbody>{records.map((record, index) => <tr key={record.id}>
+          <td className="table-cell text-ink-500">{index + 1}</td>
+          <td className="table-cell"><p className="font-medium text-ink-800">{record.name}</p><p className="mt-1 text-xs text-ink-500">{formatShortDate(record.date)}</p></td>
+          <td className="table-cell text-xs text-ink-600">{record.bags.map((weight, bagIndex) => <span key={bagIndex} className="mr-1.5 inline-block whitespace-nowrap rounded-full bg-paper-100 px-2 py-1">{bagIndex + 1}: {kg(weight)}</span>)}</td>
+          <td className="table-cell text-right whitespace-nowrap">{kg(record.totalWeightKg)}</td>
+          <td className="table-cell text-right whitespace-nowrap"><span className="font-medium text-plantation-800">{kg(record.payableWeightKg)}</span><span className="mt-1 block text-[11px] text-ink-400">potongan {kg(record.deductionKg)}</span></td>
+          <td className="table-cell text-right whitespace-nowrap">{formatRupiah(record.pricePerKg)}</td>
+          <td className="table-cell text-right font-medium whitespace-nowrap">{formatRupiah(record.totalAmount)}</td>
+          <td className="table-cell text-right font-semibold text-plantation-900 whitespace-nowrap">{formatRupiah(record.splitAmount)}</td>
+          <td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => setViewRecord(record)} className="rounded-lg p-2 text-plantation-800 hover:bg-plantation-50" aria-label={`Lihat catatan getah ${record.name}`} title="Lihat detail"><Eye size={16} /></button><button type="button" onClick={() => openEdit(record)} className="rounded-lg p-2 text-ink-500 hover:bg-gold-400/10 hover:text-gold-600" aria-label={`Edit catatan getah ${record.name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => remove(record)} className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label={`Hapus catatan getah ${record.name}`} title="Hapus"><Trash2 size={16} /></button></div></td>
+        </tr>)}</tbody>
+        <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total · {records.length} catatan</td><td className="table-cell text-right font-semibold">{kg(totalWeight)}</td><td colSpan={3} className="table-cell text-right text-xs text-ink-500">Total bagian setengah</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(totalHalf)}</td><td className="table-cell" /></tr></tfoot>
+      </table></div>}
+    </section>
+
+    <Modal open={Boolean(viewRecord)} onClose={() => setViewRecord(null)} title="Detail catatan getah">
+      {viewRecord && <div className="space-y-4">
+        <div className="rounded-2xl bg-plantation-950 p-4 text-white"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-300">{viewRecord.name}</p><p className="mt-1 font-display text-2xl">Getah · {formatShortDate(viewRecord.date)}</p><p className="mt-2 text-sm text-white/65">{viewRecord.bags.length} karung tercatat</p></div>
+        <div className="rounded-xl border border-ink-900/10 p-4"><h3 className="mb-3 text-sm font-semibold text-plantation-950">Rincian berat karung</h3><div className="space-y-2">{viewRecord.bags.map((weight, index) => <CalcLine key={index} label={`Karung ${index + 1}`} value={kg(weight)} dark />)}</div><div className="mt-3 border-t border-ink-900/8 pt-3"><CalcLine label="Jumlah berat" value={kg(viewRecord.totalWeightKg)} dark strong /></div></div>
+        <div className="rounded-xl bg-paper-100 p-4"><div className="space-y-2"><CalcLine label="Potongan 10% · hasil pembulatan" value={`− ${kg(viewRecord.deductionKg)}`} dark /><CalcLine label="Berat yang dibayar" value={kg(viewRecord.payableWeightKg)} dark /><CalcLine label={`Harga × ${kg(viewRecord.payableWeightKg)}`} value={`${formatRupiah(viewRecord.pricePerKg)}/kg`} dark /><CalcLine label="Total hasil" value={formatRupiah(viewRecord.totalAmount)} dark strong /><div className="mt-3 border-t border-ink-900/10 pt-3"><CalcLine label="Hasil dibagi dua" value={formatRupiah(viewRecord.splitAmount)} dark strong /></div></div></div>
+        <div className="flex justify-end"><button type="button" className="btn-primary" onClick={() => { const record = viewRecord; setViewRecord(null); openEdit(record) }}><Pencil size={15} /> Edit catatan</button></div>
+      </div>}
+    </Modal>
+  </div>
+}
+
+function SummaryCard({ icon, label, value, detail, accent = false }) {
+  return <article className="card relative overflow-hidden p-4 sm:p-5"><span className={`absolute inset-x-0 top-0 h-1 ${accent ? 'bg-gold-500' : 'bg-plantation-700'}`} /><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-plantation-700/8 text-plantation-800">{icon}</span><div className="min-w-0"><p className="text-xs text-ink-500">{label}</p><p className="mt-1 truncate font-display text-xl text-plantation-950">{value}</p><p className="mt-1 text-[11px] text-ink-400">{detail}</p></div></div></article>
+}
+
+function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }
+function CalcLine({ label, value, dark = false, strong = false, highlight = false }) { return <div className="flex items-center justify-between gap-3"><span className={`text-xs ${dark ? 'text-ink-500' : 'text-white/65'}`}>{label}</span><span className={`${strong || highlight ? 'font-semibold' : 'font-medium'} ${dark ? 'text-plantation-950' : highlight ? 'text-gold-300' : 'text-white'} text-right text-sm`}>{value}</span></div> }

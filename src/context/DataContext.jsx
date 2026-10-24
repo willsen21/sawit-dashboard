@@ -11,13 +11,13 @@ import { calculateFarmHarvest } from '../lib/farmCalculations'
 const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
-const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'stoneStock', 'stoneSales']
+const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'stoneStock', 'stoneSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
   // Stone inventory is an ongoing balance; retain historical stock and sale entries.
-  if (collection === 'stoneStock' || collection === 'stoneSales') return item
+  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'rubberRecords') return item
   if (collection === 'privateFarms') {
     return {
       ...item,
@@ -55,6 +55,7 @@ export function DataProvider({ children }) {
   const [operationalExpenses, setOperationalExpenses] = useState(() => loadItem('operationalExpenses', []))
   const [payrolls, setPayrolls] = useState(() => loadItem('payrolls', []))
   const [privateFarms, setPrivateFarms] = useState(() => loadItem('privateFarms', []))
+  const [rubberRecords, setRubberRecords] = useState(() => loadItem('rubberRecords', []))
   const [stoneStock, setStoneStock] = useState(() => loadItem('stoneStock', []))
   const [stoneSales, setStoneSales] = useState(() => loadItem('stoneSales', []))
   const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
@@ -65,9 +66,9 @@ export function DataProvider({ children }) {
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
     cancellationRequests: setCancellationRequests, cashUnlockRequests: setCashUnlockRequests,
     harvestSchedules: setHarvestSchedules, operationalExpenses: setOperationalExpenses,
-    payrolls: setPayrolls, privateFarms: setPrivateFarms, stoneStock: setStoneStock, stoneSales: setStoneSales,
+    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, stoneStock: setStoneStock, stoneSales: setStoneSales,
   }
-  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, stoneStock, stoneSales }
+  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, stoneStock, stoneSales }
   const collectionValuesRef = useRef(collectionValues)
   collectionValuesRef.current = collectionValues
 
@@ -107,6 +108,7 @@ useLayoutEffect(() => {
 useLayoutEffect(() => {
   saveItem('privateFarms', privateFarms)
 }, [privateFarms])
+useLayoutEffect(() => { saveItem('rubberRecords', rubberRecords) }, [rubberRecords])
 useLayoutEffect(() => { saveItem('stoneStock', stoneStock) }, [stoneStock])
 useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
@@ -152,7 +154,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         for (const name of COLLECTION_NAMES) {
           // Keep the legacy migration one-time for general records, but retry
           // local stone inventory every owner login until it reaches the cloud.
-          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales') continue
+          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'rubberRecords') continue
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
           const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
@@ -256,6 +258,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
   useEffect(() => { syncCollectionToCloud('operationalExpenses', operationalExpenses) }, [operationalExpenses, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('payrolls', payrolls) }, [payrolls, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('privateFarms', privateFarms) }, [privateFarms, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('rubberRecords', rubberRecords) }, [rubberRecords, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneStock', stoneStock) }, [stoneStock, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneSales', stoneSales) }, [stoneSales, cloudReady, currentUser?.id])
 
@@ -268,6 +271,49 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       detail,
       createdAt: new Date().toISOString(),
     }, ...prev])
+  }
+
+  function saveRubberRecord(recordData, recordId = null) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengelola catatan getah.' }
+    const name = String(recordData.name || '').trim()
+    const date = String(recordData.date || '')
+    const bags = (Array.isArray(recordData.bags) ? recordData.bags : []).map((weight) => parseKgInput(weight))
+    const pricePerKg = parseRupiahInput(recordData.pricePerKg)
+    if (!name || !date || !bags.length || bags.some((weight) => !Number.isFinite(weight) || weight <= 0) || !Number.isFinite(pricePerKg) || pricePerKg <= 0) {
+      return { ok: false, message: 'Nama, tanggal, berat setiap karung, dan harga per kg harus diisi dengan benar.' }
+    }
+    const totalWeightKg = bags.reduce((total, weight) => total + weight, 0)
+    // The 10% deduction is applied to the combined weight. Round to a whole
+    // payable kilogram; .5 and above rounds up, below .5 rounds down.
+    const payableWeightKg = Math.floor(totalWeightKg * 0.9 + 0.5)
+    const totalAmount = payableWeightKg * pricePerKg
+    const splitAmount = Math.round(totalAmount / 2)
+    const now = new Date().toISOString()
+    const existing = recordId ? rubberRecords.find((item) => item.id === recordId) : null
+    if (recordId && !existing) return { ok: false, message: 'Catatan getah tidak ditemukan.' }
+    const entry = {
+      ...existing,
+      id: recordId || `rubber-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name, date, bags, totalWeightKg, payableWeightKg,
+      deductionKg: totalWeightKg - payableWeightKg,
+      pricePerKg, totalAmount, splitAmount,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      ...(existing ? {} : { createdBy: currentUser.id }),
+    }
+    setRubberRecords((previous) => existing
+      ? previous.map((item) => item.id === recordId ? entry : item).sort((a, b) => b.date.localeCompare(a.date))
+      : [entry, ...previous].sort((a, b) => b.date.localeCompare(a.date)))
+    return { ok: true, entry }
+  }
+
+  function addRubberRecord(recordData) { return saveRubberRecord(recordData) }
+  function updateRubberRecord(id, recordData) { return saveRubberRecord(recordData, id) }
+  function deleteRubberRecord(id) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus catatan getah.' }
+    if (!rubberRecords.some((item) => item.id === id)) return { ok: false, message: 'Catatan getah tidak ditemukan.' }
+    setRubberRecords((previous) => previous.filter((item) => item.id !== id))
+    return { ok: true }
   }
 
   function addStoneStock({ date, type, quantityKg, capitalCost, note = '', ownerId }) {
@@ -825,6 +871,10 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     markOperationalExpensePaid,
     payrolls,
     privateFarms,
+    rubberRecords,
+    addRubberRecord,
+    updateRubberRecord,
+    deleteRubberRecord,
     stoneStock,
     stoneSales,
     addStoneStock,

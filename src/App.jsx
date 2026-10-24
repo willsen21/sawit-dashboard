@@ -20,6 +20,7 @@ import Operations from './pages/owner/Operations'
 import PrivateFarms from './pages/owner/PrivateFarms'
 import StoneSales from './pages/admin/StoneSales'
 import Stones from './pages/owner/Stones'
+import Rubber from './pages/owner/Rubber'
 import { SHOW_FRUIT_PURCHASES } from './config/features'
 
 const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="batu" element={<Stones />} />
             <Route path="operasional" element={<Operations />} />
             <Route path="kebun-pribadi" element={<PrivateFarms />} />
+            <Route path="getah" element={<Rubber />} />
             <Route path="laporan" element={<Navigate to={`/owner/laporan/${defaultPurchaseKind}`} replace />} />
             <Route path="laporan/pinjaman" element={<CashLoanReport />} />
             <Route path="laporan/buah" element={SHOW_FRUIT_PURCHASES ? <Reports /> : <Navigate to="/owner/laporan/brondolan" replace />} />

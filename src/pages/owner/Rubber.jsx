@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react'
-import { CalendarDays, Check, CircleDollarSign, Droplets, Eye, Pencil, Plus, Scale, Trash2, X } from 'lucide-react'
+import { CalendarDays, Check, CircleDollarSign, Download, Droplets, Eye, FileSpreadsheet, FileText, Pencil, Plus, Scale, Trash2, X } from 'lucide-react'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { useData } from '../../context/DataContext'
 import { formatRupiah, formatShortDate, todayKey } from '../../lib/dateUtils'
 import { formatKgInput, parseKgInput } from '../../lib/kgUtils'
@@ -15,6 +17,77 @@ const calculate = (weight, price) => {
   return { payableWeight, deduction: weight - payableWeight, total, half: Math.round(total / 2) }
 }
 
+function exportCsv(records, range) {
+  const bagCount = Math.max(0, ...records.map((record) => record.bags.length))
+  const headers = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total hasil (Rp)', 'Bagian setengah (Rp)']
+  const rows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, record.splitAmount])
+  const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
+  const contents = '\uFEFF' + [headers, ...rows].map((row) => row.map(quote).join(';')).join('\r\n')
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8;' }))
+  link.href = url
+  link.download = `laporan-getah-${range[0]}_${range[1]}.csv`
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function exportPdf(records, range) {
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const totalWeight = records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0)
+  const totalNetWeight = records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0)
+  const totalHalf = records.reduce((sum, record) => sum + Number(record.splitAmount || 0), 0)
+  const width = pdf.internal.pageSize.getWidth()
+  pdf.setFillColor(22, 48, 42)
+  pdf.roundedRect(12, 11, width - 24, 34, 4, 4, 'F')
+  pdf.setFillColor(227, 177, 85)
+  pdf.roundedRect(12, 11, 3, 34, 1.5, 1.5, 'F')
+  pdf.setTextColor(255, 255, 255)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(17)
+  pdf.text('LAPORAN HASIL GETAH', 21, 24)
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(220, 233, 225)
+  pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}  ·  ${records.length} catatan`, 21, 34)
+  pdf.setTextColor(31, 42, 36)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(9)
+  pdf.text(`Berat total: ${kg(totalWeight)}     Berat bersih: ${kg(totalNetWeight)}     Akumulasi bagian ½: ${formatRupiah(totalHalf)}`, 14, 54)
+  autoTable(pdf, {
+    startY: 60,
+    head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan 10%', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian ½']],
+    body: records.map((record) => [
+      formatShortDate(record.date),
+      record.name,
+      record.bags.map((weight, index) => `${index + 1}: ${kg(weight)}`).join(' · '),
+      kg(record.totalWeightKg),
+      kg(record.deductionKg),
+      kg(record.payableWeightKg),
+      formatRupiah(record.pricePerKg),
+      formatRupiah(record.totalAmount),
+      formatRupiah(record.splitAmount),
+    ]),
+    foot: [['TOTAL', `${records.length} catatan`, '', kg(totalWeight), '', kg(totalNetWeight), '', '', formatRupiah(totalHalf)]],
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [245, 239, 227], textColor: [22, 48, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [251, 248, 242] },
+    columnStyles: { 2: { cellWidth: 47 }, 1: { cellWidth: 28 } },
+    margin: { left: 12, right: 12 },
+  })
+  const pages = pdf.getNumberOfPages()
+  for (let page = 1; page <= pages; page += 1) {
+    pdf.setPage(page)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(8)
+    pdf.setTextColor(115, 128, 119)
+    pdf.text('Kebun Kas · Rekap hasil getah', 12, pdf.internal.pageSize.getHeight() - 7)
+    pdf.text(`${page} / ${pages}`, width - 12, pdf.internal.pageSize.getHeight() - 7, { align: 'right' })
+  }
+  pdf.save(`laporan-getah-${range[0]}_${range[1]}.pdf`)
+}
+
 export default function Rubber() {
   const { rubberRecords, addRubberRecord, updateRubberRecord, deleteRubberRecord } = useData()
   const [formOpen, setFormOpen] = useState(false)
@@ -23,13 +96,20 @@ export default function Rubber() {
   const [formError, setFormError] = useState('')
   const [viewRecord, setViewRecord] = useState(null)
   const [notice, setNotice] = useState('')
+  const today = todayKey()
+  const [downloadRange, setDownloadRange] = useState([`${today.slice(0, 7)}-01`, today])
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
   const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
+  const totalNetWeight = records.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
   const totalHalf = records.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
   const todayRecords = records.filter((item) => item.date === todayKey())
   const previewWeight = bagWeight(form.bags)
   const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
+  const exportRecords = records.filter((record) => record.date >= downloadRange[0] && record.date <= downloadRange[1])
+  const exportTotalWeight = exportRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
+  const exportNetWeight = exportRecords.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
+  const exportHalf = exportRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
 
   function openCreate() {
     setEditingId(null)
@@ -83,11 +163,27 @@ export default function Rubber() {
 
     {notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-plantation-700/15 bg-plantation-700/5 px-4 py-3 text-sm text-plantation-900"><span className="flex items-center gap-2"><Check size={16} />{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Tutup pemberitahuan"><X size={16} /></button></div>}
 
-    <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <SummaryCard icon={<Droplets size={18} />} label="Jumlah catatan" value={records.length.toLocaleString('id-ID')} detail="Semua catatan getah" />
       <SummaryCard icon={<Scale size={18} />} label="Berat total" value={kg(totalWeight)} detail="Akumulasi semua karung" />
+      <SummaryCard icon={<Scale size={18} />} label="Berat bersih" value={kg(totalNetWeight)} detail="Sesudah potongan dan pembulatan" />
       <SummaryCard icon={<CalendarDays size={18} />} label="Catatan hari ini" value={todayRecords.length.toLocaleString('id-ID')} detail={kg(todayRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0))} />
       <SummaryCard icon={<CircleDollarSign size={18} />} label="Bagian ½ hasil" value={formatRupiah(totalHalf)} detail="Akumulasi semua catatan" accent />
+    </section>
+
+    <section className="card mb-6 overflow-hidden">
+      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Unduh rekap berdasarkan tanggal</h2><p className="mt-1 text-xs text-ink-500">Pilih rentang tanggal. Rekap memuat rincian setiap karung, berat bersih, harga, dan pembagian hasil.</p></div></div></div>
+      <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Dari tanggal"><input type="date" className="input" value={downloadRange[0]} max={downloadRange[1] || undefined} onChange={(event) => setDownloadRange([event.target.value, downloadRange[1]])} /></Field>
+          <Field label="Sampai tanggal"><input type="date" className="input" value={downloadRange[1]} min={downloadRange[0] || undefined} max={today} onChange={(event) => setDownloadRange([downloadRange[0], event.target.value])} /></Field>
+          <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([`${today.slice(0, 7)}-01`, today])}>Bulan ini</button><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([records.length ? records[records.length - 1].date : today, today])}>Semua catatan</button></div>
+        </div>
+        <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
+          <div className="text-left text-xs text-ink-500 lg:text-right"><p><b className="text-plantation-900">{exportRecords.length}</b> catatan · {kg(exportTotalWeight)} berat total</p><p className="mt-1">{kg(exportNetWeight)} berat bersih · {formatRupiah(exportHalf)} bagian ½</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportRecords.length || downloadRange[0] > downloadRange[1]} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, downloadRange)}><FileSpreadsheet size={16} /> CSV</button><button type="button" disabled={!exportRecords.length || downloadRange[0] > downloadRange[1]} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, downloadRange)}><FileText size={16} /> Unduh PDF</button></div>
+        </div>
+      </div>
     </section>
 
     {formOpen && <section className="card mb-6 overflow-hidden">
@@ -146,13 +242,13 @@ export default function Rubber() {
           <td className="table-cell"><p className="font-medium text-ink-800">{record.name}</p><p className="mt-1 text-xs text-ink-500">{formatShortDate(record.date)}</p></td>
           <td className="table-cell text-xs text-ink-600">{record.bags.map((weight, bagIndex) => <span key={bagIndex} className="mr-1.5 inline-block whitespace-nowrap rounded-full bg-paper-100 px-2 py-1">{bagIndex + 1}: {kg(weight)}</span>)}</td>
           <td className="table-cell text-right whitespace-nowrap">{kg(record.totalWeightKg)}</td>
-          <td className="table-cell text-right whitespace-nowrap"><span className="font-medium text-plantation-800">{kg(record.payableWeightKg)}</span><span className="mt-1 block text-[11px] text-ink-400">potongan {kg(record.deductionKg)}</span></td>
+          <td className="table-cell text-right whitespace-nowrap"><span className="font-medium text-plantation-800">{kg(record.payableWeightKg)}</span><span className="mt-1 block text-[11px] text-ink-400">bersih · potongan {kg(record.deductionKg)}</span></td>
           <td className="table-cell text-right whitespace-nowrap">{formatRupiah(record.pricePerKg)}</td>
           <td className="table-cell text-right font-medium whitespace-nowrap">{formatRupiah(record.totalAmount)}</td>
           <td className="table-cell text-right font-semibold text-plantation-900 whitespace-nowrap">{formatRupiah(record.splitAmount)}</td>
           <td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => setViewRecord(record)} className="rounded-lg p-2 text-plantation-800 hover:bg-plantation-50" aria-label={`Lihat catatan getah ${record.name}`} title="Lihat detail"><Eye size={16} /></button><button type="button" onClick={() => openEdit(record)} className="rounded-lg p-2 text-ink-500 hover:bg-gold-400/10 hover:text-gold-600" aria-label={`Edit catatan getah ${record.name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => remove(record)} className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label={`Hapus catatan getah ${record.name}`} title="Hapus"><Trash2 size={16} /></button></div></td>
         </tr>)}</tbody>
-        <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total · {records.length} catatan</td><td className="table-cell text-right font-semibold">{kg(totalWeight)}</td><td colSpan={3} className="table-cell text-right text-xs text-ink-500">Total bagian setengah</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(totalHalf)}</td><td className="table-cell" /></tr></tfoot>
+        <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total · {records.length} catatan</td><td className="table-cell text-right font-semibold">{kg(totalWeight)}</td><td className="table-cell text-right font-semibold text-plantation-800">{kg(totalNetWeight)}</td><td className="table-cell" /><td className="table-cell text-right font-semibold">{formatRupiah(records.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0))}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(totalHalf)}</td><td className="table-cell" /></tr></tfoot>
       </table></div>}
     </section>
 

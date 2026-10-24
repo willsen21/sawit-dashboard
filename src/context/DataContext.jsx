@@ -61,6 +61,7 @@ export function DataProvider({ children }) {
   const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
   const [cloudError, setCloudError] = useState('')
   const cloudBaseline = useRef({})
+  const cloudSyncErrors = useRef({})
   const collectionSetters = {
     suppliers: setSuppliers, transactions: setTransactions, dailyCash: setDailyCash,
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
@@ -136,6 +137,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     let channel
     setCloudReady(false)
     setCloudError('')
+    cloudSyncErrors.current = {}
 
     async function hydrateCloudData() {
       const { data, error } = await supabase.from('app_records').select('collection, record_id, data')
@@ -239,10 +241,20 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       if (failure) {
         console.error(`Gagal menyimpan ${collection} ke Supabase:`, failure)
         cloudBaseline.current = { ...cloudBaseline.current, [collection]: previous }
-        setCloudError(collection === 'stoneStock'
-          ? `Stok batu belum tersimpan ke cloud. Pastikan supabase/stone-feature.sql sudah dijalankan di Supabase. Detail: ${failure.message}`
-          : 'Sebagian perubahan belum tersimpan ke cloud. Periksa koneksi sebelum berpindah perangkat.')
-      } else setCloudError('')
+        const detail = [failure.message, failure.code && `kode ${failure.code}`].filter(Boolean).join(' · ')
+        const hint = collection === 'stoneStock' || collection === 'stoneSales'
+          ? 'Pastikan supabase/stone-feature.sql sudah dijalankan di Supabase.'
+          : collection === 'rubberRecords'
+            ? 'Pastikan supabase/getah-feature.sql sudah dijalankan di Supabase SQL Editor.'
+            : 'Periksa koneksi dan aturan akses database Supabase.'
+        const collectionLabel = collection === 'rubberRecords' ? 'catatan Getah' : collection === 'stoneStock' ? 'stok batu' : collection === 'stoneSales' ? 'penjualan batu' : collection
+        cloudSyncErrors.current = { ...cloudSyncErrors.current, [collection]: `Gagal menyimpan ${collectionLabel} ke cloud. ${hint}${detail ? ` Detail: ${detail}` : ''}` }
+        setCloudError(Object.values(cloudSyncErrors.current).join(' '))
+      } else {
+        const { [collection]: _resolved, ...remainingErrors } = cloudSyncErrors.current
+        cloudSyncErrors.current = remainingErrors
+        setCloudError(Object.values(remainingErrors).join(' '))
+      }
     })
   }
 

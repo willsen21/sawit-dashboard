@@ -10,7 +10,7 @@ alter table public.app_records
   add constraint app_records_collection_check check (collection in (
     'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
     'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
-    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords',
+    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales',
     'stoneStock', 'stoneSales'
   ));
 

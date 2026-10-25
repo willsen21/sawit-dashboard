@@ -11,7 +11,7 @@ import { calculateFarmHarvest } from '../lib/farmCalculations'
 const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
-const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'stoneStock', 'stoneSales']
+const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 
 function keepCloudRecord(collection, item) {
@@ -56,6 +56,7 @@ export function DataProvider({ children }) {
   const [payrolls, setPayrolls] = useState(() => loadItem('payrolls', []))
   const [privateFarms, setPrivateFarms] = useState(() => loadItem('privateFarms', []))
   const [rubberRecords, setRubberRecords] = useState(() => loadItem('rubberRecords', []))
+  const [rubberFactorySales, setRubberFactorySales] = useState(() => loadItem('rubberFactorySales', []))
   const [stoneStock, setStoneStock] = useState(() => loadItem('stoneStock', []))
   const [stoneSales, setStoneSales] = useState(() => loadItem('stoneSales', []))
   const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
@@ -67,9 +68,9 @@ export function DataProvider({ children }) {
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
     cancellationRequests: setCancellationRequests, cashUnlockRequests: setCashUnlockRequests,
     harvestSchedules: setHarvestSchedules, operationalExpenses: setOperationalExpenses,
-    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, stoneStock: setStoneStock, stoneSales: setStoneSales,
+    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, rubberFactorySales: setRubberFactorySales, stoneStock: setStoneStock, stoneSales: setStoneSales,
   }
-  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, stoneStock, stoneSales }
+  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, rubberFactorySales, stoneStock, stoneSales }
   const collectionValuesRef = useRef(collectionValues)
   collectionValuesRef.current = collectionValues
 
@@ -110,6 +111,7 @@ useLayoutEffect(() => {
   saveItem('privateFarms', privateFarms)
 }, [privateFarms])
 useLayoutEffect(() => { saveItem('rubberRecords', rubberRecords) }, [rubberRecords])
+useLayoutEffect(() => { saveItem('rubberFactorySales', rubberFactorySales) }, [rubberFactorySales])
 useLayoutEffect(() => { saveItem('stoneStock', stoneStock) }, [stoneStock])
 useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
 
@@ -271,6 +273,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
   useEffect(() => { syncCollectionToCloud('payrolls', payrolls) }, [payrolls, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('privateFarms', privateFarms) }, [privateFarms, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('rubberRecords', rubberRecords) }, [rubberRecords, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('rubberFactorySales', rubberFactorySales) }, [rubberFactorySales, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneStock', stoneStock) }, [stoneStock, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneSales', stoneSales) }, [stoneSales, cloudReady, currentUser?.id])
 
@@ -325,6 +328,27 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus catatan getah.' }
     if (!rubberRecords.some((item) => item.id === id)) return { ok: false, message: 'Catatan getah tidak ditemukan.' }
     setRubberRecords((previous) => previous.filter((item) => item.id !== id))
+    return { ok: true }
+  }
+
+  function addRubberFactorySale(data) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mencatat penjualan pabrik.' }
+    const date = String(data.date || '')
+    const weightKg = parseKgInput(data.weightKg)
+    const pricePerKg = parseRupiahInput(data.pricePerKg)
+    const expenses = (Array.isArray(data.expenses) ? data.expenses : []).map((item) => ({ description: String(item.description || '').trim(), amount: parseRupiahInput(item.amount) }))
+    if (!date || !Number.isFinite(weightKg) || weightKg <= 0 || !Number.isFinite(pricePerKg) || pricePerKg <= 0) return { ok: false, message: 'Tanggal, berat pabrik, dan harga per kg harus diisi dengan benar.' }
+    if (expenses.some((item) => !item.description || !Number.isFinite(item.amount) || item.amount <= 0)) return { ok: false, message: 'Nama dan nominal setiap pengeluaran wajib diisi dengan benar.' }
+    const grossAmount = weightKg * pricePerKg
+    const expenseTotal = expenses.reduce((sum, item) => sum + item.amount, 0)
+    const entry = { id: `rubber-factory-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, weightKg, pricePerKg, grossAmount, expenses, expenseTotal, netAmount: grossAmount - expenseTotal, createdAt: new Date().toISOString(), createdBy: currentUser.id }
+    setRubberFactorySales((previous) => [entry, ...previous].sort((a, b) => b.date.localeCompare(a.date)))
+    return { ok: true, entry }
+  }
+  function deleteRubberFactorySale(id) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus penjualan pabrik.' }
+    if (!rubberFactorySales.some((item) => item.id === id)) return { ok: false, message: 'Catatan penjualan pabrik tidak ditemukan.' }
+    setRubberFactorySales((previous) => previous.filter((item) => item.id !== id))
     return { ok: true }
   }
 
@@ -884,6 +908,9 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     payrolls,
     privateFarms,
     rubberRecords,
+    rubberFactorySales,
+    addRubberFactorySale,
+    deleteRubberFactorySale,
     addRubberRecord,
     updateRubberRecord,
     deleteRubberRecord,

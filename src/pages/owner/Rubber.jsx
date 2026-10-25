@@ -89,13 +89,15 @@ function exportPdf(records, range) {
 }
 
 export default function Rubber() {
-  const { rubberRecords, addRubberRecord, updateRubberRecord, deleteRubberRecord } = useData()
+  const { rubberRecords, addRubberRecord, updateRubberRecord, deleteRubberRecord, rubberFactorySales, addRubberFactorySale, deleteRubberFactorySale } = useData()
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(blankForm)
   const [formError, setFormError] = useState('')
   const [viewRecord, setViewRecord] = useState(null)
   const [notice, setNotice] = useState('')
+  const [factoryForm, setFactoryForm] = useState({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
+  const [factoryError, setFactoryError] = useState('')
   const today = todayKey()
   const [downloadRange, setDownloadRange] = useState([`${today.slice(0, 7)}-01`, today])
 
@@ -110,6 +112,17 @@ export default function Rubber() {
   const exportTotalWeight = exportRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
   const exportNetWeight = exportRecords.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
   const exportHalf = exportRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
+  const factoryGross = parseKgInput(factoryForm.weightKg) * parseRupiahInput(factoryForm.pricePerKg)
+  const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
+
+  function saveFactorySale(event) {
+    event.preventDefault()
+    const result = addRubberFactorySale(factoryForm)
+    if (!result.ok) return setFactoryError(result.message)
+    setFactoryError('')
+    setFactoryForm({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
+    setNotice('Penjualan pabrik berhasil disimpan.')
+  }
 
   function openCreate() {
     setEditingId(null)
@@ -169,6 +182,23 @@ export default function Rubber() {
       <SummaryCard icon={<Scale size={18} />} label="Berat bersih" value={kg(totalNetWeight)} detail="Sesudah potongan dan pembulatan" />
       <SummaryCard icon={<CalendarDays size={18} />} label="Catatan hari ini" value={todayRecords.length.toLocaleString('id-ID')} detail={kg(todayRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0))} />
       <SummaryCard icon={<CircleDollarSign size={18} />} label="Bagian ½ hasil" value={formatRupiah(totalHalf)} detail="Akumulasi semua catatan" accent />
+    </section>
+
+    <section className="card mb-6 overflow-hidden">
+      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><CircleDollarSign size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Penjualan getah di pabrik</h2><p className="mt-1 text-xs text-ink-500">Masukkan berat dan harga; pengeluaran lain otomatis mengurangi hasil penjualan.</p></div></div></div>
+      <form onSubmit={saveFactorySale} className="space-y-4 p-5 sm:p-6">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Tanggal"><input type="date" className="input" value={factoryForm.date} onChange={(e) => setFactoryForm({ ...factoryForm, date: e.target.value })} required /></Field>
+          <Field label="Total berat di pabrik (kg)"><input inputMode="decimal" className="input" value={factoryForm.weightKg} onChange={(e) => setFactoryForm({ ...factoryForm, weightKg: formatKgInput(e.target.value) })} placeholder="Contoh: 1.250" required /></Field>
+          <Field label="Harga jual per kg (Rp)"><input inputMode="numeric" className="input" value={factoryForm.pricePerKg} onChange={(e) => setFactoryForm({ ...factoryForm, pricePerKg: formatRupiahInput(e.target.value) })} placeholder="Contoh: 12.000" required /></Field>
+        </div>
+        <div className="rounded-xl bg-paper-50 p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-plantation-950">Pengeluaran / pemakaian lainnya</h3><p className="mt-1 text-xs text-ink-500">Setiap nominal dipotong dari penjualan pabrik.</p></div><button type="button" className="btn-ghost !min-h-9 !px-3 !py-2 text-xs" onClick={() => setFactoryForm((f) => ({ ...f, expenses: [...f.expenses, { description: '', amount: '' }] }))}><Plus size={15} /> Tambah pengeluaran</button></div>
+          {factoryForm.expenses.length === 0 ? <p className="text-xs text-ink-400">Belum ada pengeluaran tambahan.</p> : <div className="space-y-2">{factoryForm.expenses.map((expense, i) => <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input className="input" aria-label="Nama pengeluaran" placeholder="Contoh: ongkos angkut" value={expense.description} onChange={(e) => setFactoryForm((f) => ({ ...f, expenses: f.expenses.map((x, j) => j === i ? { ...x, description: e.target.value } : x) }))} required /><input className="input" inputMode="numeric" aria-label="Nominal pengeluaran" placeholder="Nominal (Rp)" value={expense.amount} onChange={(e) => setFactoryForm((f) => ({ ...f, expenses: f.expenses.map((x, j) => j === i ? { ...x, amount: formatRupiahInput(e.target.value) } : x) }))} required /><button type="button" className="btn-ghost !min-h-10 !px-3" onClick={() => setFactoryForm((f) => ({ ...f, expenses: f.expenses.filter((_, j) => j !== i) }))} aria-label="Hapus pengeluaran"><Trash2 size={16} /></button></div>)}</div>}
+        </div>
+        <div className="grid gap-2 rounded-xl bg-plantation-950 p-4 text-white sm:grid-cols-3"><CalcLine label="Berat × harga jual" value={formatRupiah(factoryGross)} /><CalcLine label="Total pengeluaran" value={`− ${formatRupiah(factoryExpenseTotal)}`} /><CalcLine label="Hasil bersih diterima" value={formatRupiah(factoryGross - factoryExpenseTotal)} highlight /></div>
+        {factoryError && <p role="alert" className="text-sm text-red-700">{factoryError}</p>}<div className="flex justify-end"><button type="submit" className="btn-primary"><Check size={16} /> Simpan penjualan pabrik</button></div>
+      </form>
+      <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[850px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Penjualan</th><th className="table-head">Pengeluaran lain</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>{rubberFactorySales.map((sale) => <tr key={sale.id}><td className="table-cell">{formatShortDate(sale.date)}</td><td className="table-cell text-right">{kg(sale.weightKg)}</td><td className="table-cell text-right">{formatRupiah(sale.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(sale.grossAmount)}</td><td className="table-cell text-xs">{sale.expenses?.length ? sale.expenses.map((x) => `${x.description}: ${formatRupiah(x.amount)}`).join(' · ') : '—'}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(sale.netAmount)}</td><td className="table-cell"><button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label="Hapus penjualan pabrik" onClick={() => { if (window.confirm('Hapus catatan penjualan pabrik ini?')) deleteRubberFactorySale(sale.id) }}><Trash2 size={16} /></button></td></tr>)}</tbody>{rubberFactorySales.length > 0 && <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total pabrik · {rubberFactorySales.length} catatan</td><td className="table-cell text-right font-semibold">{formatRupiah(rubberFactorySales.reduce((s, x) => s + Number(x.grossAmount || 0), 0))}</td><td className="table-cell text-right font-semibold">− {formatRupiah(rubberFactorySales.reduce((s, x) => s + Number(x.expenseTotal || 0), 0))}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(rubberFactorySales.reduce((s, x) => s + Number(x.netAmount || 0), 0))}</td><td /></tr></tfoot>}</table></div>
     </section>
 
     <section className="card mb-6 overflow-hidden">

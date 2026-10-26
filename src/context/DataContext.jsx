@@ -16,6 +16,7 @@ const CLOUD_DATA_CUTOFF = '2026-10-10'
 const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash']
 const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
+const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
@@ -333,7 +334,6 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       let changed = false
       const corrected = previous.map((day) => {
         if (day.status !== 'locked') return day
-        const allDateStoneCapital = stoneStock.filter((item) => item.date === day.date).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
         const stoneCapital = stoneStock.filter((item) => item.date === day.date && (!day.closedAt || (!item.createdAt || item.createdAt <= day.closedAt) && (!item.updatedAt || item.updatedAt <= day.closedAt))).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
         if (day.date !== STONE_CAPITAL_CORRECTION_DATE) {
           if ((!day.correctedAt && !day.stoneCapitalExcludedFromCash) || !Number.isFinite(Number(day.systemCashAtClose))) return day
@@ -343,16 +343,16 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
           changed = true
           return { ...originalDay, systemCashAtClose, cashDifference }
         }
-        const knownStaleClose = Number(day.systemCashAtClose) === STONE_CAPITAL_STALE_CLOSE && allDateStoneCapital === 5_000
+        const knownStaleClose = Number(day.systemCashAtClose) === STONE_CAPITAL_STALE_CLOSE
         if ((day.stoneCapitalExcludedFromCash && !knownStaleClose) || (stoneCapital <= 0 && !knownStaleClose) || !Number.isFinite(Number(day.systemCashAtClose))) return day
-        const systemCashAtClose = Number(day.systemCashAtClose) + (knownStaleClose ? allDateStoneCapital : stoneCapital)
+        const systemCashAtClose = knownStaleClose ? STONE_CAPITAL_CORRECTED_CLOSE : Number(day.systemCashAtClose) + stoneCapital
         const cashDifference = Number.isFinite(Number(day.countedCash)) ? Number(day.countedCash) - systemCashAtClose : day.cashDifference
         changed = true
         return { ...day, systemCashAtClose, cashDifference, stoneCapitalExcludedFromCash: true, correctedAt: new Date().toISOString() }
       })
       return changed ? corrected : previous
     })
-  }, [cloudReady, currentUser?.role, stoneStock])
+  }, [cloudReady, currentUser?.role, stoneStock, dailyCash])
 
   function addAuditLog({ action, actorId, transactionId = null, detail }) {
     setAuditLogs((prev) => [{

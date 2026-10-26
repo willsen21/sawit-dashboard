@@ -13,6 +13,7 @@ const DataContext = createContext(null)
 const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
+const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash']
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
@@ -63,6 +64,8 @@ export function DataProvider({ children }) {
   const [cloudError, setCloudError] = useState('')
   const cloudBaseline = useRef({})
   const cloudSyncErrors = useRef({})
+  const cloudRetryTimers = useRef({})
+  const cloudRetryAttempts = useRef({})
   const collectionSetters = {
     suppliers: setSuppliers, transactions: setTransactions, dailyCash: setDailyCash,
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
@@ -137,6 +140,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     if (!currentUser) { setCloudReady(false); return }
     let active = true
     let channel
+    let cleanupRefresh = () => {}
     setCloudReady(false)
     setCloudError('')
     cloudSyncErrors.current = {}
@@ -193,6 +197,39 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       setCloudReady(true)
       if (migrationWarnings.length) setCloudError(`Sebagian data lokal belum terkirim ke cloud: ${migrationWarnings.join('; ')}. Periksa aturan database di Supabase.`)
 
+      async function refreshOwnerCashData() {
+        if (!active || currentUser.role !== 'owner') return
+        const { data: freshRows, error: refreshError } = await supabase.from('app_records')
+          .select('collection, record_id, data')
+          .in('collection', OWNER_REFRESH_COLLECTIONS)
+        if (refreshError) {
+          console.error('Gagal memperbarui transaksi dan kas owner:', refreshError)
+          return
+        }
+        if (!active) return
+        const freshByCollection = Object.fromEntries(OWNER_REFRESH_COLLECTIONS.map((name) => [name, []]))
+        for (const row of freshRows || []) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
+        const nextBaselines = { ...cloudBaseline.current }
+        for (const name of OWNER_REFRESH_COLLECTIONS) {
+          const rawItems = freshByCollection[name]
+          nextBaselines[name] = new Map(rawItems.map((item) => [String(item.id), item]))
+          collectionSetters[name](rawItems.map((item) => keepCloudRecord(name, item)).filter(Boolean))
+        }
+        cloudBaseline.current = nextBaselines
+      }
+
+      const refreshOnReturn = () => {
+        if (document.visibilityState === 'visible') refreshOwnerCashData()
+      }
+      window.addEventListener('focus', refreshOnReturn)
+      window.addEventListener('hashchange', refreshOnReturn)
+      document.addEventListener('visibilitychange', refreshOnReturn)
+      cleanupRefresh = () => {
+        window.removeEventListener('focus', refreshOnReturn)
+        window.removeEventListener('hashchange', refreshOnReturn)
+        document.removeEventListener('visibilitychange', refreshOnReturn)
+      }
+
       channel = supabase.channel(`kebunkas-records-${currentUser.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'app_records' }, (payload) => {
           const row = payload.new?.collection ? payload.new : payload.old
@@ -209,6 +246,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         })
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setCloudError('Koneksi sinkronisasi terputus. Muat ulang halaman untuk menyambungkan kembali.')
+          if (status === 'SUBSCRIBED') refreshOwnerCashData()
         })
     }
 
@@ -222,7 +260,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         setCloudReady(false)
       }
     })
-    return () => { active = false; if (channel) supabase.removeChannel(channel) }
+    return () => { active = false; cleanupRefresh(); if (channel) supabase.removeChannel(channel) }
   }, [authReady, currentUser?.id, currentUser?.role])
 
   function syncCollectionToCloud(collection, items) {
@@ -252,7 +290,17 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         const collectionLabel = collection === 'rubberRecords' ? 'catatan Getah' : collection === 'stoneStock' ? 'stok batu' : collection === 'stoneSales' ? 'penjualan batu' : collection
         cloudSyncErrors.current = { ...cloudSyncErrors.current, [collection]: `Gagal menyimpan ${collectionLabel} ke cloud. ${hint}${detail ? ` Detail: ${detail}` : ''}` }
         setCloudError(Object.values(cloudSyncErrors.current).join(' '))
+        if ((cloudRetryAttempts.current[collection] || 0) < 3 && !cloudRetryTimers.current[collection]) {
+          cloudRetryAttempts.current[collection] = (cloudRetryAttempts.current[collection] || 0) + 1
+          cloudRetryTimers.current[collection] = window.setTimeout(() => {
+            cloudRetryTimers.current[collection] = null
+            syncCollectionToCloud(collection, collectionValuesRef.current[collection] || [])
+          }, 1500 * (2 ** (cloudRetryAttempts.current[collection] - 1)))
+        }
       } else {
+        cloudRetryAttempts.current[collection] = 0
+        if (cloudRetryTimers.current[collection]) window.clearTimeout(cloudRetryTimers.current[collection])
+        cloudRetryTimers.current[collection] = null
         const { [collection]: _resolved, ...remainingErrors } = cloudSyncErrors.current
         cloudSyncErrors.current = remainingErrors
         setCloudError(Object.values(remainingErrors).join(' '))

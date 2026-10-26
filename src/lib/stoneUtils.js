@@ -1,4 +1,4 @@
-export const STONE_TYPES = ['Batu Besscoss', 'Batu Split 5/7', 'Batu Split 1/2', 'Pasir']
+export const STONE_TYPES = ['Batu Besscoss', 'Batu Split 5/7', 'Batu Split 2/3', 'Batu Split 1/2', 'Pasir']
 
 const LEGACY_STONE_TYPES = {
   'Batu A': STONE_TYPES[0],

@@ -325,6 +325,23 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
   useEffect(() => { syncCollectionToCloud('stoneStock', stoneStock) }, [stoneStock, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneSales', stoneSales) }, [stoneSales, cloudReady, currentUser?.id])
 
+  useEffect(() => {
+    if (!cloudReady || currentUser?.role !== 'owner') return
+    setDailyCash((previous) => {
+      let changed = false
+      const corrected = previous.map((day) => {
+        if (day.status !== 'locked' || day.stoneCapitalExcludedFromCash) return day
+        const stoneCapital = stoneStock.filter((item) => item.date === day.date && (!day.closedAt || (!item.createdAt || item.createdAt <= day.closedAt) && (!item.updatedAt || item.updatedAt <= day.closedAt))).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
+        if (stoneCapital <= 0 || !Number.isFinite(Number(day.systemCashAtClose))) return day
+        const systemCashAtClose = Number(day.systemCashAtClose) + stoneCapital
+        const cashDifference = Number.isFinite(Number(day.countedCash)) ? Number(day.countedCash) - systemCashAtClose : day.cashDifference
+        changed = true
+        return { ...day, systemCashAtClose, cashDifference, stoneCapitalExcludedFromCash: true, correctedAt: new Date().toISOString() }
+      })
+      return changed ? corrected : previous
+    })
+  }, [cloudReady, currentUser?.role, stoneStock])
+
   function addAuditLog({ action, actorId, transactionId = null, detail }) {
     setAuditLogs((prev) => [{
       id: `al-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -547,6 +564,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       countedCash: amount,
       systemCashAtClose: expectedCash,
       cashDifference: amount - expectedCash,
+      stoneCapitalExcludedFromCash: true,
       closedAt,
       closedBy: actorId,
     } : d)))
@@ -897,8 +915,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       const total = isHarminiBrondolan ? Math.round(netKg * (Number(t.pricePerKg || 0) + 10)) : Number(t.total)
       return sum + total
     }, 0)
-    const totalStoneCapital = stoneStock.filter((item) => item.date === dateKey).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
-    const totalUsed = totalPurchaseUsed + totalStoneCapital
+    const totalUsed = totalPurchaseUsed
     const todaysLoans = cashLoans.filter((loan) => loan.date === dateKey)
     const totalLoans = todaysLoans.reduce((sum, loan) => sum + Number(loan.amount), 0)
     const remaining = initialAmount + totalTopup - totalUsed - totalLoans
@@ -909,7 +926,6 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       totalTopup,
       totalUsed,
       totalPurchaseUsed,
-      totalStoneCapital,
       totalLoans,
       remaining,
       topups: todaysTopups,

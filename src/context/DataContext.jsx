@@ -14,6 +14,7 @@ const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash']
+const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
@@ -330,9 +331,17 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     setDailyCash((previous) => {
       let changed = false
       const corrected = previous.map((day) => {
-        if (day.status !== 'locked' || day.stoneCapitalExcludedFromCash) return day
+        if (day.status !== 'locked') return day
         const stoneCapital = stoneStock.filter((item) => item.date === day.date && (!day.closedAt || (!item.createdAt || item.createdAt <= day.closedAt) && (!item.updatedAt || item.updatedAt <= day.closedAt))).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
-        if (stoneCapital <= 0 || !Number.isFinite(Number(day.systemCashAtClose))) return day
+        if (day.date !== STONE_CAPITAL_CORRECTION_DATE) {
+          if ((!day.correctedAt && !day.stoneCapitalExcludedFromCash) || !Number.isFinite(Number(day.systemCashAtClose))) return day
+          const systemCashAtClose = Number(day.systemCashAtClose) - stoneCapital
+          const cashDifference = Number.isFinite(Number(day.countedCash)) ? Number(day.countedCash) - systemCashAtClose : day.cashDifference
+          const { correctedAt, stoneCapitalExcludedFromCash, ...originalDay } = day
+          changed = true
+          return { ...originalDay, systemCashAtClose, cashDifference }
+        }
+        if (day.stoneCapitalExcludedFromCash || stoneCapital <= 0 || !Number.isFinite(Number(day.systemCashAtClose))) return day
         const systemCashAtClose = Number(day.systemCashAtClose) + stoneCapital
         const cashDifference = Number.isFinite(Number(day.countedCash)) ? Number(day.countedCash) - systemCashAtClose : day.cashDifference
         changed = true
@@ -915,7 +924,10 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       const total = isHarminiBrondolan ? Math.round(netKg * (Number(t.pricePerKg || 0) + 10)) : Number(t.total)
       return sum + total
     }, 0)
-    const totalUsed = totalPurchaseUsed
+    const totalStoneCapital = dateKey === STONE_CAPITAL_CORRECTION_DATE
+      ? 0
+      : stoneStock.filter((item) => item.date === dateKey).reduce((sum, item) => sum + Number(item.capitalCost || 0), 0)
+    const totalUsed = totalPurchaseUsed + totalStoneCapital
     const todaysLoans = cashLoans.filter((loan) => loan.date === dateKey)
     const totalLoans = todaysLoans.reduce((sum, loan) => sum + Number(loan.amount), 0)
     const remaining = initialAmount + totalTopup - totalUsed - totalLoans

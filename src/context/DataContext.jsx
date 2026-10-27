@@ -200,20 +200,23 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       setCloudReady(true)
       if (migrationWarnings.length) setCloudError(`Sebagian data lokal belum terkirim ke cloud: ${migrationWarnings.join('; ')}. Periksa aturan database di Supabase.`)
 
-      async function refreshOwnerCashData() {
-        if (!active || currentUser.role !== 'owner') return
+      async function refreshSharedCashData() {
+        if (!active) return
+        const refreshCollections = currentUser.role === 'owner'
+          ? OWNER_REFRESH_COLLECTIONS
+          : ['dailyCash', 'cancellationRequests', 'cashUnlockRequests']
         const { data: freshRows, error: refreshError } = await supabase.from('app_records')
           .select('collection, record_id, data')
-          .in('collection', OWNER_REFRESH_COLLECTIONS)
+          .in('collection', refreshCollections)
         if (refreshError) {
-          console.error('Gagal memperbarui transaksi dan kas owner:', refreshError)
+          console.error('Gagal memperbarui data kas dan persetujuan:', refreshError)
           return
         }
         if (!active) return
-        const freshByCollection = Object.fromEntries(OWNER_REFRESH_COLLECTIONS.map((name) => [name, []]))
+        const freshByCollection = Object.fromEntries(refreshCollections.map((name) => [name, []]))
         for (const row of freshRows || []) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
         const nextBaselines = { ...cloudBaseline.current }
-        for (const name of OWNER_REFRESH_COLLECTIONS) {
+        for (const name of refreshCollections) {
           const rawItems = freshByCollection[name]
           nextBaselines[name] = new Map(rawItems.map((item) => [String(item.id), item]))
           collectionSetters[name](rawItems.map((item) => keepCloudRecord(name, item)).filter(Boolean))
@@ -222,7 +225,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       }
 
       const refreshOnReturn = () => {
-        if (document.visibilityState === 'visible') refreshOwnerCashData()
+        if (document.visibilityState === 'visible') refreshSharedCashData()
       }
       window.addEventListener('focus', refreshOnReturn)
       window.addEventListener('hashchange', refreshOnReturn)
@@ -249,7 +252,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         })
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setCloudError('Koneksi sinkronisasi terputus. Muat ulang halaman untuk menyambungkan kembali.')
-          if (status === 'SUBSCRIBED') refreshOwnerCashData()
+          if (status === 'SUBSCRIBED') refreshSharedCashData()
         })
     }
 

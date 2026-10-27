@@ -306,6 +306,15 @@
 .dashboard-firefly { animation: firefly 3s ease-in-out infinite; }
 .dashboard-firefly-two { animation-delay: -1.1s; }
 .dashboard-firefly-three { animation-delay: -2s; }
+.dashboard-scene .dashboard-palm,
+.dashboard-scene .dashboard-fruit,
+.dashboard-scene .dashboard-truck,
+.dashboard-scene .woman-chasing,
+.dashboard-scene .woman-run-arms,
+.dashboard-scene .woman-run-legs,
+.dashboard-scene .dashboard-firefly { animation: none !important; }
+.dashboard-scene .woman-chasing { transform: scale(.76); }
+.dashboard-scene .dashboard-truck { left: 22%; opacity: .85; }
 .dashboard-today-card { animation: section-enter 600ms cubic-bezier(.22, 1, .36, 1) 120ms both; }
 .dashboard-stone-card { animation: section-enter 500ms cubic-bezier(.22, 1, .36, 1) 180ms both; }
 .loading-screen {

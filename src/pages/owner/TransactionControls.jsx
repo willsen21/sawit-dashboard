@@ -20,7 +20,9 @@ export default function TransactionControls() {
   const names = Object.fromEntries([...admins, currentUser].filter(Boolean).map((user) => [user.id, user.name]))
   const pending = cancellationRequests.filter((request) => request.status === 'pending')
   const pendingLoanDeletions = pending.filter((request) => request.kind === 'cashLoanDeletion')
-  const pendingCashEdits = pending.filter((request) => request.kind === 'cashInitialEdit')
+  const pendingCashEdits = pending
+    .filter((request) => request.kind === 'cashInitialEdit')
+    .filter((request) => !pending.some((other) => other.kind === 'cashInitialEdit' && other.date === request.date && other.createdAt > request.createdAt))
   const pendingTransactionCancellations = pending.filter((request) => !['cashLoanDeletion', 'cashInitialEdit'].includes(request.kind))
   const pendingUnlocks = cashUnlockRequests.filter((request) => request.status === 'pending')
 

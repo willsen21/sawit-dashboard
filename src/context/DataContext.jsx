@@ -687,8 +687,6 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const newAmount = Number(amount)
     if (!Number.isFinite(newAmount) || newAmount < 0) return { ok: false, message: 'Kas awal harus 0 atau lebih.' }
     if (!reason?.trim()) return { ok: false, message: 'Alasan perubahan wajib diisi.' }
-    const exists = cancellationRequests.some((request) => request.kind === 'cashInitialEdit' && request.date === date && request.status === 'pending')
-    if (exists) return { ok: false, message: 'Permintaan perubahan kas untuk tanggal ini masih menunggu owner.' }
     const request = {
       id: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       kind: 'cashInitialEdit',
@@ -787,7 +785,14 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     const request = cancellationRequests.find((item) => item.id === requestId)
     if (!request || request.status !== 'pending') return { ok: false, message: 'Permintaan sudah diproses atau tidak ditemukan.' }
     const approved = decision === 'approved'
-    setCancellationRequests((prev) => prev.map((item) => item.id === requestId ? { ...item, status: approved ? 'approved' : 'rejected', resolvedBy: ownerId, resolvedAt: new Date().toISOString() } : item))
+    setCancellationRequests((prev) => prev.map((item) => {
+      if (item.kind === 'cashInitialEdit' && request.kind === 'cashInitialEdit' && item.date === request.date && item.status === 'pending') {
+        return item.id === requestId
+          ? { ...item, status: approved ? 'approved' : 'rejected', resolvedBy: ownerId, resolvedAt: new Date().toISOString() }
+          : { ...item, status: 'superseded', supersededAt: new Date().toISOString() }
+      }
+      return item.id === requestId ? { ...item, status: approved ? 'approved' : 'rejected', resolvedBy: ownerId, resolvedAt: new Date().toISOString() } : item
+    }))
     if (request.kind === 'cashLoanDeletion') {
       const loan = cashLoans.find((item) => item.id === request.cashLoanId)
       if (approved && loan) setCashLoans((prev) => prev.filter((item) => item.id !== request.cashLoanId))

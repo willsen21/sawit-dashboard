@@ -157,6 +157,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       // Otherwise a failed migration is mistaken for data already in the cloud.
       const rawCloudData = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, [...grouped[name]]]))
       const migrationWarnings = []
+      const locallyRecoveredIds = new Map()
 
       // Merge the legacy local cache once on the first owner login; cloud records win on duplicate IDs.
       const localMigrationDone = window.localStorage.getItem('kebunkas_cloud_migration_done') === 'true'
@@ -184,6 +185,18 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
           if (name !== 'stoneStock' && name !== 'stoneSales') legacyMigrationFailed = true
         }
         if (!localMigrationDone && !legacyMigrationFailed) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
+      } else if (currentUser.role === 'admin') {
+        // Preserve this admin's locally cached purchases if a prior cloud write failed.
+        // The normal collection sync below will retry records missing from Supabase.
+        const cloudIds = new Set(grouped.transactions.map((item) => String(item.id)))
+        const localTransactions = (collectionValuesRef.current.transactions || [])
+          .map((item) => keepCloudRecord('transactions', item))
+          .filter((item) => item && item.adminId === currentUser.id)
+        const missing = localTransactions.filter((item) => item.id && !cloudIds.has(String(item.id)))
+        if (missing.length) {
+          grouped.transactions = [...grouped.transactions, ...missing]
+          locallyRecoveredIds.set('transactions', new Set(missing.map((item) => String(item.id))))
+        }
       }
 
       if (!active) return
@@ -193,7 +206,12 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       cloudBaseline.current = Object.fromEntries(COLLECTION_NAMES.map((name) => {
         // Owners can clean old rows from Supabase on sync. Admins only hide them
         // locally because their RLS permissions correctly prevent deletion.
-        const baselineItems = currentUser.role === 'owner' ? rawCloudData[name] : grouped[name]
+        const recoveredIds = locallyRecoveredIds.get(name)
+        const baselineItems = currentUser.role === 'owner'
+          ? rawCloudData[name]
+          : recoveredIds?.size
+            ? grouped[name].filter((item) => !recoveredIds.has(String(item.id)))
+            : grouped[name]
         return [name, new Map(baselineItems.map((item) => [String(item.id), item]))]
       }))
       for (const name of COLLECTION_NAMES) collectionSetters[name](grouped[name])

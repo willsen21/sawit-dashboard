@@ -25,6 +25,23 @@ create table if not exists public.app_records (
   primary key (collection, record_id)
 );
 
+-- CREATE TABLE IF NOT EXISTS does not change constraints on an existing table.
+-- Reapply the allowed collection list so upgrades accept newer app records.
+begin;
+
+alter table public.app_records
+  drop constraint if exists app_records_collection_check;
+
+alter table public.app_records
+  add constraint app_records_collection_check check (collection in (
+    'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
+    'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
+    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales',
+    'stoneStock', 'stoneSales'
+  ));
+
+commit;
+
 create index if not exists app_records_collection_idx on public.app_records (collection);
 
 create or replace function public.current_kebunkas_role()

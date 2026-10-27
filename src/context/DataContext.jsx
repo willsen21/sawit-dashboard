@@ -230,10 +230,14 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       window.addEventListener('focus', refreshOnReturn)
       window.addEventListener('hashchange', refreshOnReturn)
       document.addEventListener('visibilitychange', refreshOnReturn)
+      const adminRefreshTimer = currentUser.role === 'admin'
+        ? window.setInterval(refreshOnReturn, 10_000)
+        : null
       cleanupRefresh = () => {
         window.removeEventListener('focus', refreshOnReturn)
         window.removeEventListener('hashchange', refreshOnReturn)
         document.removeEventListener('visibilitychange', refreshOnReturn)
+        if (adminRefreshTimer) window.clearInterval(adminRefreshTimer)
       }
 
       channel = supabase.channel(`kebunkas-records-${currentUser.id}`)

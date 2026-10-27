@@ -16,7 +16,7 @@ create table if not exists public.app_records (
   collection text not null check (collection in (
     'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
     'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
-    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'stoneStock', 'stoneSales'
+    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales'
   )),
   record_id text not null,
   data jsonb not null,

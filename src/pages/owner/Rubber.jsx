@@ -29,12 +29,44 @@ const factorySaleDate = (sale) => {
   return localDate ? `${localDate[3]}-${String(localDate[2]).padStart(2, '0')}-${String(localDate[1]).padStart(2, '0')}` : ''
 }
 
-function exportCsv(records, range) {
+const saleExpenseAmount = (sale) => Number.isFinite(Number(sale.expenseTotal))
+  ? Number(sale.expenseTotal)
+  : (sale.expenses || []).reduce((sum, item) => sum + Number(item.amount || 0), 0)
+const saleGrossAmount = (sale) => Number.isFinite(Number(sale.grossAmount))
+  ? Number(sale.grossAmount)
+  : Number(sale.weightKg || 0) * Number(sale.pricePerKg || 0)
+const saleNetAmount = (sale) => Number.isFinite(Number(sale.netAmount))
+  ? Number(sale.netAmount)
+  : saleGrossAmount(sale) - saleExpenseAmount(sale)
+
+function exportCsv(records, factorySales, range) {
   const bagCount = Math.max(0, ...records.map((record) => record.bags.length))
-  const headers = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total hasil (Rp)', 'Bagian setengah (Rp)']
-  const rows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, record.splitAmount])
+  const purchaseHeaders = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total pembelian (Rp)', 'Bagian setengah (Rp)']
+  const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, record.splitAmount])
+  const saleHeaders = ['Tanggal', 'Berat di pabrik (kg)', 'Harga jual/kg (Rp)', 'Penjualan kotor (Rp)', 'Rincian pengeluaran', 'Total pengeluaran (Rp)', 'Hasil bersih pabrik (Rp)']
+  const saleRows = factorySales.map((sale) => [factorySaleDate(sale), sale.weightKg, sale.pricePerKg, saleGrossAmount(sale), (sale.expenses || []).map((item) => `${item.description}: ${formatRupiah(item.amount)}`).join(' | ') || '—', saleExpenseAmount(sale), saleNetAmount(sale)])
+  const expenseHeaders = ['Tanggal', 'ID penjualan', 'Nama pengeluaran', 'Nominal (Rp)']
+  const expenseRows = factorySales.flatMap((sale) => (sale.expenses || []).map((item) => [factorySaleDate(sale), sale.id, item.description, item.amount]))
+  const totalPurchases = records.reduce((sum, record) => sum + Number(record.totalAmount || 0), 0)
+  const totalGross = factorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
+  const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
+  const totalNet = factorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
-  const contents = '\uFEFF' + [headers, ...rows].map((row) => row.map(quote).join(';')).join('\r\n')
+  const csvRows = [
+    ['LAPORAN GETAH', `${formatShortDate(range[0])} - ${formatShortDate(range[1])}`],
+    [], ['RINGKASAN'],
+    ['Pembelian getah', totalPurchases],
+    ['Penjualan pabrik kotor', totalGross],
+    ['Total pengeluaran pabrik', totalExpenses],
+    ['Hasil bersih pabrik', totalNet],
+    [], ['PEMBELIAN GETAH'], purchaseHeaders, ...purchaseRows,
+    ['TOTAL PEMBELIAN', '', ...Array(bagCount).fill(''), '', records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0), '', records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0), '', totalPurchases, records.reduce((sum, record) => sum + Number(record.splitAmount || 0), 0)],
+    [], ['PENJUALAN GETAH DI PABRIK'], saleHeaders, ...saleRows,
+    ['TOTAL PENJUALAN PABRIK', '', '', totalGross, '', totalExpenses, totalNet],
+    [], ['RINCIAN PENGELUARAN PABRIK'], expenseHeaders, ...expenseRows,
+    ['TOTAL PENGELUARAN', '', '', totalExpenses],
+  ]
+  const contents = '\uFEFF' + csvRows.map((row) => row.map(quote).join(';')).join('\r\n')
   const link = document.createElement('a')
   const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8;' }))
   link.href = url
@@ -43,32 +75,41 @@ function exportCsv(records, range) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function exportPdf(records, range) {
+function exportPdf(records, factorySales, range) {
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const totalWeight = records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0)
   const totalNetWeight = records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0)
   const totalHalf = records.reduce((sum, record) => sum + Number(record.splitAmount || 0), 0)
+  const totalPurchases = records.reduce((sum, record) => sum + Number(record.totalAmount || 0), 0)
+  const totalGross = factorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
+  const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
+  const totalFactoryNet = factorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const width = pdf.internal.pageSize.getWidth()
   pdf.setFillColor(22, 48, 42)
-  pdf.roundedRect(12, 11, width - 24, 34, 4, 4, 'F')
+  pdf.roundedRect(12, 11, width - 24, 38, 4, 4, 'F')
   pdf.setFillColor(227, 177, 85)
-  pdf.roundedRect(12, 11, 3, 34, 1.5, 1.5, 'F')
+  pdf.roundedRect(12, 11, 3, 38, 1.5, 1.5, 'F')
   pdf.setTextColor(255, 255, 255)
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(17)
-  pdf.text('LAPORAN HASIL GETAH', 21, 24)
+  pdf.text('LAPORAN GETAH · PEMBELIAN & PABRIK', 21, 23)
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(9)
   pdf.setTextColor(220, 233, 225)
-  pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}  ·  ${records.length} catatan`, 21, 34)
+  pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}  ·  ${records.length} pembelian  ·  ${factorySales.length} penjualan pabrik`, 21, 33)
   pdf.setTextColor(31, 42, 36)
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(9)
-  pdf.text(`Berat total: ${kg(totalWeight)}     Berat bersih: ${kg(totalNetWeight)}     Akumulasi bagian ½: ${formatRupiah(totalHalf)}`, 14, 54)
+  pdf.text(`Pembelian getah: ${formatRupiah(totalPurchases)}     Penjualan pabrik: ${formatRupiah(totalGross)}     Pengeluaran pabrik: − ${formatRupiah(totalExpenses)}     Hasil bersih pabrik: ${formatRupiah(totalFactoryNet)}`, 14, 57)
+  pdf.setFont('helvetica', 'normal')
+  pdf.text(`Berat pembelian: ${kg(totalWeight)} kotor · ${kg(totalNetWeight)} bersih     Bagian ½: ${formatRupiah(totalHalf)}`, 14, 63)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(11)
+  pdf.text('PEMBELIAN GETAH', 14, 73)
   autoTable(pdf, {
-    startY: 60,
+    startY: 77,
     head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan 10%', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian ½']],
-    body: records.map((record) => [
+    body: records.length ? records.map((record) => [
       formatShortDate(record.date),
       record.name,
       record.bags.map((weight, index) => `${index + 1}: ${kg(weight)}`).join(' · '),
@@ -78,7 +119,7 @@ function exportPdf(records, range) {
       formatRupiah(record.pricePerKg),
       formatRupiah(record.totalAmount),
       formatRupiah(record.splitAmount),
-    ]),
+    ]) : [['—', 'Tidak ada pembelian getah dalam rentang tanggal ini', '—', '—', '—', '—', '—', '—', '—']],
     foot: [['TOTAL', `${records.length} catatan`, '', kg(totalWeight), '', kg(totalNetWeight), '', '', formatRupiah(totalHalf)]],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
@@ -88,6 +129,47 @@ function exportPdf(records, range) {
     columnStyles: { 2: { cellWidth: 47 }, 1: { cellWidth: 28 } },
     margin: { left: 12, right: 12 },
   })
+  let nextY = pdf.lastAutoTable.finalY + 12
+  if (nextY > pdf.internal.pageSize.getHeight() - 35) { pdf.addPage(); nextY = 18 }
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(11)
+  pdf.text('PENJUALAN GETAH DI PABRIK', 14, nextY)
+  autoTable(pdf, {
+    startY: nextY + 4,
+    head: [['Tanggal', 'Berat', 'Harga/kg', 'Penjualan kotor', 'Rincian pengeluaran', 'Total pengeluaran', 'Hasil bersih']],
+    body: factorySales.length ? factorySales.map((sale) => [
+      formatShortDate(factorySaleDate(sale)), kg(sale.weightKg), formatRupiah(sale.pricePerKg), formatRupiah(saleGrossAmount(sale)),
+      (sale.expenses || []).map((item) => `${item.description}: ${formatRupiah(item.amount)}`).join(' · ') || '—',
+      formatRupiah(saleExpenseAmount(sale)), formatRupiah(saleNetAmount(sale)),
+    ]) : [['—', '—', '—', '—', 'Tidak ada penjualan pabrik dalam rentang tanggal ini', '—', '—']],
+    foot: [['TOTAL', `${factorySales.length} catatan`, '', formatRupiah(totalGross), '', formatRupiah(totalExpenses), formatRupiah(totalFactoryNet)]],
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [245, 239, 227], textColor: [22, 48, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [251, 248, 242] },
+    columnStyles: { 4: { cellWidth: 58 } },
+    margin: { left: 12, right: 12 },
+  })
+  nextY = pdf.lastAutoTable.finalY + 12
+  const expenseRows = factorySales.flatMap((sale) => (sale.expenses || []).map((item) => [formatShortDate(factorySaleDate(sale)), item.description, formatRupiah(item.amount)]))
+  if (expenseRows.length) {
+    if (nextY > pdf.internal.pageSize.getHeight() - 35) { pdf.addPage(); nextY = 18 }
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(11)
+    pdf.text('RINCIAN PENGELUARAN PABRIK', 14, nextY)
+    autoTable(pdf, {
+      startY: nextY + 4,
+      head: [['Tanggal', 'Keperluan', 'Nominal']],
+      body: expenseRows,
+      foot: [['TOTAL PENGELUARAN', '', formatRupiah(totalExpenses)]],
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2.2, textColor: [31, 42, 36], lineColor: [225, 228, 222] },
+      headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [245, 239, 227], textColor: [22, 48, 42], fontStyle: 'bold' },
+      margin: { left: 12, right: 12 },
+    })
+  }
   const pages = pdf.getNumberOfPages()
   for (let page = 1; page <= pages; page += 1) {
     pdf.setPage(page)
@@ -133,9 +215,18 @@ export default function Rubber() {
   const previewWeight = bagWeight(form.bags)
   const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
   const exportRecords = records.filter((record) => record.date >= downloadRange[0] && record.date <= downloadRange[1])
+  const exportFactorySales = rubberFactorySales.filter((sale) => {
+    const date = factorySaleDate(sale)
+    return date && date >= downloadRange[0] && date <= downloadRange[1]
+  })
   const exportTotalWeight = exportRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
   const exportNetWeight = exportRecords.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
   const exportHalf = exportRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
+  const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
+  const exportFactoryGross = exportFactorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
+  const exportFactoryExpenses = exportFactorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
+  const exportFactoryNet = exportFactorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
+  const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0
   const factoryGross = parseKgInput(factoryForm.weightKg) * parseRupiahInput(factoryForm.pricePerKg)
   const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
 
@@ -228,16 +319,16 @@ export default function Rubber() {
     </section>
 
     <section className="card mb-6 overflow-hidden">
-      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Unduh rekap berdasarkan tanggal</h2><p className="mt-1 text-xs text-ink-500">Pilih rentang tanggal. Rekap memuat rincian setiap karung, berat bersih, harga, dan pembagian hasil.</p></div></div></div>
+      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Unduh rekap lengkap berdasarkan tanggal</h2><p className="mt-1 text-xs text-ink-500">File memuat pembelian getah, penjualan pabrik, rincian pengeluaran, dan total hasil untuk rentang tanggal yang dipilih.</p></div></div></div>
       <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Dari tanggal"><input type="date" className="input" value={downloadRange[0]} max={downloadRange[1] || undefined} onChange={(event) => setDownloadRange([event.target.value, downloadRange[1]])} /></Field>
           <Field label="Sampai tanggal"><input type="date" className="input" value={downloadRange[1]} min={downloadRange[0] || undefined} max={today} onChange={(event) => setDownloadRange([downloadRange[0], event.target.value])} /></Field>
-          <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([`${today.slice(0, 7)}-01`, today])}>Bulan ini</button><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([records.length ? records[records.length - 1].date : today, today])}>Semua catatan</button></div>
+          <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([`${today.slice(0, 7)}-01`, today])}>Bulan ini</button><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => { const allDates = [...records.map((record) => record.date), ...factorySaleDates].filter(Boolean).sort(); setDownloadRange([allDates[0] || today, today]) }}>Semua catatan</button></div>
         </div>
         <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
-          <div className="text-left text-xs text-ink-500 lg:text-right"><p><b className="text-plantation-900">{exportRecords.length}</b> catatan · {kg(exportTotalWeight)} berat total</p><p className="mt-1">{kg(exportNetWeight)} berat bersih · {formatRupiah(exportHalf)} bagian ½</p></div>
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportRecords.length || downloadRange[0] > downloadRange[1]} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, downloadRange)}><FileSpreadsheet size={16} /> CSV</button><button type="button" disabled={!exportRecords.length || downloadRange[0] > downloadRange[1]} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, downloadRange)}><FileText size={16} /> Unduh PDF</button></div>
+          <div className="text-left text-xs text-ink-500 lg:text-right"><p><b className="text-plantation-900">{exportRecords.length}</b> pembelian · <b className="text-plantation-900">{exportFactorySales.length}</b> penjualan pabrik</p><p className="mt-1">Pembelian {formatRupiah(exportPurchaseTotal)} · Pabrik {formatRupiah(exportFactoryGross)}</p><p className="mt-1">Pengeluaran pabrik −{formatRupiah(exportFactoryExpenses)} · Bersih {formatRupiah(exportFactoryNet)}</p><p className="mt-1">{kg(exportTotalWeight)} berat kotor · {kg(exportNetWeight)} bersih · {formatRupiah(exportHalf)} bagian ½</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable || downloadRange[0] > downloadRange[1]} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, downloadRange)}><FileSpreadsheet size={16} /> CSV lengkap</button><button type="button" disabled={!exportAvailable || downloadRange[0] > downloadRange[1]} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, downloadRange)}><FileText size={16} /> Unduh PDF lengkap</button></div>
         </div>
       </div>
     </section>

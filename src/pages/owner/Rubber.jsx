@@ -97,17 +97,24 @@ function exportPdf(records, factorySales, range) {
   pdf.setFontSize(9)
   pdf.setTextColor(220, 233, 225)
   pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}  ·  ${records.length} pembelian  ·  ${factorySales.length} penjualan pabrik`, 21, 33)
-  pdf.setTextColor(31, 42, 36)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(9)
-  pdf.text(`Pembelian getah: ${formatRupiah(totalPurchases)}     Penjualan pabrik: ${formatRupiah(totalGross)}     Pengeluaran pabrik: − ${formatRupiah(totalExpenses)}     Hasil bersih pabrik: ${formatRupiah(totalFactoryNet)}`, 14, 57)
-  pdf.setFont('helvetica', 'normal')
-  pdf.text(`Berat pembelian: ${kg(totalWeight)} kotor · ${kg(totalNetWeight)} bersih     Bagian ½: ${formatRupiah(totalHalf)}`, 14, 63)
+  autoTable(pdf, {
+    startY: 54,
+    body: [
+      ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
+      ['Pengeluaran pabrik', `− ${formatRupiah(totalExpenses)}`, 'Hasil bersih pabrik', formatRupiah(totalFactoryNet)],
+      ['Berat kotor · bersih', `${kg(totalWeight)} · ${kg(totalNetWeight)}`, 'Bagian ½', formatRupiah(totalHalf)],
+    ],
+    theme: 'grid',
+    styles: { fontSize: 8.5, cellPadding: 2.6, textColor: [31, 42, 36], lineColor: [225, 228, 222], fillColor: [251, 248, 242] },
+    columnStyles: { 0: { cellWidth: 44, fontStyle: 'normal', textColor: [100, 112, 104] }, 1: { cellWidth: 88, fontStyle: 'bold' }, 2: { cellWidth: 44, fontStyle: 'normal', textColor: [100, 112, 104] }, 3: { cellWidth: 85, fontStyle: 'bold' } },
+    margin: { left: 12, right: 12 },
+  })
+  let sectionY = pdf.lastAutoTable.finalY + 9
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
-  pdf.text('PEMBELIAN GETAH', 14, 73)
+  pdf.text('PEMBELIAN GETAH', 14, sectionY)
   autoTable(pdf, {
-    startY: 77,
+    startY: sectionY + 4,
     head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan 10%', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian ½']],
     body: records.length ? records.map((record) => [
       formatShortDate(record.date),
@@ -129,7 +136,7 @@ function exportPdf(records, factorySales, range) {
     columnStyles: { 2: { cellWidth: 47 }, 1: { cellWidth: 28 } },
     margin: { left: 12, right: 12 },
   })
-  let nextY = pdf.lastAutoTable.finalY + 12
+  let nextY = pdf.lastAutoTable.finalY + 10
   if (nextY > pdf.internal.pageSize.getHeight() - 35) { pdf.addPage(); nextY = 18 }
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
@@ -219,13 +226,8 @@ export default function Rubber() {
     const date = factorySaleDate(sale)
     return date && date >= downloadRange[0] && date <= downloadRange[1]
   })
-  const exportTotalWeight = exportRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
-  const exportNetWeight = exportRecords.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
-  const exportHalf = exportRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
   const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
   const exportFactoryGross = exportFactorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
-  const exportFactoryExpenses = exportFactorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
-  const exportFactoryNet = exportFactorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0
   const factoryGross = parseKgInput(factoryForm.weightKg) * parseRupiahInput(factoryForm.pricePerKg)
   const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
@@ -327,7 +329,10 @@ export default function Rubber() {
           <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([`${today.slice(0, 7)}-01`, today])}>Bulan ini</button><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => { const allDates = [...records.map((record) => record.date), ...factorySaleDates].filter(Boolean).sort(); setDownloadRange([allDates[0] || today, today]) }}>Semua catatan</button></div>
         </div>
         <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
-          <div className="text-left text-xs text-ink-500 lg:text-right"><p><b className="text-plantation-900">{exportRecords.length}</b> pembelian · <b className="text-plantation-900">{exportFactorySales.length}</b> penjualan pabrik</p><p className="mt-1">Pembelian {formatRupiah(exportPurchaseTotal)} · Pabrik {formatRupiah(exportFactoryGross)}</p><p className="mt-1">Pengeluaran pabrik −{formatRupiah(exportFactoryExpenses)} · Bersih {formatRupiah(exportFactoryNet)}</p><p className="mt-1">{kg(exportTotalWeight)} berat kotor · {kg(exportNetWeight)} bersih · {formatRupiah(exportHalf)} bagian ½</p></div>
+          <div className="grid gap-2 text-left sm:grid-cols-2 lg:min-w-[26rem]">
+            <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total pembelian</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchaseTotal)}</p></div>
+            <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total penjualan pabrik</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportFactoryGross)}</p></div>
+          </div>
           <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable || downloadRange[0] > downloadRange[1]} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, downloadRange)}><FileSpreadsheet size={16} /> CSV lengkap</button><button type="button" disabled={!exportAvailable || downloadRange[0] > downloadRange[1]} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, downloadRange)}><FileText size={16} /> Unduh PDF lengkap</button></div>
         </div>
       </div>

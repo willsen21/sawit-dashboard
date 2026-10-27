@@ -20,8 +20,8 @@ const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
-  // Stone inventory is an ongoing balance; retain historical stock and sale entries.
-  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'rubberRecords') return item
+  // Keep full histories for inventory and rubber records, including older dates.
+  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'rubberRecords' || collection === 'rubberFactorySales') return item
   if (collection === 'privateFarms') {
     return {
       ...item,
@@ -165,8 +165,8 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         const additionsByCollection = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, []]))
         for (const name of COLLECTION_NAMES) {
           // Keep the legacy migration one-time for general records, but retry
-          // local stone inventory every owner login until it reaches the cloud.
-          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'rubberRecords') continue
+          // historical inventory and rubber records until they reach the cloud.
+          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'rubberRecords' && name !== 'rubberFactorySales') continue
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
           const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))

@@ -518,27 +518,11 @@ function FarmFormDialog({ title, form, setForm, error, onClose, onSubmit, editin
 
 function FarmCard({ farm, onClick }) {
   const rows = farm.records || []
-  const today = todayKey()
-  const weekStart = toDateKey(startOfWeek(new Date()))
-  const todaySummary = summarizeFarmRecords(rows.filter((row) => row.date === today))
-  const weekSummary = summarizeFarmRecords(rows.filter((row) => row.date >= weekStart && row.date <= today))
   const last = rows[0]
   return <button onClick={onClick} style={{ '--stat-delay': `${Math.min(rows.length * 60, 240)}ms` }} className="stat-card stat-card-action group overflow-hidden rounded-xl border border-ink-900/10 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-plantation-700/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-plantation-700/30">
     <div className="relative bg-gradient-to-br from-plantation-950 via-plantation-900 to-plantation-700 px-5 pb-5 pt-6 text-white"><div className="absolute right-4 top-3 opacity-10"><Leaf size={76} /></div><div className="relative flex items-start justify-between"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10"><Sprout size={20} /></span><span className="rounded-full bg-gold-400/15 px-2.5 py-1 text-[11px] font-medium text-gold-300">Lahan</span></div><h2 className="relative mt-5 font-display text-2xl text-white">{farm.name}</h2><p className="relative mt-1 flex items-center gap-1.5 text-sm text-white/85"><MapPin size={14} />{farm.location || 'Lokasi belum diisi'}</p></div>
-    <div className="p-5">{farm.owner && <div className="flex items-center gap-2 text-sm text-ink-600"><UserRound size={15} className="text-plantation-700" /><span>Pemilik: <strong className="font-medium text-ink-800">{farm.owner}</strong></span></div>}{farm.areaHa && <p className={`${farm.owner ? 'mt-2' : ''} text-xs text-ink-500`}>Luas lahan {farm.areaHa} hektare</p>}<div className="mt-5 grid grid-cols-2 gap-2"><FarmMetric label="Berat bersih · hari ini" value={`${todaySummary.netKg.toLocaleString('id-ID')} kg`} tone="paper" /><FarmMetric label="Hasil akhir · hari ini" value={money(todaySummary.result)} tone="gold" /><FarmMetric label="Berat bersih · minggu ini" value={`${weekSummary.netKg.toLocaleString('id-ID')} kg`} tone="paper" /><FarmMetric label="Hasil akhir · minggu ini" value={money(weekSummary.result)} tone="gold" /></div><div className="mt-4 flex items-center justify-between border-t border-ink-900/8 pt-3 text-xs text-ink-500"><span>{rows.length ? `Panen terakhir · ${formatShortDate(last.date)}` : 'Belum ada catatan panen'}</span><span className="font-medium text-plantation-700 group-hover:underline">Buka lahan →</span></div></div>
+    <div className="p-5">{farm.owner && <div className="flex items-center gap-2 text-sm text-ink-600"><UserRound size={15} className="text-plantation-700" /><span>Pemilik: <strong className="font-medium text-ink-800">{farm.owner}</strong></span></div>}{farm.areaHa && <p className={`${farm.owner ? 'mt-2' : ''} text-xs text-ink-500`}>Luas lahan {farm.areaHa} hektare</p>}<div className="mt-4 flex items-center justify-between border-t border-ink-900/8 pt-3 text-xs text-ink-500"><span>{rows.length ? `Panen terakhir · ${formatShortDate(last.date)}` : 'Belum ada catatan panen'}</span><span className="font-medium text-plantation-700 group-hover:underline">Buka lahan →</span></div></div>
   </button>
-}
-
-function summarizeFarmRecords(rows) {
-  return rows.reduce((summary, row) => {
-    summary.netKg += Number(row.netKg) || 0
-    summary.result += getFarmHarvestTotals(row).finalTotal
-    return summary
-  }, { netKg: 0, result: 0 })
-}
-
-function FarmMetric({ label, value, tone }) {
-  return <div className={`rounded-lg p-3 ${tone === 'gold' ? 'bg-gold-400/10' : 'bg-paper-100'}`}><p className="text-[10px] text-ink-500">{label}</p><p className="mt-1 truncate font-display text-base text-plantation-900">{value}</p></div>
 }
 
 function HarvestDetailDialog({ farm, record, onClose }) {

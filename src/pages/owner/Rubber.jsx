@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CalendarDays, Check, CircleDollarSign, Download, Droplets, Eye, FileSpreadsheet, FileText, Pencil, Plus, Scale, Trash2, X } from 'lucide-react'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleDollarSign, Download, Droplets, Eye, FileSpreadsheet, FileText, Pencil, Plus, Scale, Trash2, X } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useData } from '../../context/DataContext'
@@ -15,6 +15,11 @@ const calculate = (weight, price) => {
   const payableWeight = Math.floor(weight * 0.9 + 0.5)
   const total = payableWeight * price
   return { payableWeight, deduction: weight - payableWeight, total, half: Math.round(total / 2) }
+}
+const shiftDate = (date, amount) => {
+  const value = new Date(`${date}T12:00:00`)
+  value.setDate(value.getDate() + amount)
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
 }
 
 function exportCsv(records, range) {
@@ -99,6 +104,8 @@ export default function Rubber() {
   const [factoryForm, setFactoryForm] = useState({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
   const [factoryError, setFactoryError] = useState('')
   const today = todayKey()
+  const [selectedDate, setSelectedDate] = useState(today)
+  const [selectedFactoryDate, setSelectedFactoryDate] = useState(today)
   const [downloadRange, setDownloadRange] = useState([`${today.slice(0, 7)}-01`, today])
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
@@ -106,6 +113,15 @@ export default function Rubber() {
   const totalNetWeight = records.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
   const totalHalf = records.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
   const todayRecords = records.filter((item) => item.date === todayKey())
+  const dailyRecords = records.filter((item) => item.date === selectedDate)
+  const dailyFactorySales = rubberFactorySales.filter((sale) => sale.date === selectedFactoryDate).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+  const dailyWeight = dailyRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
+  const dailyNetWeight = dailyRecords.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
+  const dailyTotal = dailyRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
+  const dailyHalf = dailyRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
+  const factoryDayGross = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.grossAmount || 0), 0)
+  const factoryDayExpenses = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.expenseTotal || 0), 0)
+  const factoryDayNet = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.netAmount || 0), 0)
   const previewWeight = bagWeight(form.bags)
   const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
   const exportRecords = records.filter((record) => record.date >= downloadRange[0] && record.date <= downloadRange[1])
@@ -119,6 +135,7 @@ export default function Rubber() {
     event.preventDefault()
     const result = addRubberFactorySale(factoryForm)
     if (!result.ok) return setFactoryError(result.message)
+    setSelectedFactoryDate(factoryForm.date)
     setFactoryError('')
     setFactoryForm({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
     setNotice('Penjualan pabrik berhasil disimpan.')
@@ -198,7 +215,8 @@ export default function Rubber() {
         <div className="grid gap-2 rounded-xl bg-plantation-950 p-4 text-white sm:grid-cols-3"><CalcLine label="Berat × harga jual" value={formatRupiah(factoryGross)} /><CalcLine label="Total pengeluaran" value={`− ${formatRupiah(factoryExpenseTotal)}`} /><CalcLine label="Hasil bersih diterima" value={formatRupiah(factoryGross - factoryExpenseTotal)} highlight /></div>
         {factoryError && <p role="alert" className="text-sm text-red-700">{factoryError}</p>}<div className="flex justify-end"><button type="submit" className="btn-primary"><Check size={16} /> Simpan penjualan pabrik</button></div>
       </form>
-      <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[850px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Penjualan</th><th className="table-head">Pengeluaran lain</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>{rubberFactorySales.map((sale) => <tr key={sale.id}><td className="table-cell">{formatShortDate(sale.date)}</td><td className="table-cell text-right">{kg(sale.weightKg)}</td><td className="table-cell text-right">{formatRupiah(sale.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(sale.grossAmount)}</td><td className="table-cell text-xs">{sale.expenses?.length ? sale.expenses.map((x) => `${x.description}: ${formatRupiah(x.amount)}`).join(' · ') : '—'}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(sale.netAmount)}</td><td className="table-cell"><button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label="Hapus penjualan pabrik" onClick={() => { if (window.confirm('Hapus catatan penjualan pabrik ini?')) deleteRubberFactorySale(sale.id) }}><Trash2 size={16} /></button></td></tr>)}</tbody>{rubberFactorySales.length > 0 && <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total pabrik · {rubberFactorySales.length} catatan</td><td className="table-cell text-right font-semibold">{formatRupiah(rubberFactorySales.reduce((s, x) => s + Number(x.grossAmount || 0), 0))}</td><td className="table-cell text-right font-semibold">− {formatRupiah(rubberFactorySales.reduce((s, x) => s + Number(x.expenseTotal || 0), 0))}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(rubberFactorySales.reduce((s, x) => s + Number(x.netAmount || 0), 0))}</td><td /></tr></tfoot>}</table></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-y border-ink-900/8 bg-paper-50/70 px-5 py-3 sm:px-6"><div><p className="text-xs font-medium text-ink-500">Riwayat penjualan pada</p><p className="mt-0.5 text-sm font-semibold text-plantation-950">{formatShortDate(selectedFactoryDate)} <span className="font-normal text-ink-500">· {dailyFactorySales.length} catatan</span></p></div><DateNavigator date={selectedFactoryDate} today={today} onChange={setSelectedFactoryDate} /></div>
+      <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[850px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Penjualan</th><th className="table-head">Pengeluaran lain</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>{dailyFactorySales.map((sale) => <tr key={sale.id}><td className="table-cell">{formatShortDate(sale.date)}</td><td className="table-cell text-right">{kg(sale.weightKg)}</td><td className="table-cell text-right">{formatRupiah(sale.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(sale.grossAmount)}</td><td className="table-cell text-xs">{sale.expenses?.length ? sale.expenses.map((x) => `${x.description}: ${formatRupiah(x.amount)}`).join(' · ') : '—'}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(sale.netAmount)}</td><td className="table-cell"><button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label="Hapus penjualan pabrik ini" onClick={() => { if (window.confirm('Hapus catatan penjualan pabrik ini?')) deleteRubberFactorySale(sale.id) }}><Trash2 size={16} /></button></td></tr>)}</tbody>{dailyFactorySales.length > 0 && <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total tanggal ini · {dailyFactorySales.length} catatan</td><td className="table-cell text-right font-semibold">{formatRupiah(factoryDayGross)}</td><td className="table-cell text-right font-semibold">− {formatRupiah(factoryDayExpenses)}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(factoryDayNet)}</td><td /></tr></tfoot>}</table>{!dailyFactorySales.length && <p className="px-5 py-8 text-center text-sm text-ink-500">Belum ada penjualan pabrik pada tanggal ini.</p>}</div>
     </section>
 
     <section className="card mb-6 overflow-hidden">
@@ -262,12 +280,13 @@ export default function Rubber() {
 
     <section className="card overflow-hidden">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-900/8 px-5 py-4 sm:px-6">
-        <div><h2 className="font-display text-xl text-plantation-950">Riwayat getah</h2><p className="mt-1 text-xs text-ink-500">Rincian berat, potongan, nilai hasil, dan bagian setengah.</p></div>
-        <span className="rounded-full bg-plantation-700/8 px-3 py-1.5 text-xs font-medium text-plantation-800">{records.length} catatan</span>
+        <div><h2 className="font-display text-xl text-plantation-950">Riwayat getah</h2><p className="mt-1 text-xs text-ink-500">Catatan dipisahkan per tanggal. Pilih hari untuk melihat rinciannya.</p></div>
+        <span className="rounded-full bg-plantation-700/8 px-3 py-1.5 text-xs font-medium text-plantation-800">{dailyRecords.length} catatan · {formatShortDate(selectedDate)}</span>
       </div>
-      {records.length === 0 ? <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-plantation-700/8 text-plantation-700"><Droplets size={22} /></span><h3 className="font-display text-lg text-plantation-950">Belum ada catatan getah</h3><p className="mt-1 max-w-sm text-sm text-ink-500">Mulai dengan mencatat nama, berat tiap karung, dan harga per kg.</p><button type="button" className="btn-primary mt-4" onClick={openCreate}><Plus size={16} /> Catat getah pertama</button></div> : <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[1060px]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/8 bg-paper-50/70 px-5 py-3 sm:px-6"><div><p className="text-xs font-medium text-ink-500">Tanggal yang ditampilkan</p><p className="mt-0.5 text-sm font-semibold text-plantation-950">{formatShortDate(selectedDate)} <span className="font-normal text-ink-500">· {kg(dailyWeight)} kotor · {kg(dailyNetWeight)} bersih</span></p></div><DateNavigator date={selectedDate} today={today} onChange={setSelectedDate} /></div>
+      {dailyRecords.length === 0 ? <div className="flex min-h-44 flex-col items-center justify-center px-5 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-plantation-700/8 text-plantation-700"><Droplets size={22} /></span><h3 className="font-display text-lg text-plantation-950">Belum ada catatan pada tanggal ini</h3><p className="mt-1 max-w-sm text-sm text-ink-500">Riwayat tanggal lain tetap tersimpan. Gunakan navigasi tanggal untuk melihat hari lain.</p>{records.length === 0 && <button type="button" className="btn-primary mt-4" onClick={openCreate}><Plus size={16} /> Catat getah pertama</button>}</div> : <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[1060px]">
         <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal / nama</th><th className="table-head">Berat per karung</th><th className="table-head text-right">Berat total</th><th className="table-head text-right">Setelah -10%</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total hasil</th><th className="table-head text-right">Bagian ½</th><th className="table-head">Aksi</th></tr></thead>
-        <tbody>{records.map((record, index) => <tr key={record.id}>
+        <tbody>{dailyRecords.map((record, index) => <tr key={record.id}>
           <td className="table-cell text-ink-500">{index + 1}</td>
           <td className="table-cell"><p className="font-medium text-ink-800">{record.name}</p><p className="mt-1 text-xs text-ink-500">{formatShortDate(record.date)}</p></td>
           <td className="table-cell text-xs text-ink-600">{record.bags.map((weight, bagIndex) => <span key={bagIndex} className="mr-1.5 inline-block whitespace-nowrap rounded-full bg-paper-100 px-2 py-1">{bagIndex + 1}: {kg(weight)}</span>)}</td>
@@ -278,7 +297,7 @@ export default function Rubber() {
           <td className="table-cell text-right font-semibold text-plantation-900 whitespace-nowrap">{formatRupiah(record.splitAmount)}</td>
           <td className="table-cell"><div className="flex items-center gap-1"><button type="button" onClick={() => setViewRecord(record)} className="rounded-lg p-2 text-plantation-800 hover:bg-plantation-50" aria-label={`Lihat catatan getah ${record.name}`} title="Lihat detail"><Eye size={16} /></button><button type="button" onClick={() => openEdit(record)} className="rounded-lg p-2 text-ink-500 hover:bg-gold-400/10 hover:text-gold-600" aria-label={`Edit catatan getah ${record.name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => remove(record)} className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label={`Hapus catatan getah ${record.name}`} title="Hapus"><Trash2 size={16} /></button></div></td>
         </tr>)}</tbody>
-        <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total · {records.length} catatan</td><td className="table-cell text-right font-semibold">{kg(totalWeight)}</td><td className="table-cell text-right font-semibold text-plantation-800">{kg(totalNetWeight)}</td><td className="table-cell" /><td className="table-cell text-right font-semibold">{formatRupiah(records.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0))}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(totalHalf)}</td><td className="table-cell" /></tr></tfoot>
+        <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total tanggal ini · {dailyRecords.length} catatan</td><td className="table-cell text-right font-semibold">{kg(dailyWeight)}</td><td className="table-cell text-right font-semibold text-plantation-800">{kg(dailyNetWeight)}</td><td className="table-cell" /><td className="table-cell text-right font-semibold">{formatRupiah(dailyTotal)}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(dailyHalf)}</td><td className="table-cell" /></tr></tfoot>
       </table></div>}
     </section>
 
@@ -295,6 +314,15 @@ export default function Rubber() {
 
 function SummaryCard({ icon, label, value, detail, accent = false }) {
   return <article className="card relative overflow-hidden p-4 sm:p-5"><span className={`absolute inset-x-0 top-0 h-1 ${accent ? 'bg-gold-500' : 'bg-plantation-700'}`} /><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-plantation-700/8 text-plantation-800">{icon}</span><div className="min-w-0"><p className="text-xs text-ink-500">{label}</p><p className="mt-1 truncate font-display text-xl text-plantation-950">{value}</p><p className="mt-1 text-[11px] text-ink-400">{detail}</p></div></div></article>
+}
+
+function DateNavigator({ date, today, onChange }) {
+  return <div className="flex flex-wrap items-center gap-2">
+    <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs" onClick={() => onChange(shiftDate(date, -1))} aria-label="Tanggal sebelumnya"><ChevronLeft size={16} /><span className="hidden sm:inline">Sebelumnya</span></button>
+    <label className="relative"><span className="sr-only">Pilih tanggal</span><input type="date" className="input !min-h-9 !w-auto !rounded-full !px-3 !py-1.5 text-xs" value={date} max={today} onChange={(event) => event.target.value && onChange(event.target.value)} /></label>
+    <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs" onClick={() => onChange(today)} disabled={date === today}>Hari ini</button>
+    <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40" onClick={() => onChange(shiftDate(date, 1))} disabled={date >= today} aria-label="Tanggal berikutnya"><span className="hidden sm:inline">Berikutnya</span><ChevronRight size={16} /></button>
+  </div>
 }
 
 function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }

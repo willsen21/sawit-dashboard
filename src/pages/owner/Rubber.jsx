@@ -101,7 +101,7 @@ function exportPdf(records, factorySales, range) {
     startY: 54,
     body: [
       ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
-      ['Pengeluaran pabrik', `− ${formatRupiah(totalExpenses)}`, 'Hasil bersih pabrik', formatRupiah(totalFactoryNet)],
+      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Hasil bersih pabrik', formatRupiah(totalFactoryNet)],
       ['Berat kotor · bersih', `${kg(totalWeight)} · ${kg(totalNetWeight)}`, 'Bagian ½', formatRupiah(totalHalf)],
     ],
     theme: 'grid',
@@ -112,6 +112,7 @@ function exportPdf(records, factorySales, range) {
   let sectionY = pdf.lastAutoTable.finalY + 9
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
+  pdf.setTextColor(22, 48, 42)
   pdf.text('PEMBELIAN GETAH', 14, sectionY)
   autoTable(pdf, {
     startY: sectionY + 4,
@@ -140,6 +141,7 @@ function exportPdf(records, factorySales, range) {
   if (nextY > pdf.internal.pageSize.getHeight() - 35) { pdf.addPage(); nextY = 18 }
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
+  pdf.setTextColor(22, 48, 42)
   pdf.text('PENJUALAN GETAH DI PABRIK', 14, nextY)
   autoTable(pdf, {
     startY: nextY + 4,
@@ -164,6 +166,7 @@ function exportPdf(records, factorySales, range) {
     if (nextY > pdf.internal.pageSize.getHeight() - 35) { pdf.addPage(); nextY = 18 }
     pdf.setFont('helvetica', 'bold')
     pdf.setFontSize(11)
+    pdf.setTextColor(22, 48, 42)
     pdf.text('RINCIAN PENGELUARAN PABRIK', 14, nextY)
     autoTable(pdf, {
       startY: nextY + 4,

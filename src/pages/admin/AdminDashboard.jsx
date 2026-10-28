@@ -39,10 +39,15 @@ export default function AdminDashboard() {
   const [unlockError, setUnlockError] = useState('')
   const hasPendingUnlock = cashUnlockRequests.some((request) => request.date === date && request.status === 'pending')
   const pendingCashEdit = cancellationRequests.some((request) => request.kind === 'cashInitialEdit' && request.date === date && request.status === 'pending')
+  const hasCashInitialRequest = cancellationRequests.some((request) => request.kind === 'cashInitialEdit' && request.date === date)
 
   useEffect(() => {
-    if (cloudReady && !summary.exists && !pendingCashEdit) setShowInitialCash(true)
-  }, [cloudReady, summary.exists, pendingCashEdit])
+    if (!cloudReady || summary.exists || hasCashInitialRequest || !currentUser?.id) return
+    const promptKey = `kebunkas_initial_cash_prompt_${currentUser.id}_${date}`
+    if (window.localStorage.getItem(promptKey) === 'shown') return
+    window.localStorage.setItem(promptKey, 'shown')
+    setShowInitialCash(true)
+  }, [cloudReady, summary.exists, hasCashInitialRequest, currentUser?.id, date])
 
   function handleSaveInitialCash(event) {
     event.preventDefault()

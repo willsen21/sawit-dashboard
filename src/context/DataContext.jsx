@@ -14,6 +14,7 @@ const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash']
+const ADMIN_REFRESH_COLLECTIONS = ['topups', 'dailyCash', 'cancellationRequests', 'cashUnlockRequests']
 const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
 const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
@@ -222,7 +223,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         if (!active) return
         const refreshCollections = currentUser.role === 'owner'
           ? OWNER_REFRESH_COLLECTIONS
-          : ['dailyCash', 'cancellationRequests', 'cashUnlockRequests']
+          : ADMIN_REFRESH_COLLECTIONS
         const { data: freshRows, error: refreshError } = await supabase.from('app_records')
           .select('collection, record_id, data')
           .in('collection', refreshCollections)

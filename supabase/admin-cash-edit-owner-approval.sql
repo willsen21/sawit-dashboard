@@ -18,7 +18,7 @@ begin
   if (select public.current_kebunkas_role()) = 'admin'
      and tg_op = 'UPDATE'
      and old.collection = 'dailyCash'
-     and (old.data - 'status') is distinct from (new.data - 'status') then
+     and (old.data -> 'initialAmount') is distinct from (new.data -> 'initialAmount') then
     raise exception 'Admin tidak dapat mengubah nominal kas awal; perubahan harus disetujui owner.';
   end if;
 

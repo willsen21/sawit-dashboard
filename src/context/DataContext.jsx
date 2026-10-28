@@ -302,9 +302,18 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     // Optimistic per-record baseline keeps unrelated edits on different devices from replacing an entire collection.
     cloudBaseline.current = { ...cloudBaseline.current, [collection]: next }
     const rows = changed.map(([id, item]) => ({ collection, record_id: id, data: item }))
+    const adminDailyCashUpdate = collection === 'dailyCash' && currentUser.role === 'admin'
     Promise.all([
-      rows.length ? supabase.from('app_records').upsert(rows, { onConflict: 'collection,record_id' }) : Promise.resolve({ error: null }),
-      removed.length ? supabase.from('app_records').delete().eq('collection', collection).in('record_id', removed) : Promise.resolve({ error: null }),
+      rows.length && adminDailyCashUpdate
+        ? Promise.all(rows.map((row) => supabase.from('app_records')
+          .update({ data: row.data })
+          .eq('collection', collection)
+          .eq('record_id', row.record_id)
+          .select('record_id')
+          .maybeSingle()))
+          .then((results) => ({ error: results.find((result) => result.error)?.error || (results.some((result) => !result.data) ? { message: 'Catatan kas awal tidak ditemukan di cloud. Minta owner menyinkronkan kas awal sebelum menutup kas.' } : null) }))
+        : rows.length ? supabase.from('app_records').upsert(rows, { onConflict: 'collection,record_id' }) : Promise.resolve({ error: null }),
+      removed.length && !adminDailyCashUpdate ? supabase.from('app_records').delete().eq('collection', collection).in('record_id', removed) : Promise.resolve({ error: null }),
     ]).then((results) => {
       const failure = results.find((result) => result.error)?.error
       if (failure) {

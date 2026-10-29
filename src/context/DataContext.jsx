@@ -598,16 +598,18 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     return { ok: true }
   }
 
-  function addPineappleStock({ date, type, quantity, capitalCost, note = '', ownerId }) {
+  function addPineappleStock({ date, quantities, capitalCost, note = '', ownerId }) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok nanas.' }
-    const count = Number(quantity)
+    const normalizedQuantities = Object.fromEntries(['large', 'small', 'bundle'].map((type) => [type, Number(quantities?.[type] || 0)]))
+    const totalQuantity = Object.values(normalizedQuantities).reduce((sum, quantity) => sum + quantity, 0)
     const cost = parseRupiahInput(capitalCost)
-    if (!date || !['large', 'small', 'bundle'].includes(type) || !Number.isInteger(count) || count <= 0 || !Number.isFinite(cost) || cost <= 0) {
-      return { ok: false, message: 'Tanggal, jenis, jumlah stok, dan modal harus diisi dengan benar.' }
+    if (!date || Object.values(normalizedQuantities).some((quantity) => !Number.isInteger(quantity) || quantity < 0) || totalQuantity <= 0 || !Number.isFinite(cost) || cost <= 0) {
+      return { ok: false, message: 'Tanggal, minimal satu jumlah stok, dan total modal harus diisi dengan benar.' }
     }
-    const entry = { id: `pineapple-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, capitalCost: cost, note: String(note).trim(), ownerId, createdAt: new Date().toISOString() }
+    const entry = { id: `pineapple-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, quantities: normalizedQuantities, capitalCost: cost, note: String(note).trim(), ownerId, createdAt: new Date().toISOString() }
     setPineappleStock((previous) => [entry, ...previous])
-    addAuditLog({ action: 'Menambah stok nanas', actorId: ownerId, detail: `${type}: ${count} unit · modal Rp${cost.toLocaleString('id-ID')}` })
+    const stockDetail = Object.entries(normalizedQuantities).filter(([, quantity]) => quantity > 0).map(([type, quantity]) => `${type}: ${quantity}`).join(' · ')
+    addAuditLog({ action: 'Menambah stok nanas', actorId: ownerId, detail: `${stockDetail} · total modal Rp${cost.toLocaleString('id-ID')}` })
     return { ok: true, entry }
   }
 
@@ -617,7 +619,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     if (!date || !['large', 'small', 'bundle'].includes(type) || !Number.isInteger(count) || count <= 0) {
       return { ok: false, message: 'Tanggal, ukuran nanas, dan jumlah penjualan harus diisi dengan benar.' }
     }
-    const available = pineappleStock.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+    const available = pineappleStock.reduce((sum, item) => sum + Number(item.quantities?.[type] ?? (item.type === type ? item.quantity : 0) ?? 0), 0)
       - pineappleSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
     if (count > available) return { ok: false, message: `Stok tidak cukup. Tersedia ${available.toLocaleString('id-ID')} unit.` }
     const prices = { large: 13000, small: 8000, bundle: 20000 }

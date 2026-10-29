@@ -660,7 +660,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
       - pineappleSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
     if (count > available) return { ok: false, message: `Stok tidak cukup. Tersedia ${available.toLocaleString('id-ID')} unit.` }
     const prices = { large: 13000, small: 8000, bundle: 20000 }
-    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, sellerName, unitPrice: prices[type], total: count * prices[type], adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
+    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, sellerName, unitPrice: prices[type], total: count * prices[type], paymentMethod: 'pending', paymentStatus: 'pending', adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
     setPineappleSales((previous) => [sale, ...previous])
     addAuditLog({ action: 'Mencatat penjualan nanas', actorId: adminId || currentUser.id, detail: `${sellerName} · ${type}: ${count} unit × Rp${prices[type].toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
     return { ok: true, sale }
@@ -691,6 +691,24 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     setPineappleSales((previous) => previous.filter((item) => item.id !== id))
     addAuditLog({ action: 'Menghapus penjualan nanas', actorId: ownerId || currentUser.id, detail: `${existing.sellerName || 'Penjual belum dicatat'} · ${existing.type}: ${Number(existing.quantity || 0)} unit · ${existing.date}` })
     return { ok: true }
+  }
+
+  function updatePineappleSalePayment(id, paymentMethod, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah status pembayaran penjualan nanas.' }
+    if (!['pending', 'cash', 'transfer'].includes(paymentMethod)) return { ok: false, message: 'Pilih status belum bayar, tunai, atau transfer.' }
+    const existing = pineappleSales.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan penjualan nanas tidak ditemukan.' }
+    const updated = {
+      ...existing,
+      paymentMethod,
+      paymentStatus: paymentMethod === 'pending' ? 'pending' : 'paid',
+      paymentUpdatedAt: new Date().toISOString(),
+      paymentUpdatedBy: ownerId || currentUser.id,
+    }
+    setPineappleSales((previous) => previous.map((item) => item.id === id ? updated : item))
+    const paymentLabel = { pending: 'Belum bayar', cash: 'Tunai', transfer: 'TF' }[paymentMethod]
+    addAuditLog({ action: 'Mengubah status pembayaran penjualan nanas', actorId: ownerId || currentUser.id, detail: `${existing.sellerName || 'Penjual belum dicatat'} · ${existing.type} · ${paymentLabel}` })
+    return { ok: true, sale: updated }
   }
 
   // ---- Supplier ----
@@ -1193,6 +1211,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     addPineappleSale,
     updatePineappleSale,
     deletePineappleSale,
+    updatePineappleSalePayment,
     addPrivateFarm,
     updatePrivateFarm,
     addPrivateHarvestRecord,

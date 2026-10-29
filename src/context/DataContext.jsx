@@ -11,7 +11,7 @@ import { calculateFarmHarvest } from '../lib/farmCalculations'
 const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
-const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales']
+const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
 const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash']
 const ADMIN_REFRESH_COLLECTIONS = [...OWNER_REFRESH_COLLECTIONS, 'cancellationRequests', 'cashUnlockRequests']
@@ -22,7 +22,7 @@ const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
   // Keep full histories for inventory and rubber records, including older dates.
-  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'rubberRecords' || collection === 'rubberFactorySales') return item
+  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'rubberRecords' || collection === 'rubberFactorySales' || collection === 'pineappleStock' || collection === 'pineappleSales') return item
   if (collection === 'privateFarms') {
     return {
       ...item,
@@ -64,6 +64,8 @@ export function DataProvider({ children }) {
   const [rubberFactorySales, setRubberFactorySales] = useState(() => loadItem('rubberFactorySales', []))
   const [stoneStock, setStoneStock] = useState(() => loadItem('stoneStock', []))
   const [stoneSales, setStoneSales] = useState(() => loadItem('stoneSales', []))
+  const [pineappleStock, setPineappleStock] = useState(() => loadItem('pineappleStock', []))
+  const [pineappleSales, setPineappleSales] = useState(() => loadItem('pineappleSales', []))
   const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
   const [cloudError, setCloudError] = useState('')
   const cloudBaseline = useRef({})
@@ -75,9 +77,9 @@ export function DataProvider({ children }) {
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
     cancellationRequests: setCancellationRequests, cashUnlockRequests: setCashUnlockRequests,
     harvestSchedules: setHarvestSchedules, operationalExpenses: setOperationalExpenses,
-    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, rubberFactorySales: setRubberFactorySales, stoneStock: setStoneStock, stoneSales: setStoneSales,
+    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, rubberFactorySales: setRubberFactorySales, stoneStock: setStoneStock, stoneSales: setStoneSales, pineappleStock: setPineappleStock, pineappleSales: setPineappleSales,
   }
-  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, rubberFactorySales, stoneStock, stoneSales }
+  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, rubberFactorySales, stoneStock, stoneSales, pineappleStock, pineappleSales }
   const collectionValuesRef = useRef(collectionValues)
   collectionValuesRef.current = collectionValues
 
@@ -121,6 +123,8 @@ useLayoutEffect(() => { saveItem('rubberRecords', rubberRecords) }, [rubberRecor
 useLayoutEffect(() => { saveItem('rubberFactorySales', rubberFactorySales) }, [rubberFactorySales])
 useLayoutEffect(() => { saveItem('stoneStock', stoneStock) }, [stoneStock])
 useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
+useLayoutEffect(() => { saveItem('pineappleStock', pineappleStock) }, [pineappleStock])
+useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineappleSales])
 
   useEffect(() => {
     const syncStorageChange = (event) => {
@@ -168,7 +172,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         for (const name of COLLECTION_NAMES) {
           // Keep the legacy migration one-time for general records, but retry
           // historical inventory and rubber records until they reach the cloud.
-          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'rubberRecords' && name !== 'rubberFactorySales') continue
+          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'rubberRecords' && name !== 'rubberFactorySales' && name !== 'pineappleStock' && name !== 'pineappleSales') continue
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
           const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
@@ -184,7 +188,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
           if (!migrateError) continue
           console.error(`Gagal memindahkan data lokal ${name} ke Supabase:`, migrateError)
           migrationWarnings.push(`${name}: ${migrateError.message}${migrateError.code ? ` (kode ${migrateError.code})` : ''}`)
-          if (name !== 'stoneStock' && name !== 'stoneSales') legacyMigrationFailed = true
+          if (!['stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'].includes(name)) legacyMigrationFailed = true
         }
         if (!localMigrationDone && !legacyMigrationFailed) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
       } else if (currentUser.role === 'admin') {
@@ -197,6 +201,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
           auditLogs: 'actorId',
           cancellationRequests: 'requestedBy',
           cashUnlockRequests: 'requestedBy',
+          pineappleSales: 'adminId',
         }
         for (const [name, ownerField] of Object.entries(adminOwnedCollections)) {
           const cloudIds = new Set(grouped[name].map((item) => String(item.id)))
@@ -335,10 +340,12 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         const detail = [failure.message, failure.code && `kode ${failure.code}`].filter(Boolean).join(' · ')
         const hint = collection === 'stoneStock' || collection === 'stoneSales'
           ? 'Pastikan supabase/stone-feature.sql sudah dijalankan di Supabase.'
+          : collection === 'pineappleStock' || collection === 'pineappleSales'
+            ? 'Pastikan supabase/pineapple-feature.sql sudah dijalankan di Supabase.'
           : collection === 'rubberRecords'
             ? 'Pastikan supabase/getah-feature.sql sudah dijalankan di Supabase SQL Editor.'
             : 'Periksa koneksi dan aturan akses database Supabase.'
-        const collectionLabel = collection === 'rubberRecords' ? 'catatan Getah' : collection === 'stoneStock' ? 'stok batu' : collection === 'stoneSales' ? 'penjualan batu' : collection
+        const collectionLabel = collection === 'rubberRecords' ? 'catatan Getah' : collection === 'stoneStock' ? 'stok batu' : collection === 'stoneSales' ? 'penjualan batu' : collection === 'pineappleStock' ? 'stok nanas' : collection === 'pineappleSales' ? 'penjualan nanas' : collection
         cloudSyncErrors.current = { ...cloudSyncErrors.current, [collection]: `Gagal menyimpan ${collectionLabel} ke cloud. ${hint}${detail ? ` Detail: ${detail}` : ''}` }
         setCloudError(Object.values(cloudSyncErrors.current).join(' '))
         if ((cloudRetryAttempts.current[collection] || 0) < 3 && !cloudRetryTimers.current[collection]) {
@@ -375,6 +382,8 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
   useEffect(() => { syncCollectionToCloud('rubberFactorySales', rubberFactorySales) }, [rubberFactorySales, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneStock', stoneStock) }, [stoneStock, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneSales', stoneSales) }, [stoneSales, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('pineappleStock', pineappleStock) }, [pineappleStock, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('pineappleSales', pineappleSales) }, [pineappleSales, cloudReady, currentUser?.id])
 
   useEffect(() => {
     if (!cloudReady || currentUser?.role !== 'owner') return
@@ -582,6 +591,35 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     setStoneSales((prev) => prev.map((item) => item.id === id ? { ...item, paymentStatus: 'paid', paidBy: ownerId, paidAt: new Date().toISOString() } : item))
     addAuditLog({ action: 'Mengonfirmasi pelunasan batu', actorId: ownerId, detail: `${canonicalStoneType(sale.type)} · ${sale.driverName} · ${sale.date}` })
     return { ok: true }
+  }
+
+  function addPineappleStock({ date, type, quantity, capitalCost, note = '', ownerId }) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok nanas.' }
+    const count = Number(quantity)
+    const cost = parseRupiahInput(capitalCost)
+    if (!date || !['large', 'small', 'bundle'].includes(type) || !Number.isInteger(count) || count <= 0 || !Number.isFinite(cost) || cost <= 0) {
+      return { ok: false, message: 'Tanggal, jenis, jumlah stok, dan modal harus diisi dengan benar.' }
+    }
+    const entry = { id: `pineapple-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, capitalCost: cost, note: String(note).trim(), ownerId, createdAt: new Date().toISOString() }
+    setPineappleStock((previous) => [entry, ...previous])
+    addAuditLog({ action: 'Menambah stok nanas', actorId: ownerId, detail: `${type}: ${count} unit · modal Rp${cost.toLocaleString('id-ID')}` })
+    return { ok: true, entry }
+  }
+
+  function addPineappleSale({ date, type, quantity, adminId }) {
+    if (!['owner', 'admin'].includes(currentUser?.role)) return { ok: false, message: 'Akses mencatat penjualan nanas tidak tersedia.' }
+    const count = Number(quantity)
+    if (!date || !['large', 'small', 'bundle'].includes(type) || !Number.isInteger(count) || count <= 0) {
+      return { ok: false, message: 'Tanggal, ukuran nanas, dan jumlah penjualan harus diisi dengan benar.' }
+    }
+    const available = pineappleStock.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+      - pineappleSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+    if (count > available) return { ok: false, message: `Stok tidak cukup. Tersedia ${available.toLocaleString('id-ID')} unit.` }
+    const prices = { large: 13000, small: 8000, bundle: 20000 }
+    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, unitPrice: prices[type], total: count * prices[type], adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
+    setPineappleSales((previous) => [sale, ...previous])
+    addAuditLog({ action: 'Mencatat penjualan nanas', actorId: adminId || currentUser.id, detail: `${type}: ${count} unit × Rp${prices[type].toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
+    return { ok: true, sale }
   }
 
   // ---- Supplier ----
@@ -1078,6 +1116,10 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     updateStoneSale,
     deleteStoneSale,
     markStoneSalePaid,
+    pineappleStock,
+    pineappleSales,
+    addPineappleStock,
+    addPineappleSale,
     addPrivateFarm,
     updatePrivateFarm,
     addPrivateHarvestRecord,

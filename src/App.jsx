@@ -21,6 +21,7 @@ import PrivateFarms from './pages/owner/PrivateFarms'
 import StoneSales from './pages/admin/StoneSales'
 import Stones from './pages/owner/Stones'
 import Rubber from './pages/owner/Rubber'
+import Pineapples from './pages/shared/Pineapples'
 import { SHOW_FRUIT_PURCHASES } from './config/features'
 
 const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
@@ -51,6 +52,7 @@ export default function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="batu" element={<StoneSales />} />
+            <Route path="nanas" element={<Pineapples />} />
             <Route path="catat-pembelian" element={<Navigate to={`/admin/catat-pembelian/${defaultPurchaseKind}`} replace />} />
             <Route path="catat-pembelian/buah" element={SHOW_FRUIT_PURCHASES ? <PurchaseForm /> : <Navigate to="/admin/catat-pembelian/brondolan" replace />} />
             <Route path="catat-pembelian/brondolan" element={<PurchaseForm />} />
@@ -72,6 +74,7 @@ export default function App() {
             <Route path="operasional" element={<Operations />} />
             <Route path="kebun-pribadi" element={<PrivateFarms />} />
             <Route path="getah" element={<Rubber />} />
+            <Route path="nanas" element={<Pineapples />} />
             <Route path="laporan" element={<Navigate to={`/owner/laporan/${defaultPurchaseKind}`} replace />} />
             <Route path="laporan/pinjaman" element={<CashLoanReport />} />
             <Route path="laporan/buah" element={SHOW_FRUIT_PURCHASES ? <Reports /> : <Navigate to="/owner/laporan/brondolan" replace />} />

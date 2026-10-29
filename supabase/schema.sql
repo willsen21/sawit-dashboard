@@ -16,7 +16,8 @@ create table if not exists public.app_records (
   collection text not null check (collection in (
     'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
     'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
-    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales'
+    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales',
+    'pineappleStock', 'pineappleSales'
   )),
   record_id text not null,
   data jsonb not null,
@@ -37,7 +38,7 @@ alter table public.app_records
     'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
     'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
     'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales',
-    'stoneStock', 'stoneSales'
+    'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'
   ));
 
 commit;
@@ -90,7 +91,7 @@ using (
     (select public.current_kebunkas_role()) = 'admin'
     and collection in (
       'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans',
-      'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales'
+      'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'
     )
   )
 );
@@ -104,7 +105,7 @@ with check (
     (select public.current_kebunkas_role()) = 'admin'
     and collection in (
       'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
-      'cancellationRequests', 'cashUnlockRequests', 'stoneSales'
+      'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'pineappleSales'
     )
   )
 );

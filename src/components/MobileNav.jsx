@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, ClipboardList, Users, Wallet, ReceiptText, ShieldCheck, LogOut, CalendarDays, Sprout, Menu, X, Mountain, KeyRound, Droplets } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Users, Wallet, ReceiptText, ShieldCheck, LogOut, CalendarDays, Sprout, Menu, X, Mountain, KeyRound, Droplets, Apple } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { SHOW_FRUIT_PURCHASES } from '../config/features'
 import ChangePasswordModal from './ChangePasswordModal'
@@ -9,6 +9,7 @@ const defaultPurchaseKind = SHOW_FRUIT_PURCHASES ? 'buah' : 'brondolan'
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Kas Hari Ini', icon: Wallet, end: true },
   { to: '/admin/batu', label: 'Catat Batu', icon: Mountain },
+  { to: '/admin/nanas', label: 'Penjualan Nanas', icon: Apple },
   { to: `/admin/catat-pembelian/${defaultPurchaseKind}`, label: 'Catat Pembelian', icon: ReceiptText, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/admin/catat-pembelian/buah', label: 'Buah' }] : []), { to: '/admin/catat-pembelian/brondolan', label: 'Brondolan' }] },
   { to: `/admin/pembelian/${defaultPurchaseKind}`, label: 'Riwayat Pembelian', icon: ClipboardList, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/admin/pembelian/buah', label: 'Buah' }] : []), { to: '/admin/pembelian/brondolan', label: 'Brondolan' }] },
 ]
@@ -16,6 +17,7 @@ const ADMIN_LINKS = [
 const OWNER_LINKS = [
   { to: '/owner', label: 'Ringkasan', icon: LayoutGrid, end: true },
   { to: '/owner/batu', label: 'Stok Batu', icon: Mountain },
+  { to: '/owner/nanas', label: 'Nanas Gambut', icon: Apple },
   { to: `/owner/laporan/${defaultPurchaseKind}`, label: 'Laporan', icon: ClipboardList, children: [...(SHOW_FRUIT_PURCHASES ? [{ to: '/owner/laporan/buah', label: 'Buah' }] : []), { to: '/owner/laporan/brondolan', label: 'Brondolan' }, { to: '/owner/laporan/pinjaman', label: 'Pinjaman Kas' }] },
   { to: '/owner/operasional', label: 'Operasional Kebun', icon: CalendarDays },
   { to: '/owner/kebun-pribadi', label: 'Kebun', icon: Sprout },

@@ -13,8 +13,8 @@ const DataContext = createContext(null)
 const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
-const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash', 'pineappleStock', 'pineappleSales']
-const ADMIN_REFRESH_COLLECTIONS = [...OWNER_REFRESH_COLLECTIONS, 'cancellationRequests', 'cashUnlockRequests']
+const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales']
+const ADMIN_REFRESH_COLLECTIONS = [...OWNER_REFRESH_COLLECTIONS]
 const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
 const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
@@ -246,9 +246,19 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
             .in('collection', refreshCollections)
           if (refreshError) {
             console.error('Gagal memperbarui data kas dan persetujuan:', refreshError)
+            cloudSyncErrors.current = {
+              ...cloudSyncErrors.current,
+              refresh: `Pembaruan data bersama gagal: ${refreshError.message}${refreshError.code ? ` · kode ${refreshError.code}` : ''}`,
+            }
+            setCloudError(Object.values(cloudSyncErrors.current).join(' '))
             return
           }
           if (!active) return
+          if (cloudSyncErrors.current.refresh) {
+            const { refresh: _resolvedRefresh, ...remainingErrors } = cloudSyncErrors.current
+            cloudSyncErrors.current = remainingErrors
+            setCloudError(Object.values(remainingErrors).join(' '))
+          }
           const freshByCollection = Object.fromEntries(refreshCollections.map((name) => [name, []]))
           for (const row of freshRows || []) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
           const nextBaselines = { ...cloudBaseline.current }
@@ -294,15 +304,33 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
           const id = String((payload.new?.record_id || payload.old?.record_id || ''))
           if (!id) return
           const baseline = new Map(cloudBaseline.current[collection] || [])
-          const current = new Map(baseline)
-          if (payload.eventType === 'DELETE') { baseline.delete(id); current.delete(id) }
-          else { baseline.set(id, payload.new.data); current.set(id, payload.new.data) }
+          const localRecords = collectionValuesRef.current[collection] || []
+          const current = new Map(localRecords.filter((item) => item?.id).map((item) => [String(item.id), item]))
+          const localRecord = current.get(id)
+          const localHasPendingChange = localRecord && (
+            !baseline.has(id) || JSON.stringify(baseline.get(id)) !== JSON.stringify(localRecord)
+          )
+          if (payload.eventType === 'DELETE') {
+            baseline.delete(id)
+            if (!localHasPendingChange) current.delete(id)
+          } else {
+            baseline.set(id, payload.new.data)
+            if (!localHasPendingChange) current.set(id, payload.new.data)
+          }
           cloudBaseline.current = { ...cloudBaseline.current, [collection]: baseline }
           collectionSetters[collection]([...current.values()])
         })
         .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setCloudError('Koneksi sinkronisasi terputus. Muat ulang halaman untuk menyambungkan kembali.')
-          if (status === 'SUBSCRIBED') refreshSharedCashData()
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            cloudSyncErrors.current = { ...cloudSyncErrors.current, realtime: 'Koneksi realtime terputus; aplikasi sedang mencoba menyambungkan ulang.' }
+            setCloudError(Object.values(cloudSyncErrors.current).join(' '))
+          }
+          if (status === 'SUBSCRIBED') {
+            const { realtime: _resolvedRealtime, ...remainingErrors } = cloudSyncErrors.current
+            cloudSyncErrors.current = remainingErrors
+            setCloudError(Object.values(remainingErrors).join(' '))
+            refreshSharedCashData()
+          }
         })
     }
 

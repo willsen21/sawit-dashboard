@@ -650,35 +650,41 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     return { ok: true, entry }
   }
 
-  function addPineappleSale({ date, type, quantity, sellerName, adminId }) {
+  function addPineappleSale({ date, type, quantity, sellerName, discount = 0, adminId }) {
     if (!['owner', 'admin'].includes(currentUser?.role)) return { ok: false, message: 'Akses mencatat penjualan nanas tidak tersedia.' }
     const count = Number(quantity)
-    if (!date || !['large', 'small', 'bundle'].includes(type) || !['willsen', 'sri', 'nisa'].includes(sellerName) || !Number.isInteger(count) || count <= 0) {
-      return { ok: false, message: 'Tanggal, ukuran, nama penjual, dan jumlah penjualan harus diisi dengan benar.' }
+    const discountAmount = parseRupiahInput(discount)
+    if (!date || !['large', 'small', 'bundle'].includes(type) || !['willsen', 'sri', 'nisa', 'together'].includes(sellerName) || !Number.isInteger(count) || count <= 0 || !Number.isFinite(discountAmount) || discountAmount < 0) {
+      return { ok: false, message: 'Tanggal, ukuran, nama penjual, jumlah, dan potongan harga harus diisi dengan benar.' }
     }
     const available = pineappleStock.reduce((sum, item) => sum + Number(item.quantities?.[type] ?? (item.type === type ? item.quantity : 0) ?? 0), 0)
       - pineappleSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
     if (count > available) return { ok: false, message: `Stok tidak cukup. Tersedia ${available.toLocaleString('id-ID')} unit.` }
     const prices = { large: 13000, small: 8000, bundle: 20000 }
-    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, sellerName, unitPrice: prices[type], total: count * prices[type], paymentMethod: 'pending', paymentStatus: 'pending', adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
+    const grossTotal = count * prices[type]
+    if (discountAmount >= grossTotal) return { ok: false, message: 'Potongan harus lebih kecil dari total harga sebelum potongan.' }
+    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, sellerName, unitPrice: prices[type], grossTotal, discount: discountAmount, total: grossTotal - discountAmount, paymentMethod: 'pending', paymentStatus: 'pending', adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
     setPineappleSales((previous) => [sale, ...previous])
-    addAuditLog({ action: 'Mencatat penjualan nanas', actorId: adminId || currentUser.id, detail: `${sellerName} · ${type}: ${count} unit × Rp${prices[type].toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
+    addAuditLog({ action: 'Mencatat penjualan nanas', actorId: adminId || currentUser.id, detail: `${sellerName} · ${type}: ${count} unit · potongan Rp${discountAmount.toLocaleString('id-ID')} · diterima Rp${sale.total.toLocaleString('id-ID')}` })
     return { ok: true, sale }
   }
 
-  function updatePineappleSale(id, { date, type, quantity, sellerName }, ownerId) {
+  function updatePineappleSale(id, { date, type, quantity, sellerName, discount = 0 }, ownerId) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah penjualan nanas.' }
     const existing = pineappleSales.find((item) => item.id === id)
     if (!existing) return { ok: false, message: 'Catatan penjualan nanas tidak ditemukan.' }
     const count = Number(quantity)
-    if (!date || !['large', 'small', 'bundle'].includes(type) || !['willsen', 'sri', 'nisa'].includes(sellerName) || !Number.isInteger(count) || count <= 0) {
-      return { ok: false, message: 'Tanggal, ukuran, nama penjual, dan jumlah penjualan harus diisi dengan benar.' }
+    const discountAmount = parseRupiahInput(discount)
+    if (!date || !['large', 'small', 'bundle'].includes(type) || !['willsen', 'sri', 'nisa', 'together'].includes(sellerName) || !Number.isInteger(count) || count <= 0 || !Number.isFinite(discountAmount) || discountAmount < 0) {
+      return { ok: false, message: 'Tanggal, ukuran, nama penjual, jumlah, dan potongan harga harus diisi dengan benar.' }
     }
     const available = pineappleStock.reduce((sum, item) => sum + Number(item.quantities?.[type] ?? (item.type === type ? item.quantity : 0) ?? 0), 0)
       - pineappleSales.filter((item) => item.id !== id && item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
     if (count > available) return { ok: false, message: `Stok tidak cukup. Maksimal tersedia ${available.toLocaleString('id-ID')} unit untuk ukuran ini.` }
     const prices = { large: 13000, small: 8000, bundle: 20000 }
-    const updated = { ...existing, date, type, quantity: count, sellerName, unitPrice: prices[type], total: count * prices[type], editedAt: new Date().toISOString(), editedBy: ownerId || currentUser.id }
+    const grossTotal = count * prices[type]
+    if (discountAmount >= grossTotal) return { ok: false, message: 'Potongan harus lebih kecil dari total harga sebelum potongan.' }
+    const updated = { ...existing, date, type, quantity: count, sellerName, unitPrice: prices[type], grossTotal, discount: discountAmount, total: grossTotal - discountAmount, editedAt: new Date().toISOString(), editedBy: ownerId || currentUser.id }
     setPineappleSales((previous) => previous.map((item) => item.id === id ? updated : item))
     addAuditLog({ action: 'Mengubah penjualan nanas', actorId: ownerId || currentUser.id, detail: `${sellerName} · ${type}: ${count} unit · ${date}` })
     return { ok: true, sale: updated }

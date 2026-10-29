@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { CalendarDays, CheckCircle2, Lock, Plus, Unlock, Wallet, X, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
@@ -28,6 +28,9 @@ export default function AdminDashboard() {
   const [cashEditForm, setCashEditForm] = useState({ amount: '', reason: '' })
   const [cashEditError, setCashEditError] = useState('')
   const [showTopup, setShowTopup] = useState(false)
+  const [savingTopup, setSavingTopup] = useState(false)
+  const savingTopupRef = useRef(false)
+  const topupRequestId = useRef('')
   const [showUnlockRequest, setShowUnlockRequest] = useState(false)
   const [showLowCash, setShowLowCash] = useState(true)
   const [initialCashInput, setInitialCashInput] = useState(() => formatNumericInput(DEFAULT_INITIAL_CASH))
@@ -85,12 +88,26 @@ export default function AdminDashboard() {
     setCloseCashError('')
   }
 
-  function handleAddTopup(event) {
+  async function handleAddTopup(event) {
     event.preventDefault()
+    if (savingTopupRef.current) return
     setTopupError('')
     if (parseAmount(topupForm.amount) <= 0) return setTopupError('Jumlah top-up harus lebih dari 0.')
+    if (!topupRequestId.current) topupRequestId.current = `tu-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const now = new Date()
-    addTopup({ date, time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`, amount: parseAmount(topupForm.amount), source: topupForm.source, note: topupForm.note, adminId: currentUser.id })
+    savingTopupRef.current = true
+    setSavingTopup(true)
+    let result
+    try {
+      result = await addTopup({ id: topupRequestId.current, date, time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`, amount: parseAmount(topupForm.amount), source: topupForm.source, note: topupForm.note, adminId: currentUser.id })
+    } catch (error) {
+      result = { ok: false, message: `Top-up belum dapat dikonfirmasi: ${error?.message || 'koneksi terputus'}. Tekan simpan lagi; catatan akan diperiksa dulu agar tidak tercatat dua kali.` }
+    } finally {
+      savingTopupRef.current = false
+      setSavingTopup(false)
+    }
+    if (!result.ok) return setTopupError(result.message)
+    topupRequestId.current = ''
     setTopupForm({ amount: '', source: '', note: '' })
     setTopupError('')
     setShowTopup(false)
@@ -133,7 +150,7 @@ export default function AdminDashboard() {
     </section>
     <Modal open={showInitialCash} onClose={() => setShowInitialCash(false)} title="Ajukan kas awal ke owner"><form onSubmit={handleSaveInitialCash} className="space-y-4"><p className="text-sm text-ink-600">Kas awal belum diatur. Pengajuan ini akan menunggu persetujuan owner sebelum saldo dipakai.</p><div><label className="label" htmlFor="initial-cash-amount">Jumlah kas awal (Rp)</label><input id="initial-cash-amount" type="text" inputMode="numeric" className="input" value={initialCashInput} onChange={(event) => setInitialCashInput(formatNumericInput(event.target.value))} autoFocus required /></div><div><label className="label" htmlFor="initial-cash-reason">Alasan / keterangan</label><textarea id="initial-cash-reason" className="input min-h-24" value={initialCashReason} onChange={(event) => { setInitialCashReason(event.target.value); setInitialCashError('') }} placeholder="Contoh: kas awal operasional hari ini" required /></div>{initialCashError && <p role="alert" className="text-sm text-red-700">{initialCashError}</p>}<button type="submit" className="btn-primary w-full"><ShieldCheck size={16} /> Kirim ke owner</button></form></Modal>
     <Modal open={showCashEdit} onClose={() => setShowCashEdit(false)} title="Ajukan perubahan kas awal"><form onSubmit={handleRequestCashEdit} className="space-y-4"><p className="text-sm text-ink-600">Nilai kas awal tidak langsung berubah. Owner perlu menyetujui permintaan ini terlebih dahulu.</p><div><label className="label" htmlFor="cash-edit-amount">Kas awal baru (Rp)</label><input id="cash-edit-amount" type="text" inputMode="numeric" className="input" value={cashEditForm.amount} onChange={(event) => setCashEditForm({ ...cashEditForm, amount: formatNumericInput(event.target.value) })} autoFocus required /><p className="mt-1 text-xs text-ink-500">Saat ini: {formatRupiah(summary.initialAmount)}</p></div><div><label className="label" htmlFor="cash-edit-reason">Alasan perubahan</label><textarea id="cash-edit-reason" className="input min-h-24" value={cashEditForm.reason} onChange={(event) => { setCashEditForm({ ...cashEditForm, reason: event.target.value }); setCashEditError('') }} placeholder="Contoh: koreksi jumlah kas awal" required /></div>{cashEditError && <p role="alert" className="text-sm text-red-700">{cashEditError}</p>}<div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={() => setShowCashEdit(false)}>Batal</button><button type="submit" className="btn-primary"><ShieldCheck size={16} /> Kirim ke owner</button></div></form></Modal>
-    <Modal open={showTopup} onClose={() => { setShowTopup(false); setTopupError('') }} title="Tambah kas (top-up)"><form onSubmit={handleAddTopup} className="space-y-4"><div><label className="label" htmlFor="topup-amount">Jumlah tambahan (Rp) *</label><input id="topup-amount" type="text" inputMode="numeric" className="input" value={topupForm.amount} onChange={(event) => { setTopupForm({ ...topupForm, amount: formatNumericInput(event.target.value) }); setTopupError('') }} placeholder="mis. 20.000.000" autoFocus required /><p className="mt-2 text-xs text-plantation-700">Jumlah tambahan: <b>{formatRupiah(parseAmount(topupForm.amount))}</b></p></div><div><label className="label">Sumber dana (opsional)</label><input className="input" value={topupForm.source} onChange={(event) => setTopupForm({ ...topupForm, source: event.target.value })} placeholder="mis. transfer dari owner" /></div><div><label className="label">Catatan (opsional)</label><input className="input" value={topupForm.note} onChange={(event) => setTopupForm({ ...topupForm, note: event.target.value })} placeholder="mis. kas awal habis jam 14.00" /></div>{topupError && <p role="alert" className="text-sm text-red-700">{topupError}</p>}<button type="submit" className="btn-gold w-full">Tambahkan ke kas</button></form></Modal>
+    <Modal open={showTopup} onClose={() => { if (savingTopupRef.current) return; setShowTopup(false); setTopupError('') }} title="Tambah kas (top-up)"><form onSubmit={handleAddTopup} className="space-y-4"><div><label className="label" htmlFor="topup-amount">Jumlah tambahan (Rp) *</label><input id="topup-amount" type="text" inputMode="numeric" className="input" value={topupForm.amount} onChange={(event) => { setTopupForm({ ...topupForm, amount: formatNumericInput(event.target.value) }); setTopupError('') }} placeholder="mis. 20.000.000" autoFocus required /><p className="mt-2 text-xs text-plantation-700">Jumlah tambahan: <b>{formatRupiah(parseAmount(topupForm.amount))}</b></p></div><div><label className="label">Sumber dana (opsional)</label><input className="input" value={topupForm.source} onChange={(event) => setTopupForm({ ...topupForm, source: event.target.value })} placeholder="mis. transfer dari owner" /></div><div><label className="label">Catatan (opsional)</label><input className="input" value={topupForm.note} onChange={(event) => setTopupForm({ ...topupForm, note: event.target.value })} placeholder="mis. kas awal habis jam 14.00" /></div>{topupError && <p role="alert" className="text-sm text-red-700">{topupError}</p>}<button type="submit" disabled={savingTopup} className="btn-gold w-full disabled:cursor-wait disabled:opacity-60">{savingTopup ? 'Menyimpan ke cloud…' : 'Tambahkan ke kas'}</button></form></Modal>
     <Modal open={showCloseCash} onClose={() => setShowCloseCash(false)} title="Tutup kas hari ini">
       <form onSubmit={handleCloseCash} className="space-y-4">
         <p className="text-sm leading-relaxed text-ink-600">Hitung uang tunai yang tersisa, lalu masukkan jumlah fisiknya. Owner akan melihat angka sistem dan selisihnya di ringkasan laporan brondolan.</p>

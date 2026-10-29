@@ -144,6 +144,7 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     if (!currentUser) { setCloudReady(false); return }
     let active = true
     let channel
+    let refreshInFlight = false
     let cleanupRefresh = () => {}
     setCloudReady(false)
     setCloudError('')
@@ -187,16 +188,25 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
         }
         if (!localMigrationDone && !legacyMigrationFailed) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
       } else if (currentUser.role === 'admin') {
-        // Preserve this admin's locally cached purchases if a prior cloud write failed.
-        // The normal collection sync below will retry records missing from Supabase.
-        const cloudIds = new Set(grouped.transactions.map((item) => String(item.id)))
-        const localTransactions = (collectionValuesRef.current.transactions || [])
-          .map((item) => keepCloudRecord('transactions', item))
-          .filter((item) => item && item.adminId === currentUser.id)
-        const missing = localTransactions.filter((item) => item.id && !cloudIds.has(String(item.id)))
-        if (missing.length) {
-          grouped.transactions = [...grouped.transactions, ...missing]
-          locallyRecoveredIds.set('transactions', new Set(missing.map((item) => String(item.id))))
+        // Keep this admin's locally cached writes if the connection failed before
+        // they reached Supabase; the normal sync effects retry the same stable IDs.
+        const adminOwnedCollections = {
+          transactions: 'adminId',
+          topups: 'adminId',
+          cashLoans: 'adminId',
+          auditLogs: 'actorId',
+          cancellationRequests: 'requestedBy',
+          cashUnlockRequests: 'requestedBy',
+        }
+        for (const [name, ownerField] of Object.entries(adminOwnedCollections)) {
+          const cloudIds = new Set(grouped[name].map((item) => String(item.id)))
+          const localItems = (collectionValuesRef.current[name] || [])
+            .map((item) => keepCloudRecord(name, item))
+            .filter((item) => item && item[ownerField] === currentUser.id)
+          const missing = localItems.filter((item) => item.id && !cloudIds.has(String(item.id)))
+          if (!missing.length) continue
+          grouped[name] = [...grouped[name], ...missing]
+          locallyRecoveredIds.set(name, new Set(missing.map((item) => String(item.id))))
         }
       }
 
@@ -220,27 +230,32 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       if (migrationWarnings.length) setCloudError(`Sebagian data lokal belum terkirim ke cloud: ${migrationWarnings.join('; ')}. Periksa aturan database di Supabase.`)
 
       async function refreshSharedCashData() {
-        if (!active) return
+        if (!active || refreshInFlight) return
+        refreshInFlight = true
         const refreshCollections = currentUser.role === 'owner'
           ? OWNER_REFRESH_COLLECTIONS
           : ADMIN_REFRESH_COLLECTIONS
-        const { data: freshRows, error: refreshError } = await supabase.from('app_records')
-          .select('collection, record_id, data')
-          .in('collection', refreshCollections)
-        if (refreshError) {
-          console.error('Gagal memperbarui data kas dan persetujuan:', refreshError)
-          return
+        try {
+          const { data: freshRows, error: refreshError } = await supabase.from('app_records')
+            .select('collection, record_id, data')
+            .in('collection', refreshCollections)
+          if (refreshError) {
+            console.error('Gagal memperbarui data kas dan persetujuan:', refreshError)
+            return
+          }
+          if (!active) return
+          const freshByCollection = Object.fromEntries(refreshCollections.map((name) => [name, []]))
+          for (const row of freshRows || []) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
+          const nextBaselines = { ...cloudBaseline.current }
+          for (const name of refreshCollections) {
+            const rawItems = freshByCollection[name]
+            nextBaselines[name] = new Map(rawItems.map((item) => [String(item.id), item]))
+            collectionSetters[name](rawItems.map((item) => keepCloudRecord(name, item)).filter(Boolean))
+          }
+          cloudBaseline.current = nextBaselines
+        } finally {
+          refreshInFlight = false
         }
-        if (!active) return
-        const freshByCollection = Object.fromEntries(refreshCollections.map((name) => [name, []]))
-        for (const row of freshRows || []) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
-        const nextBaselines = { ...cloudBaseline.current }
-        for (const name of refreshCollections) {
-          const rawItems = freshByCollection[name]
-          nextBaselines[name] = new Map(rawItems.map((item) => [String(item.id), item]))
-          collectionSetters[name](rawItems.map((item) => keepCloudRecord(name, item)).filter(Boolean))
-        }
-        cloudBaseline.current = nextBaselines
       }
 
       const refreshOnReturn = () => {
@@ -249,14 +264,12 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
       window.addEventListener('focus', refreshOnReturn)
       window.addEventListener('hashchange', refreshOnReturn)
       document.addEventListener('visibilitychange', refreshOnReturn)
-      const adminRefreshTimer = currentUser.role === 'admin'
-        ? window.setInterval(refreshOnReturn, 10_000)
-        : null
+      const sharedCashRefreshTimer = window.setInterval(refreshOnReturn, 10_000)
       cleanupRefresh = () => {
         window.removeEventListener('focus', refreshOnReturn)
         window.removeEventListener('hashchange', refreshOnReturn)
         document.removeEventListener('visibilitychange', refreshOnReturn)
-        if (adminRefreshTimer) window.clearInterval(adminRefreshTimer)
+        window.clearInterval(sharedCashRefreshTimer)
       }
 
       channel = supabase.channel(`kebunkas-records-${currentUser.id}`)
@@ -669,11 +682,34 @@ useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
     addAuditLog({ action: approved ? 'Menyetujui buka kas' : 'Menolak buka kas', actorId: ownerId, detail: `${request.date}: ${request.reason}` })
   }
 
-  function addTopup({ date, time, amount, source, note, adminId }) {
-    const topup = { id: `tu-${Date.now()}`, date, time, amount, source, note, adminId }
-    setTopups((prev) => [...prev, topup])
+  async function addTopup({ id, date, time, amount, source, note, adminId }) {
+    if (isSupabaseConfigured && !cloudReady) return { ok: false, message: 'Data belum tersambung ke cloud. Tunggu sinkronisasi selesai lalu coba lagi.' }
+    const topup = { id: id || `tu-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, time, amount: Number(amount), source, note, adminId }
+    if (isSupabaseConfigured) {
+      const { data: existing, error: lookupError } = await supabase.from('app_records')
+        .select('record_id, data')
+        .eq('collection', 'topups')
+        .eq('record_id', topup.id)
+        .maybeSingle()
+      if (lookupError) return { ok: false, message: `Top-up gagal diperiksa di cloud: ${lookupError.message}` }
+      const sameExistingTopup = existing && ['date', 'time', 'amount', 'source', 'note', 'adminId']
+        .every((key) => key === 'amount'
+          ? Number(existing.data?.[key]) === Number(topup[key])
+          : (existing.data?.[key] ?? null) === (topup[key] ?? null))
+      if (existing && !sameExistingTopup) {
+        return { ok: false, message: 'ID top-up sudah dipakai untuk data lain. Tutup formulir, buka kembali, lalu coba lagi.' }
+      }
+      if (!existing) {
+        const { error } = await supabase.from('app_records').insert({ collection: 'topups', record_id: topup.id, data: topup })
+        if (error) return { ok: false, message: `Top-up gagal disimpan ke cloud: ${error.message}${error.code ? ` · kode ${error.code}` : ''}` }
+      }
+      const baseline = new Map(cloudBaseline.current.topups || [])
+      baseline.set(String(topup.id), topup)
+      cloudBaseline.current = { ...cloudBaseline.current, topups: baseline }
+    }
+    setTopups((prev) => prev.some((item) => String(item.id) === String(topup.id)) ? prev : [topup, ...prev])
     addAuditLog({ action: 'Menambah top-up kas', actorId: adminId, detail: `${date}: Rp${Number(amount).toLocaleString('id-ID')}` })
-    return topup
+    return { ok: true, topup }
   }
 
   function addCashLoan({ date, relatedDate = '', name, amount, reason, adminId }) {

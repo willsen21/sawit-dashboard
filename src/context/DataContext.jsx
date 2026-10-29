@@ -13,7 +13,7 @@ const DataContext = createContext(null)
 const DEFAULT_INITIAL_CASH = 0
 const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
-const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash']
+const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash', 'pineappleStock', 'pineappleSales']
 const ADMIN_REFRESH_COLLECTIONS = [...OWNER_REFRESH_COLLECTIONS, 'cancellationRequests', 'cashUnlockRequests']
 const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
@@ -254,8 +254,17 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
           const nextBaselines = { ...cloudBaseline.current }
           for (const name of refreshCollections) {
             const rawItems = freshByCollection[name]
+            const freshById = new Map(rawItems.map((item) => [String(item.id), item]))
+            const previousBaseline = cloudBaseline.current[name] || new Map()
+            const localPending = (collectionValuesRef.current[name] || []).filter((item) => {
+              const id = String(item?.id || '')
+              return id && (!previousBaseline.has(id) || JSON.stringify(previousBaseline.get(id)) !== JSON.stringify(item))
+            })
+            // Keep local additions/edits that have not reached Supabase yet. The
+            // collection sync effect will retry them against this fresh baseline.
+            for (const item of localPending) freshById.set(String(item.id), item)
             nextBaselines[name] = new Map(rawItems.map((item) => [String(item.id), item]))
-            collectionSetters[name](rawItems.map((item) => keepCloudRecord(name, item)).filter(Boolean))
+            collectionSetters[name]([...freshById.values()].map((item) => keepCloudRecord(name, item)).filter(Boolean))
           }
           cloudBaseline.current = nextBaselines
         } finally {

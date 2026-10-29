@@ -650,20 +650,47 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     return { ok: true, entry }
   }
 
-  function addPineappleSale({ date, type, quantity, adminId }) {
+  function addPineappleSale({ date, type, quantity, sellerName, adminId }) {
     if (!['owner', 'admin'].includes(currentUser?.role)) return { ok: false, message: 'Akses mencatat penjualan nanas tidak tersedia.' }
     const count = Number(quantity)
-    if (!date || !['large', 'small', 'bundle'].includes(type) || !Number.isInteger(count) || count <= 0) {
-      return { ok: false, message: 'Tanggal, ukuran nanas, dan jumlah penjualan harus diisi dengan benar.' }
+    if (!date || !['large', 'small', 'bundle'].includes(type) || !['willsen', 'sri', 'nisa'].includes(sellerName) || !Number.isInteger(count) || count <= 0) {
+      return { ok: false, message: 'Tanggal, ukuran, nama penjual, dan jumlah penjualan harus diisi dengan benar.' }
     }
     const available = pineappleStock.reduce((sum, item) => sum + Number(item.quantities?.[type] ?? (item.type === type ? item.quantity : 0) ?? 0), 0)
       - pineappleSales.filter((item) => item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
     if (count > available) return { ok: false, message: `Stok tidak cukup. Tersedia ${available.toLocaleString('id-ID')} unit.` }
     const prices = { large: 13000, small: 8000, bundle: 20000 }
-    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, unitPrice: prices[type], total: count * prices[type], adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
+    const sale = { id: `pineapple-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantity: count, sellerName, unitPrice: prices[type], total: count * prices[type], adminId: adminId || currentUser.id, recordedByRole: currentUser.role, createdAt: new Date().toISOString() }
     setPineappleSales((previous) => [sale, ...previous])
-    addAuditLog({ action: 'Mencatat penjualan nanas', actorId: adminId || currentUser.id, detail: `${type}: ${count} unit × Rp${prices[type].toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
+    addAuditLog({ action: 'Mencatat penjualan nanas', actorId: adminId || currentUser.id, detail: `${sellerName} · ${type}: ${count} unit × Rp${prices[type].toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
     return { ok: true, sale }
+  }
+
+  function updatePineappleSale(id, { date, type, quantity, sellerName }, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah penjualan nanas.' }
+    const existing = pineappleSales.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan penjualan nanas tidak ditemukan.' }
+    const count = Number(quantity)
+    if (!date || !['large', 'small', 'bundle'].includes(type) || !['willsen', 'sri', 'nisa'].includes(sellerName) || !Number.isInteger(count) || count <= 0) {
+      return { ok: false, message: 'Tanggal, ukuran, nama penjual, dan jumlah penjualan harus diisi dengan benar.' }
+    }
+    const available = pineappleStock.reduce((sum, item) => sum + Number(item.quantities?.[type] ?? (item.type === type ? item.quantity : 0) ?? 0), 0)
+      - pineappleSales.filter((item) => item.id !== id && item.type === type).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+    if (count > available) return { ok: false, message: `Stok tidak cukup. Maksimal tersedia ${available.toLocaleString('id-ID')} unit untuk ukuran ini.` }
+    const prices = { large: 13000, small: 8000, bundle: 20000 }
+    const updated = { ...existing, date, type, quantity: count, sellerName, unitPrice: prices[type], total: count * prices[type], editedAt: new Date().toISOString(), editedBy: ownerId || currentUser.id }
+    setPineappleSales((previous) => previous.map((item) => item.id === id ? updated : item))
+    addAuditLog({ action: 'Mengubah penjualan nanas', actorId: ownerId || currentUser.id, detail: `${sellerName} · ${type}: ${count} unit · ${date}` })
+    return { ok: true, sale: updated }
+  }
+
+  function deletePineappleSale(id, ownerId) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus penjualan nanas.' }
+    const existing = pineappleSales.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan penjualan nanas tidak ditemukan.' }
+    setPineappleSales((previous) => previous.filter((item) => item.id !== id))
+    addAuditLog({ action: 'Menghapus penjualan nanas', actorId: ownerId || currentUser.id, detail: `${existing.sellerName || 'Penjual belum dicatat'} · ${existing.type}: ${Number(existing.quantity || 0)} unit · ${existing.date}` })
+    return { ok: true }
   }
 
   // ---- Supplier ----
@@ -1164,6 +1191,8 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     pineappleSales,
     addPineappleStock,
     addPineappleSale,
+    updatePineappleSale,
+    deletePineappleSale,
     addPrivateFarm,
     updatePrivateFarm,
     addPrivateHarvestRecord,

@@ -44,3 +44,9 @@ with check (
 );
 
 commit;
+
+-- Confirm the active check constraint includes the pineapple collections.
+select conname, pg_get_constraintdef(oid) as definition
+from pg_constraint
+where conrelid = 'public.app_records'::regclass
+  and conname = 'app_records_collection_check';

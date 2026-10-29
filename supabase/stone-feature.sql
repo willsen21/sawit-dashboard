@@ -10,7 +10,8 @@ alter table public.app_records
   add constraint app_records_collection_check check (collection in (
     'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
     'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
-    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'stoneStock', 'stoneSales'
+    'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales',
+    'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'
   ));
 
 drop policy if exists "active members read app records" on public.app_records;
@@ -22,7 +23,8 @@ using (
     (select public.current_kebunkas_role()) = 'admin'
     and collection in (
       'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans',
-      'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales'
+      'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales',
+      'pineappleStock', 'pineappleSales'
     )
   )
 );
@@ -36,7 +38,7 @@ with check (
     (select public.current_kebunkas_role()) = 'admin'
     and collection in (
       'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
-      'cancellationRequests', 'cashUnlockRequests', 'stoneSales'
+      'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'pineappleSales'
     )
   )
 );

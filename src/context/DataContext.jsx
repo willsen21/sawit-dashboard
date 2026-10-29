@@ -315,7 +315,12 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     const previous = cloudBaseline.current[collection] || new Map()
     const next = new Map(items.filter((item) => item?.id).map((item) => [String(item.id), item]))
     const changed = [...next.entries()].filter(([id, item]) => JSON.stringify(previous.get(id)) !== JSON.stringify(item))
-    const removed = [...previous.keys()].filter((id) => !next.has(id))
+    const adminInsertOnlyCollections = ['topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'pineappleSales']
+    const adminInsertOnly = currentUser.role === 'admin' && adminInsertOnlyCollections.includes(collection)
+    // RLS permits admins to create these records, while updates/deletes remain owner-managed.
+    // Never send a DELETE for admin collections: local filtering or a stale cache must not
+    // turn into a forbidden attempt to remove rows that are still shared in the cloud.
+    const removed = currentUser.role === 'admin' ? [] : [...previous.keys()].filter((id) => !next.has(id))
     if (!changed.length && !removed.length) return
     // Optimistic per-record baseline keeps unrelated edits on different devices from replacing an entire collection.
     cloudBaseline.current = { ...cloudBaseline.current, [collection]: next }
@@ -330,7 +335,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
           .select('record_id')
           .maybeSingle()))
           .then((results) => ({ error: results.find((result) => result.error)?.error || (results.some((result) => !result.data) ? { message: 'Catatan kas awal tidak ditemukan di cloud. Minta owner menyinkronkan kas awal sebelum menutup kas.' } : null) }))
-        : rows.length ? supabase.from('app_records').upsert(rows, { onConflict: 'collection,record_id' }) : Promise.resolve({ error: null }),
+        : rows.length ? supabase.from('app_records').upsert(rows, { onConflict: 'collection,record_id', ignoreDuplicates: adminInsertOnly }) : Promise.resolve({ error: null }),
       removed.length && !adminDailyCashUpdate ? supabase.from('app_records').delete().eq('collection', collection).in('record_id', removed) : Promise.resolve({ error: null }),
     ]).then((results) => {
       const failure = results.find((result) => result.error)?.error

@@ -22,7 +22,7 @@ export default function Stones() {
   const [editError, setEditError] = useState('')
   const [saleToEdit, setSaleToEdit] = useState(null)
   const [saleToDelete, setSaleToDelete] = useState(null)
-  const [saleEditForm, setSaleEditForm] = useState({ date: '', type: STONE_TYPES[0], driverName: '', netKg: '', pricePerKg: '', paymentMethod: 'transfer' })
+  const [saleEditForm, setSaleEditForm] = useState({ date: '', type: STONE_TYPES[0], driverName: '', netKg: '', pricePerKg: '', paymentMethod: 'transfer', note: '' })
   const [saleEditError, setSaleEditError] = useState('')
   const totals = (type) => {
     const added = stoneStock.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
@@ -70,7 +70,7 @@ export default function Stones() {
 
   function openSaleEdit(row) {
     setSaleToEdit(row)
-    setSaleEditForm({ date: row.date, type: canonicalStoneType(row.type), driverName: row.driverName || '', netKg: number(row.netKg), pricePerKg: formatRupiahInput(row.pricePerKg || 0), paymentMethod: row.paymentMethod === 'paid' ? 'paid' : 'transfer' })
+    setSaleEditForm({ date: row.date, type: canonicalStoneType(row.type), driverName: row.driverName || '', netKg: number(row.netKg), pricePerKg: formatRupiahInput(row.pricePerKg || 0), paymentMethod: row.paymentMethod === 'paid' ? 'paid' : 'transfer', note: row.note || '' })
     setSaleEditError('')
   }
 
@@ -101,7 +101,7 @@ export default function Stones() {
     </section>
     <section className="card overflow-hidden">
       <div className="border-b border-ink-900/10 px-5 py-4"><h2 className="font-medium">Batu yang terjual</h2><p className="mt-1 text-xs text-ink-500">Penjualan admin, status pembayarannya, tanggal, dan nama sopir.</p></div>
-      <div className="table-scroll"><table className="compact-table w-full border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head">Nama sopir</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total jual</th><th className="table-head">Pembayaran</th><th className="table-head">Status</th><th className="table-head">Aksi</th></tr></thead><tbody>{rows.length ? rows.map((row) => {
+      <div className="table-scroll"><table className="compact-table w-full border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head">Nama sopir</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total jual</th><th className="table-head">Pembayaran</th><th className="table-head">Status</th><th className="table-head">Catatan owner</th><th className="table-head">Aksi</th></tr></thead><tbody>{rows.length ? rows.map((row) => {
         const isPaid = row.paymentStatus === 'paid' || row.paymentMethod === 'paid'
         const isTransfer = row.paymentMethod === 'transfer'
         return <tr key={row.id}>
@@ -113,9 +113,10 @@ export default function Stones() {
           <td className="table-cell text-right font-medium">Rp{Number(row.total || 0).toLocaleString('id-ID')}</td>
           <td className="table-cell">{isTransfer ? 'Transfer' : row.paymentMethod === 'paid' ? 'Sudah dibayar' : '—'}</td>
           <td className="table-cell">{isPaid ? <span className="rounded-full bg-plantation-700/10 px-2.5 py-1 text-xs font-medium text-plantation-800">Lunas</span> : isTransfer ? <span className="rounded-full bg-gold-400/20 px-2.5 py-1 text-xs font-medium text-gold-700">Menunggu owner</span> : '—'}</td>
+          <td className="table-cell max-w-xs whitespace-pre-wrap">{row.note || '—'}</td>
           <td className="table-cell"><div className="flex flex-wrap items-center gap-1">{isTransfer && !isPaid && <button type="button" className="btn-ghost !px-2 !py-1.5 text-xs" disabled={!cloudReady} onClick={() => setSaleToConfirm(row)}><CheckCircle2 size={14} /> Lunas</button>}{isPaid && <span className="px-1 text-xs text-ink-500">Selesai</span>}<button type="button" className="btn-ghost !px-2 !py-1.5" disabled={!cloudReady} onClick={() => openSaleEdit(row)} title="Edit penjualan"><Pencil size={15} /></button><button type="button" className="rounded-md p-2 text-red-700 hover:bg-red-50 disabled:opacity-40" disabled={!cloudReady} onClick={() => setSaleToDelete(row)} title="Hapus penjualan"><Trash2 size={15} /></button></div></td>
         </tr>
-      }) : <tr><td colSpan="9" className="table-cell py-12 text-center text-ink-500">Belum ada penjualan batu.</td></tr>}</tbody></table></div>
+      }) : <tr><td colSpan="10" className="table-cell py-12 text-center text-ink-500">Belum ada penjualan batu.</td></tr>}</tbody></table></div>
     </section>
     <Modal open={Boolean(saleToConfirm)} onClose={() => setSaleToConfirm(null)} title="Konfirmasi pelunasan">
       {saleToConfirm && <div className="space-y-4"><p className="text-sm text-ink-700">Pastikan transfer untuk catatan berikut sudah diterima sebelum menandai lunas.</p><div className="rounded-lg bg-plantation-50 p-4 text-sm"><p><b>{canonicalStoneType(saleToConfirm.type)}</b> · {saleToConfirm.driverName}</p><p className="mt-1">{formatShortDate(saleToConfirm.date)} · {number(saleToConfirm.netKg)} kg</p></div><div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setSaleToConfirm(null)}>Batal</button><button type="button" className="btn-primary" onClick={confirmPaid}><CheckCircle2 size={16} /> Ya, tandai lunas</button></div></div>}
@@ -142,6 +143,7 @@ export default function Stones() {
         <div><label className="label" htmlFor="edit-sale-kg">Berat bersih (kg)</label><input id="edit-sale-kg" className="input" inputMode="decimal" value={saleEditForm.netKg} onChange={(e) => setSaleEditForm({ ...saleEditForm, netKg: formatKgInput(e.target.value) })} required /></div>
         <div><label className="label" htmlFor="edit-sale-price">Harga jual per kg (Rp)</label><input id="edit-sale-price" className="input" inputMode="numeric" value={saleEditForm.pricePerKg} onChange={(e) => setSaleEditForm({ ...saleEditForm, pricePerKg: formatRupiahInput(e.target.value) })} required /></div>
         <div><label className="label" htmlFor="edit-sale-payment">Pembayaran</label><select id="edit-sale-payment" className="input" value={saleEditForm.paymentMethod} onChange={(e) => setSaleEditForm({ ...saleEditForm, paymentMethod: e.target.value })}><option value="transfer">Transfer — menunggu konfirmasi</option><option value="paid">Sudah dibayar</option></select></div>
+        <div><label className="label" htmlFor="edit-sale-note">Catatan owner (opsional)</label><textarea id="edit-sale-note" className="input min-h-24" value={saleEditForm.note} onChange={(e) => setSaleEditForm({ ...saleEditForm, note: e.target.value })} placeholder="Tambahkan keterangan untuk penjualan ini" /></div>
         {saleEditError && <p role="alert" className="text-sm text-red-700">{saleEditError}</p>}
         <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setSaleToEdit(null)}>Batal</button><button type="submit" className="btn-primary" disabled={!cloudReady}>Simpan perubahan</button></div>
       </form>

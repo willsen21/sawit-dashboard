@@ -610,7 +610,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
       - stoneSales.filter((item) => item.id !== id && canonicalStoneType(item.type) === canonicalStoneType(type)).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
     if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
     const total = Math.round(quantity * price)
-    const updated = { ...existing, ...patch, date, type, driverName, netKg: quantity, pricePerKg: price, total, paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', updatedAt: new Date().toISOString() }
+    const updated = { ...existing, ...patch, date, type, driverName, netKg: quantity, pricePerKg: price, total, paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', note: String(patch.note ?? existing.note ?? '').trim(), updatedAt: new Date().toISOString() }
     setStoneSales((prev) => prev.map((item) => item.id === id ? updated : item))
     addAuditLog({ action: 'Mengubah penjualan batu', actorId: ownerId, detail: `${type} · ${driverName}: ${quantity.toLocaleString('id-ID')} kg × Rp${price.toLocaleString('id-ID')} = Rp${total.toLocaleString('id-ID')}` })
     return { ok: true, sale: updated }

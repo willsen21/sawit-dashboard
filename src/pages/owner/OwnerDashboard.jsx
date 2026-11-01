@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { ArrowRight, ArrowUpRight, CalendarDays, Clock3, Leaf, Package, ShieldCheck, Wallet } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, CalendarDays, Clock3, Leaf, NotebookPen, Package, Save, ShieldCheck, Wallet } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
@@ -10,6 +10,7 @@ import { addDays, formatRupiah, formatShortDate, startOfWeek, toDateKey, todayKe
 import { STONE_TYPES, canonicalStoneType } from '../../lib/stoneUtils'
 import { SHOW_FRUIT_PURCHASES } from '../../config/features'
 import { reportedPurchaseTotal } from '../../lib/purchaseCalculations'
+import { loadItem, saveItem } from '../../lib/storage'
 
 const RANGES = [{ label: '7 hari', value: 7 }, { label: '15 hari', value: 15 }, { label: '1 bulan', value: 'month' }]
 const kgText = (kg) => `${Number(kg || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg`
@@ -19,6 +20,9 @@ export default function OwnerDashboard() {
   const { transactions, supplierMap, stoneSales, getCashSummary } = useData()
   const navigate = useNavigate()
   const [chartRange, setChartRange] = useState(7)
+  const reminderKey = `ownerReminder_${currentUser?.id || 'owner'}`
+  const [reminder, setReminder] = useState(() => loadItem(reminderKey, ''))
+  const [reminderMessage, setReminderMessage] = useState('')
   const today = todayKey()
   const cashToday = getCashSummary(today)
   const visibleTransactions = useMemo(() => transactions.filter((item) => SHOW_FRUIT_PURCHASES || item.kind === 'brondolan'), [transactions])
@@ -32,8 +36,17 @@ export default function OwnerDashboard() {
       ? new Date(now.getFullYear(), now.getMonth(), 1)
       : addDays(now, -chartRange + 1)
     const days = Math.floor((toDateKey(now) > toDateKey(start) ? (new Date(toDateKey(now)) - new Date(toDateKey(start))) : 0) / 86_400_000) + 1
+    const endKey = toDateKey(now)
+    const startKey = toDateKey(start)
+    const transactionsByDate = new Map()
+    for (const transaction of visibleTransactions) {
+      if (transaction.status === 'voided' || transaction.date < startKey || transaction.date > endKey) continue
+      const day = transactionsByDate.get(transaction.date) || []
+      day.push(transaction)
+      transactionsByDate.set(transaction.date, day)
+    }
     return Array.from({ length: days }, (_, index) => {
-      const key = toDateKey(addDays(start, index)); const day = visibleTransactions.filter((t) => t.status !== 'voided' && t.date === key)
+      const key = toDateKey(addDays(start, index)); const day = transactionsByDate.get(key) || []
       return { key, label: formatShortDate(key), volume: day.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0), total: day.reduce((total, item) => total + reportedPurchaseTotal(item, supplierMap, item.kind || 'buah'), 0) }
     })
   }, [visibleTransactions, supplierMap, chartRange])
@@ -44,6 +57,10 @@ export default function OwnerDashboard() {
   const unpaidTotal = unpaidToday.reduce((total, item) => total + reportedPurchaseTotal(item, supplierMap, item.kind || 'buah'), 0)
   const greeting = greetingForHour(new Date().getHours())
   const transactionCount = stats.today.length
+  function saveReminder() {
+    const saved = saveItem(reminderKey, reminder)
+    setReminderMessage(saved ? 'Catatan tersimpan di perangkat ini.' : 'Catatan gagal disimpan. Periksa ruang penyimpanan browser.')
+  }
   return <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-9">
     <section className="dashboard-hero relative mb-6 overflow-hidden rounded-[1.75rem] bg-plantation-950 px-5 py-7 text-white shadow-soft sm:px-8 sm:py-9 lg:px-10">
       <DashboardScene />
@@ -74,6 +91,12 @@ export default function OwnerDashboard() {
       <StatCard icon={<CalendarDays size={17} />} label={`${SHOW_FRUIT_PURCHASES ? 'Pembelian' : 'Brondolan'} bersih bulan ini`} numericValue={stats.month.reduce((total, item) => total + Number(item.netKg ?? item.weightKg ?? 0), 0)} formatValue={kgText} delay={200} sub="Lihat transaksi bulan ini" onClick={() => navigate('/owner/pembelian/bulan-ini')} />
       <StatCard icon={<Wallet size={17} />} label="Sisa kas hari ini" numericValue={cashToday.remaining} formatValue={formatRupiah} delay={300} tone={cashToday.remaining < 0 ? 'danger' : 'gold'} sub={<span className="flex flex-col gap-1"><span>Kas awal: {cashToday.exists ? formatRupiah(cashToday.initialAmount) : 'Belum diatur'}</span><span>Top-up +{formatRupiah(cashToday.totalTopup)} · Pinjaman −{formatRupiah(cashToday.totalLoans)}</span></span>} />
     </div>
+    <section className="card mb-6 p-5 md:p-6">
+      <div className="mb-4 flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-700"><NotebookPen size={19} /></span><div><h2 className="font-medium text-plantation-950">Catatan pribadi</h2><p className="text-xs text-ink-500">Simpan pengingat untuk diri sendiri. Catatan ini tersimpan di browser dan terpisah dari data operasional.</p></div></div>
+      <label className="sr-only" htmlFor="owner-reminder">Catatan pribadi owner</label>
+      <textarea id="owner-reminder" className="input min-h-28 resize-y" value={reminder} onChange={(event) => { setReminder(event.target.value); setReminderMessage('') }} placeholder="Tulis hal yang perlu diingat..." />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p aria-live="polite" className="text-xs text-ink-500">{reminderMessage}</p><button type="button" className="btn-primary ml-auto" onClick={saveReminder}><Save size={16} /> Simpan catatan</button></div>
+    </section>
     <section className="dashboard-stone-card mb-6 flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white p-5 shadow-sm sm:px-6">
       <div className="flex min-w-0 items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-plantation-50 text-plantation-800"><Package size={21} /></span><div><p className="text-sm font-semibold text-plantation-950">Penjualan batu hari ini</p><p className="mt-1 font-display text-2xl text-plantation-900">{kgText(stoneKgToday)}</p><p className="mt-1 text-sm text-ink-500">{stoneSaleBreakdown.length ? stoneSaleBreakdown.map((item) => `${item.type}: ${kgText(item.kg)}`).join(' · ') : 'Belum ada penjualan batu hari ini.'}</p></div></div>
       <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-plantation-900/15 px-4 py-2.5 text-sm font-medium text-plantation-900 transition hover:border-plantation-700/30 hover:bg-plantation-50" onClick={() => navigate('/owner/batu')}>Stok dan riwayat batu <ArrowRight size={16} /></button>

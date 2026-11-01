@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { ArrowRight, ArrowUpRight, CalendarDays, Clock3, Leaf, NotebookPen, Package, Save, ShieldCheck, Wallet } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, CalendarDays, Clock3, Leaf, NotebookPen, Package, Send, ShieldCheck, Trash2, Wallet } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import { useAuth } from '../../context/AuthContext'
 import StatCard from '../../components/StatCard'
@@ -21,7 +21,14 @@ export default function OwnerDashboard() {
   const navigate = useNavigate()
   const [chartRange, setChartRange] = useState(7)
   const reminderKey = `ownerReminder_${currentUser?.id || 'owner'}`
-  const [reminder, setReminder] = useState(() => loadItem(reminderKey, ''))
+  const [reminders, setReminders] = useState(() => {
+    const saved = loadItem(reminderKey, [])
+    if (Array.isArray(saved)) return saved
+    return typeof saved === 'string' && saved.trim()
+      ? [{ id: `legacy-${Date.now()}`, text: saved.trim(), createdAt: new Date().toISOString() }]
+      : []
+  })
+  const [reminderDraft, setReminderDraft] = useState('')
   const [reminderMessage, setReminderMessage] = useState('')
   const today = todayKey()
   const cashToday = getCashSummary(today)
@@ -57,9 +64,30 @@ export default function OwnerDashboard() {
   const unpaidTotal = unpaidToday.reduce((total, item) => total + reportedPurchaseTotal(item, supplierMap, item.kind || 'buah'), 0)
   const greeting = greetingForHour(new Date().getHours())
   const transactionCount = stats.today.length
-  function saveReminder() {
-    const saved = saveItem(reminderKey, reminder)
-    setReminderMessage(saved ? 'Catatan tersimpan di perangkat ini.' : 'Catatan gagal disimpan. Periksa ruang penyimpanan browser.')
+  function sendReminder(event) {
+    event.preventDefault()
+    const text = reminderDraft.trim()
+    if (!text) return
+    const next = [{ id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, text, createdAt: new Date().toISOString() }, ...reminders]
+    const saved = saveItem(reminderKey, next)
+    if (saved) {
+      setReminders(next)
+      setReminderDraft('')
+      setReminderMessage('Catatan ditambahkan.')
+    } else {
+      setReminderMessage('Catatan gagal disimpan. Periksa ruang penyimpanan browser.')
+    }
+  }
+
+  function deleteReminder(id) {
+    const next = reminders.filter((item) => item.id !== id)
+    const saved = saveItem(reminderKey, next)
+    if (saved) {
+      setReminders(next)
+      setReminderMessage('Catatan dihapus.')
+    } else {
+      setReminderMessage('Catatan gagal dihapus. Periksa ruang penyimpanan browser.')
+    }
   }
   return <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-9">
     <section className="dashboard-hero relative mb-6 overflow-hidden rounded-[1.75rem] bg-plantation-950 px-5 py-7 text-white shadow-soft sm:px-8 sm:py-9 lg:px-10">
@@ -92,10 +120,15 @@ export default function OwnerDashboard() {
       <StatCard icon={<Wallet size={17} />} label="Sisa kas hari ini" numericValue={cashToday.remaining} formatValue={formatRupiah} delay={300} tone={cashToday.remaining < 0 ? 'danger' : 'gold'} sub={<span className="flex flex-col gap-1"><span>Kas awal: {cashToday.exists ? formatRupiah(cashToday.initialAmount) : 'Belum diatur'}</span><span>Top-up +{formatRupiah(cashToday.totalTopup)} · Pinjaman −{formatRupiah(cashToday.totalLoans)}</span></span>} />
     </div>
     <section className="card mb-6 p-5 md:p-6">
-      <div className="mb-4 flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-700"><NotebookPen size={19} /></span><div><h2 className="font-medium text-plantation-950">Catatan pribadi</h2><p className="text-xs text-ink-500">Simpan pengingat untuk diri sendiri. Catatan ini tersimpan di browser dan terpisah dari data operasional.</p></div></div>
-      <label className="sr-only" htmlFor="owner-reminder">Catatan pribadi owner</label>
-      <textarea id="owner-reminder" className="input min-h-28 resize-y" value={reminder} onChange={(event) => { setReminder(event.target.value); setReminderMessage('') }} placeholder="Tulis hal yang perlu diingat..." />
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p aria-live="polite" className="text-xs text-ink-500">{reminderMessage}</p><button type="button" className="btn-primary ml-auto" onClick={saveReminder}><Save size={16} /> Simpan catatan</button></div>
+      <div className="mb-4 flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-700"><NotebookPen size={19} /></span><div><h2 className="font-medium text-plantation-950">Notes kecil</h2><p className="text-xs text-ink-500">Kirim pengingat singkat; tiap catatan tampil sendiri dan bisa dihapus.</p></div></div>
+      <form onSubmit={sendReminder} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1"><label className="label" htmlFor="owner-reminder">Tulis catatan</label><input id="owner-reminder" className="input" value={reminderDraft} onChange={(event) => { setReminderDraft(event.target.value); setReminderMessage('') }} placeholder="Contoh: ingat hubungi pemasok besok" maxLength={240} /></div>
+        <button type="submit" className="btn-primary shrink-0" disabled={!reminderDraft.trim()}><Send size={16} /> Kirim</button>
+      </form>
+      <p aria-live="polite" className="mt-2 min-h-4 text-xs text-ink-500">{reminderMessage}</p>
+      <div className="mt-3 space-y-2">
+        {reminders.length ? reminders.map((item) => <article key={item.id} className="flex items-start justify-between gap-3 rounded-lg border border-ink-900/10 bg-paper-50 px-3 py-2.5"><div className="min-w-0"><p className="whitespace-pre-wrap break-words text-sm text-ink-800">{item.text}</p><time className="mt-1 block text-[11px] text-ink-500">{item.createdAt ? new Date(item.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : ''}</time></div><button type="button" className="rounded-md p-2 text-ink-500 transition hover:bg-red-50 hover:text-red-700" aria-label="Hapus catatan" title="Hapus catatan" onClick={() => deleteReminder(item.id)}><Trash2 size={16} /></button></article>) : <p className="rounded-lg bg-paper-50 px-3 py-4 text-center text-sm text-ink-500">Belum ada notes. Tulis pengingat lalu tekan Kirim.</p>}
+      </div>
     </section>
     <section className="dashboard-stone-card mb-6 flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white p-5 shadow-sm sm:px-6">
       <div className="flex min-w-0 items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-plantation-50 text-plantation-800"><Package size={21} /></span><div><p className="text-sm font-semibold text-plantation-950">Penjualan batu hari ini</p><p className="mt-1 font-display text-2xl text-plantation-900">{kgText(stoneKgToday)}</p><p className="mt-1 text-sm text-ink-500">{stoneSaleBreakdown.length ? stoneSaleBreakdown.map((item) => `${item.type}: ${kgText(item.kg)}`).join(' · ') : 'Belum ada penjualan batu hari ini.'}</p></div></div>

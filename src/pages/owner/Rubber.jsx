@@ -39,7 +39,27 @@ const saleNetAmount = (sale) => Number.isFinite(Number(sale.netAmount))
   ? Number(sale.netAmount)
   : saleGrossAmount(sale) - saleExpenseAmount(sale)
 
-function exportCsv(records, factorySales, range) {
+function splitAmong(total, names) {
+  const base = Math.trunc(total / names.length)
+  let remainder = total - base * names.length
+  return names.map((name) => {
+    const adjustment = remainder > 0 ? 1 : remainder < 0 ? -1 : 0
+    remainder -= adjustment
+    return [name, base + adjustment]
+  })
+}
+
+function incomeDistribution(netIncome) {
+  const roundedNetIncome = Math.round(Number(netIncome) || 0)
+  const shareA = Math.trunc(roundedNetIncome / 2)
+  const shareB = roundedNetIncome - shareA
+  return [
+    ...splitAmong(shareA, ['Feri', 'Fendi']).map(([name, amount]) => ({ group: 'A', name, amount })),
+    ...splitAmong(shareB, ['Andi', 'Ani', 'Willsen']).map(([name, amount]) => ({ group: 'B', name, amount })),
+  ]
+}
+
+function exportCsv(records, factorySales, date) {
   const bagCount = Math.max(0, ...records.map((record) => record.bags.length))
   const purchaseHeaders = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total pembelian (Rp)', 'Bagian setengah (Rp)']
   const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, record.splitAmount])
@@ -51,9 +71,12 @@ function exportCsv(records, factorySales, range) {
   const totalGross = factorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
   const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
   const totalNet = factorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
+  const distribution = incomeDistribution(totalNet)
+  const shareA = distribution.filter((item) => item.group === 'A').reduce((sum, item) => sum + item.amount, 0)
+  const shareB = distribution.filter((item) => item.group === 'B').reduce((sum, item) => sum + item.amount, 0)
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const csvRows = [
-    ['LAPORAN GETAH', `${formatShortDate(range[0])} - ${formatShortDate(range[1])}`],
+    ['LAPORAN GETAH', formatShortDate(date)], ['Luas lahan', '47,92 hektar'],
     [], ['RINGKASAN'],
     ['Pembelian getah', totalPurchases],
     ['Penjualan pabrik kotor', totalGross],
@@ -65,17 +88,21 @@ function exportCsv(records, factorySales, range) {
     ['TOTAL PENJUALAN PABRIK', '', '', totalGross, '', totalExpenses, totalNet],
     [], ['RINCIAN PENGELUARAN PABRIK'], expenseHeaders, ...expenseRows,
     ['TOTAL PENGELUARAN', '', '', totalExpenses],
+    [], ['PEMBAGIAN HASIL BERSIH'], ['Kelompok', 'Nama', 'Nominal (Rp)'],
+    ['A', 'Total bagian A', shareA], ...distribution.filter((item) => item.group === 'A').map((item) => ['A', item.name, item.amount]),
+    ['B', 'Total bagian B', shareB], ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, item.amount]),
+    ['TOTAL BERSIH DIBAGIKAN', '', shareA + shareB],
   ]
   const contents = '\uFEFF' + csvRows.map((row) => row.map(quote).join(';')).join('\r\n')
   const link = document.createElement('a')
   const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8;' }))
   link.href = url
-  link.download = `laporan-getah-${range[0]}_${range[1]}.csv`
+  link.download = `laporan-getah-${date}.csv`
   link.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function exportPdf(records, factorySales, range) {
+function exportPdf(records, factorySales, date) {
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const totalWeight = records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0)
   const totalNetWeight = records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0)
@@ -84,6 +111,9 @@ function exportPdf(records, factorySales, range) {
   const totalGross = factorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
   const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
   const totalFactoryNet = factorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
+  const distribution = incomeDistribution(totalFactoryNet)
+  const shareA = distribution.filter((item) => item.group === 'A').reduce((sum, item) => sum + item.amount, 0)
+  const shareB = distribution.filter((item) => item.group === 'B').reduce((sum, item) => sum + item.amount, 0)
   const width = pdf.internal.pageSize.getWidth()
   pdf.setFillColor(22, 48, 42)
   pdf.roundedRect(12, 11, width - 24, 38, 4, 4, 'F')
@@ -96,12 +126,12 @@ function exportPdf(records, factorySales, range) {
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(9)
   pdf.setTextColor(220, 233, 225)
-  pdf.text(`${formatShortDate(range[0])} — ${formatShortDate(range[1])}  ·  ${records.length} pembelian  ·  ${factorySales.length} penjualan pabrik`, 21, 33)
+  pdf.text(`${formatShortDate(date)}  ·  Luas lahan 47,92 hektar  ·  ${records.length} pembelian  ·  ${factorySales.length} penjualan pabrik`, 21, 33)
   autoTable(pdf, {
     startY: 54,
     body: [
       ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
-      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Hasil bersih pabrik', formatRupiah(totalFactoryNet)],
+      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Hasil bersih dibagikan', formatRupiah(totalFactoryNet)],
       ['Berat kotor · bersih', `${kg(totalWeight)} · ${kg(totalNetWeight)}`, 'Bagian ½', formatRupiah(totalHalf)],
     ],
     theme: 'grid',
@@ -127,7 +157,7 @@ function exportPdf(records, factorySales, range) {
       formatRupiah(record.pricePerKg),
       formatRupiah(record.totalAmount),
       formatRupiah(record.splitAmount),
-    ]) : [['—', 'Tidak ada pembelian getah dalam rentang tanggal ini', '—', '—', '—', '—', '—', '—', '—']],
+    ]) : [['—', 'Tidak ada pembelian getah pada tanggal ini', '—', '—', '—', '—', '—', '—', '—']],
     foot: [['TOTAL', `${records.length} catatan`, '', kg(totalWeight), '', kg(totalNetWeight), '', '', formatRupiah(totalHalf)]],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
@@ -150,7 +180,7 @@ function exportPdf(records, factorySales, range) {
       formatShortDate(factorySaleDate(sale)), kg(sale.weightKg), formatRupiah(sale.pricePerKg), formatRupiah(saleGrossAmount(sale)),
       (sale.expenses || []).map((item) => `${item.description}: ${formatRupiah(item.amount)}`).join(' · ') || '—',
       formatRupiah(saleExpenseAmount(sale)), formatRupiah(saleNetAmount(sale)),
-    ]) : [['—', '—', '—', '—', 'Tidak ada penjualan pabrik dalam rentang tanggal ini', '—', '—']],
+    ]) : [['—', '—', '—', '—', 'Tidak ada penjualan pabrik pada tanggal ini', '—', '—']],
     foot: [['TOTAL', `${factorySales.length} catatan`, '', formatRupiah(totalGross), '', formatRupiah(totalExpenses), formatRupiah(totalFactoryNet)]],
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
@@ -180,6 +210,28 @@ function exportPdf(records, factorySales, range) {
       margin: { left: 12, right: 12 },
     })
   }
+  nextY = pdf.lastAutoTable.finalY + 12
+  if (nextY > pdf.internal.pageSize.getHeight() - 50) { pdf.addPage(); nextY = 18 }
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(11)
+  pdf.setTextColor(22, 48, 42)
+  pdf.text('PEMBAGIAN HASIL BERSIH', 14, nextY)
+  autoTable(pdf, {
+    startY: nextY + 4,
+    head: [['Kelompok', 'Penerima', 'Dasar pembagian', 'Nominal']],
+    body: [
+      ['—', 'Total bersih setelah seluruh pengeluaran', 'Penjualan pabrik − pengeluaran', formatRupiah(totalFactoryNet)],
+      ['A', 'Total bagian A', '½ hasil bersih', formatRupiah(shareA)],
+      ...distribution.filter((item) => item.group === 'A').map((item) => ['A', item.name, '½ bagian A', formatRupiah(item.amount)]),
+      ['B', 'Total bagian B', 'Sisa ½ hasil bersih', formatRupiah(shareB)],
+      ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, '⅓ bagian B', formatRupiah(item.amount)]),
+    ],
+    theme: 'grid',
+    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [31, 42, 36], lineColor: [225, 228, 222] },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [251, 248, 242] },
+    margin: { left: 12, right: 12 },
+  })
   const pages = pdf.getNumberOfPages()
   for (let page = 1; page <= pages; page += 1) {
     pdf.setPage(page)
@@ -189,11 +241,11 @@ function exportPdf(records, factorySales, range) {
     pdf.text('Kebun Kas · Rekap hasil getah', 12, pdf.internal.pageSize.getHeight() - 7)
     pdf.text(`${page} / ${pages}`, width - 12, pdf.internal.pageSize.getHeight() - 7, { align: 'right' })
   }
-  pdf.save(`laporan-getah-${range[0]}_${range[1]}.pdf`)
+  pdf.save(`laporan-getah-${date}.pdf`)
 }
 
 export default function Rubber() {
-  const { rubberRecords, addRubberRecord, updateRubberRecord, deleteRubberRecord, rubberFactorySales, addRubberFactorySale, deleteRubberFactorySale } = useData()
+  const { rubberRecords, addRubberRecord, updateRubberRecord, deleteRubberRecord, rubberFactorySales, addRubberFactorySale, updateRubberFactorySale, deleteRubberFactorySale } = useData()
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(blankForm)
@@ -201,11 +253,12 @@ export default function Rubber() {
   const [viewRecord, setViewRecord] = useState(null)
   const [notice, setNotice] = useState('')
   const [factoryForm, setFactoryForm] = useState({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
+  const [editingFactorySaleId, setEditingFactorySaleId] = useState(null)
   const [factoryError, setFactoryError] = useState('')
   const today = todayKey()
   const [selectedDate, setSelectedDate] = useState(today)
   const [selectedFactoryDate, setSelectedFactoryDate] = useState(today)
-  const [downloadRange, setDownloadRange] = useState([`${today.slice(0, 7)}-01`, today])
+  const [reportDate, setReportDate] = useState(today)
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
   const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
@@ -220,30 +273,52 @@ export default function Rubber() {
   const dailyNetWeight = dailyRecords.reduce((sum, item) => sum + Number(item.payableWeightKg || 0), 0)
   const dailyTotal = dailyRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
   const dailyHalf = dailyRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
-  const factoryDayGross = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.grossAmount || 0), 0)
+  const factoryDayGross = dailyFactorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
   const factoryDayExpenses = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.expenseTotal || 0), 0)
-  const factoryDayNet = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.netAmount || 0), 0)
+  const factoryDayNet = dailyFactorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const previewWeight = bagWeight(form.bags)
   const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
-  const exportRecords = records.filter((record) => record.date >= downloadRange[0] && record.date <= downloadRange[1])
-  const exportFactorySales = rubberFactorySales.filter((sale) => {
-    const date = factorySaleDate(sale)
-    return date && date >= downloadRange[0] && date <= downloadRange[1]
-  })
+  const exportRecords = records.filter((record) => record.date === reportDate)
+  const exportFactorySales = rubberFactorySales.filter((sale) => factorySaleDate(sale) === reportDate)
   const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
-  const exportFactoryGross = exportFactorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
+  const exportFactoryNet = exportFactorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
+  const distribution = incomeDistribution(exportFactoryNet)
+  const exportShareA = distribution.filter((item) => item.group === 'A').reduce((sum, item) => sum + item.amount, 0)
+  const exportShareB = distribution.filter((item) => item.group === 'B').reduce((sum, item) => sum + item.amount, 0)
   const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0
   const factoryGross = parseKgInput(factoryForm.weightKg) * parseRupiahInput(factoryForm.pricePerKg)
   const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
 
   function saveFactorySale(event) {
     event.preventDefault()
-    const result = addRubberFactorySale(factoryForm)
+    const result = editingFactorySaleId
+      ? updateRubberFactorySale(editingFactorySaleId, factoryForm)
+      : addRubberFactorySale(factoryForm)
     if (!result.ok) return setFactoryError(result.message)
     setSelectedFactoryDate(factoryForm.date)
     setFactoryError('')
+    setEditingFactorySaleId(null)
     setFactoryForm({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
-    setNotice('Penjualan pabrik berhasil disimpan.')
+    setNotice(editingFactorySaleId ? 'Riwayat penjualan dan pemakaian berhasil diperbarui.' : 'Penjualan pabrik berhasil disimpan.')
+  }
+
+  function editFactorySale(sale) {
+    setEditingFactorySaleId(sale.id)
+    setFactoryForm({
+      date: factorySaleDate(sale),
+      weightKg: formatKgInput(String(sale.weightKg ?? '').replace('.', ',')),
+      pricePerKg: formatRupiahInput(sale.pricePerKg),
+      expenses: (sale.expenses || []).map((item) => ({ description: item.description || '', amount: formatRupiahInput(item.amount) })),
+    })
+    setFactoryError('')
+    setNotice('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelFactorySaleEdit() {
+    setEditingFactorySaleId(null)
+    setFactoryForm({ date: todayKey(), weightKg: '', pricePerKg: '', expenses: [] })
+    setFactoryError('')
   }
 
   function openCreate() {
@@ -318,27 +393,33 @@ export default function Rubber() {
           {factoryForm.expenses.length === 0 ? <p className="text-xs text-ink-400">Belum ada pengeluaran tambahan.</p> : <div className="space-y-2">{factoryForm.expenses.map((expense, i) => <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input className="input" aria-label="Nama pengeluaran" placeholder="Contoh: ongkos angkut" value={expense.description} onChange={(e) => setFactoryForm((f) => ({ ...f, expenses: f.expenses.map((x, j) => j === i ? { ...x, description: e.target.value } : x) }))} required /><input className="input" inputMode="numeric" aria-label="Nominal pengeluaran" placeholder="Nominal (Rp)" value={expense.amount} onChange={(e) => setFactoryForm((f) => ({ ...f, expenses: f.expenses.map((x, j) => j === i ? { ...x, amount: formatRupiahInput(e.target.value) } : x) }))} required /><button type="button" className="btn-ghost !min-h-10 !px-3" onClick={() => setFactoryForm((f) => ({ ...f, expenses: f.expenses.filter((_, j) => j !== i) }))} aria-label="Hapus pengeluaran"><Trash2 size={16} /></button></div>)}</div>}
         </div>
         <div className="grid gap-2 rounded-xl bg-plantation-950 p-4 text-white sm:grid-cols-3"><CalcLine label="Berat × harga jual" value={formatRupiah(factoryGross)} /><CalcLine label="Total pengeluaran" value={`− ${formatRupiah(factoryExpenseTotal)}`} /><CalcLine label="Hasil bersih diterima" value={formatRupiah(factoryGross - factoryExpenseTotal)} highlight /></div>
-        {factoryError && <p role="alert" className="text-sm text-red-700">{factoryError}</p>}<div className="flex justify-end"><button type="submit" className="btn-primary"><Check size={16} /> Simpan penjualan pabrik</button></div>
+        {factoryError && <p role="alert" className="text-sm text-red-700">{factoryError}</p>}<div className="flex flex-wrap justify-end gap-2">{editingFactorySaleId && <button type="button" className="btn-ghost" onClick={cancelFactorySaleEdit}>Batal edit</button>}<button type="submit" className="btn-primary"><Check size={16} /> {editingFactorySaleId ? 'Simpan perubahan' : 'Simpan penjualan pabrik'}</button></div>
       </form>
       <div className="flex flex-wrap items-center justify-between gap-3 border-y border-ink-900/8 bg-paper-50/70 px-5 py-3 sm:px-6"><div><p className="text-xs font-medium text-ink-500">Riwayat penjualan pada</p><p className="mt-0.5 text-sm font-semibold text-plantation-950">{formatShortDate(selectedFactoryDate)} <span className="font-normal text-ink-500">· {dailyFactorySales.length} catatan</span></p><p className="mt-1 text-[11px] text-ink-400">Semua riwayat: {rubberFactorySales.length} catatan pada {factorySaleDates.length} tanggal</p></div><div className="flex flex-wrap items-center gap-2">{factorySaleDates.length > 0 && <label className="text-xs text-ink-500">Tanggal berisi data <select className="input mt-1 !min-h-9 !w-auto py-1.5 text-xs" value={factorySaleDates.includes(selectedFactoryDate) ? selectedFactoryDate : ''} onChange={(event) => event.target.value && setSelectedFactoryDate(event.target.value)}><option value="">Pilih tanggal</option>{factorySaleDates.map((date) => <option key={date} value={date}>{formatShortDate(date)}</option>)}</select></label>}<DateNavigator date={selectedFactoryDate} today={today} onChange={setSelectedFactoryDate} /></div></div>
-      <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[850px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Penjualan</th><th className="table-head">Pengeluaran lain</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>{dailyFactorySales.map((sale) => <tr key={sale.id}><td className="table-cell">{formatShortDate(factorySaleDate(sale))}</td><td className="table-cell text-right">{kg(sale.weightKg)}</td><td className="table-cell text-right">{formatRupiah(sale.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(sale.grossAmount)}</td><td className="table-cell text-xs">{sale.expenses?.length ? sale.expenses.map((x) => `${x.description}: ${formatRupiah(x.amount)}`).join(' · ') : '—'}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(sale.netAmount)}</td><td className="table-cell"><button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label="Hapus penjualan pabrik ini" onClick={() => { if (window.confirm('Hapus catatan penjualan pabrik ini?')) deleteRubberFactorySale(sale.id) }}><Trash2 size={16} /></button></td></tr>)}</tbody>{dailyFactorySales.length > 0 && <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total tanggal ini · {dailyFactorySales.length} catatan</td><td className="table-cell text-right font-semibold">{formatRupiah(factoryDayGross)}</td><td className="table-cell text-right font-semibold">− {formatRupiah(factoryDayExpenses)}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(factoryDayNet)}</td><td /></tr></tfoot>}</table>{!dailyFactorySales.length && <p className="px-5 py-8 text-center text-sm text-ink-500">Belum ada penjualan pabrik pada tanggal ini.</p>}</div>
+      <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[900px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Penjualan</th><th className="table-head">Pengeluaran / pemakaian</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>{dailyFactorySales.map((sale) => <tr key={sale.id}><td className="table-cell">{formatShortDate(factorySaleDate(sale))}</td><td className="table-cell text-right">{kg(sale.weightKg)}</td><td className="table-cell text-right">{formatRupiah(sale.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(saleGrossAmount(sale))}</td><td className="table-cell text-xs">{sale.expenses?.length ? sale.expenses.map((x) => `${x.description}: ${formatRupiah(x.amount)}`).join(' · ') : '—'}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(saleNetAmount(sale))}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" className="rounded-lg p-2 text-plantation-800 hover:bg-plantation-50" aria-label="Edit riwayat pemakaian getah" title="Edit penjualan dan pemakaian" onClick={() => editFactorySale(sale)}><Pencil size={16} /></button><button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label="Hapus penjualan pabrik ini" onClick={() => { if (window.confirm('Hapus catatan penjualan pabrik ini?')) deleteRubberFactorySale(sale.id) }}><Trash2 size={16} /></button></div></td></tr>)}</tbody>{dailyFactorySales.length > 0 && <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total tanggal ini · {dailyFactorySales.length} catatan</td><td className="table-cell text-right font-semibold">{formatRupiah(factoryDayGross)}</td><td className="table-cell text-right font-semibold">− {formatRupiah(factoryDayExpenses)}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(factoryDayNet)}</td><td /></tr></tfoot>}</table>{!dailyFactorySales.length && <p className="px-5 py-8 text-center text-sm text-ink-500">Belum ada penjualan pabrik pada tanggal ini.</p>}</div>
     </section>
 
     <section className="card mb-6 overflow-hidden">
-      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Unduh rekap lengkap berdasarkan tanggal</h2><p className="mt-1 text-xs text-ink-500">File memuat pembelian getah, penjualan pabrik, rincian pengeluaran, dan total hasil untuk rentang tanggal yang dipilih.</p></div></div></div>
+      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap getah per tanggal</h2><p className="mt-1 text-xs text-ink-500">Pilih satu tanggal. Tabel pembelian, penjualan, pengeluaran, dan pembagian hasil di bawah hanya memuat tanggal tersebut.</p></div></div></div>
       <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Dari tanggal"><input type="date" className="input" value={downloadRange[0]} max={downloadRange[1] || undefined} onChange={(event) => setDownloadRange([event.target.value, downloadRange[1]])} /></Field>
-          <Field label="Sampai tanggal"><input type="date" className="input" value={downloadRange[1]} min={downloadRange[0] || undefined} max={today} onChange={(event) => setDownloadRange([downloadRange[0], event.target.value])} /></Field>
-          <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => setDownloadRange([`${today.slice(0, 7)}-01`, today])}>Bulan ini</button><button type="button" className="rounded-full border border-ink-900/15 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-paper-100" onClick={() => { const allDates = [...records.map((record) => record.date), ...factorySaleDates].filter(Boolean).sort(); setDownloadRange([allDates[0] || today, today]) }}>Semua catatan</button></div>
-        </div>
+        <Field label="Tanggal laporan"><input type="date" className="input" value={reportDate} max={today} onChange={(event) => event.target.value && setReportDate(event.target.value)} /></Field>
         <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
           <div className="grid gap-2 text-left sm:grid-cols-2 lg:min-w-[26rem]">
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total pembelian</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchaseTotal)}</p></div>
-            <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total penjualan pabrik</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportFactoryGross)}</p></div>
+            <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Hasil bersih setelah pengeluaran</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportFactoryNet)}</p></div>
           </div>
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable || downloadRange[0] > downloadRange[1]} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, downloadRange)}><FileSpreadsheet size={16} /> CSV lengkap</button><button type="button" disabled={!exportAvailable || downloadRange[0] > downloadRange[1]} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, downloadRange)}><FileText size={16} /> Unduh PDF lengkap</button></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, reportDate)}><FileSpreadsheet size={16} /> CSV tanggal ini</button><button type="button" disabled={!exportAvailable} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, reportDate)}><FileText size={16} /> Unduh PDF tanggal ini</button></div>
         </div>
+      </div>
+      <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+        <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Pendapatan bersih dihitung dari penjualan pabrik dikurangi seluruh pengeluaran pada tanggal terpilih.</p></div>
+        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[520px]"><thead><tr><th className="table-head">Kelompok</th><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
+          <tr className="bg-paper-50"><td className="table-cell font-semibold">Total</td><td className="table-cell font-semibold">Hasil bersih dibagikan</td><td className="table-cell">Penjualan pabrik − pengeluaran</td><td className="table-cell text-right font-semibold">{formatRupiah(exportFactoryNet)}</td></tr>
+          <tr><td className="table-cell font-semibold">A</td><td className="table-cell">Total bagian A</td><td className="table-cell">½ dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareA)}</td></tr>
+          {distribution.filter((item) => item.group === 'A').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">A</td><td className="table-cell">{item.name}</td><td className="table-cell">½ bagian A</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
+          <tr><td className="table-cell font-semibold">B</td><td className="table-cell">Total bagian B</td><td className="table-cell">Sisa ½ dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareB)}</td></tr>
+          {distribution.filter((item) => item.group === 'B').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">B</td><td className="table-cell">{item.name}</td><td className="table-cell">⅓ bagian B</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
+        </tbody></table></div>
       </div>
     </section>
 
@@ -407,6 +488,11 @@ export default function Rubber() {
         </tr>)}</tbody>
         <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total tanggal ini · {dailyRecords.length} catatan</td><td className="table-cell text-right font-semibold">{kg(dailyWeight)}</td><td className="table-cell text-right font-semibold text-plantation-800">{kg(dailyNetWeight)}</td><td className="table-cell" /><td className="table-cell text-right font-semibold">{formatRupiah(dailyTotal)}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(dailyHalf)}</td><td className="table-cell" /></tr></tfoot>
       </table></div>}
+    </section>
+
+    <section className="card mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-gold-500 p-5 sm:p-6">
+      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-600">Informasi kebun getah</p><h2 className="mt-1 font-display text-xl text-plantation-950">Luas lahan</h2></div>
+      <p className="font-display text-3xl font-semibold text-plantation-950">47,92 <span className="text-base font-medium text-ink-500">hektar</span></p>
     </section>
 
     <Modal open={Boolean(viewRecord)} onClose={() => setViewRecord(null)} title="Detail catatan getah">

@@ -538,6 +538,22 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     setRubberFactorySales((previous) => [entry, ...previous].sort((a, b) => b.date.localeCompare(a.date)))
     return { ok: true, entry }
   }
+  function updateRubberFactorySale(id, data) {
+    if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat mengubah penjualan pabrik.' }
+    const existing = rubberFactorySales.find((item) => item.id === id)
+    if (!existing) return { ok: false, message: 'Catatan penjualan pabrik tidak ditemukan.' }
+    const date = String(data.date || '')
+    const weightKg = parseKgInput(data.weightKg)
+    const pricePerKg = parseRupiahInput(data.pricePerKg)
+    const expenses = (Array.isArray(data.expenses) ? data.expenses : []).map((item) => ({ description: String(item.description || '').trim(), amount: parseRupiahInput(item.amount) }))
+    if (!date || !Number.isFinite(weightKg) || weightKg <= 0 || !Number.isFinite(pricePerKg) || pricePerKg <= 0) return { ok: false, message: 'Tanggal, berat pabrik, dan harga per kg harus diisi dengan benar.' }
+    if (expenses.some((item) => !item.description || !Number.isFinite(item.amount) || item.amount <= 0)) return { ok: false, message: 'Nama dan nominal setiap pengeluaran wajib diisi dengan benar.' }
+    const grossAmount = weightKg * pricePerKg
+    const expenseTotal = expenses.reduce((sum, item) => sum + item.amount, 0)
+    const entry = { ...existing, date, weightKg, pricePerKg, grossAmount, expenses, expenseTotal, netAmount: grossAmount - expenseTotal, updatedAt: new Date().toISOString() }
+    setRubberFactorySales((previous) => previous.map((item) => item.id === id ? entry : item).sort((a, b) => b.date.localeCompare(a.date)))
+    return { ok: true, entry }
+  }
   function deleteRubberFactorySale(id) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menghapus penjualan pabrik.' }
     if (!rubberFactorySales.some((item) => item.id === id)) return { ok: false, message: 'Catatan penjualan pabrik tidak ditemukan.' }
@@ -1215,6 +1231,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     rubberRecords,
     rubberFactorySales,
     addRubberFactorySale,
+    updateRubberFactorySale,
     deleteRubberFactorySale,
     addRubberRecord,
     updateRubberRecord,

@@ -263,15 +263,18 @@ function exportPdf(records, factorySales, date, palmReport) {
   pdf.text('PERHITUNGAN UPAH PENGURUS GETAH', 14, nextY)
   autoTable(pdf, {
     startY: nextY + 4,
+    head: [['Rincian perhitungan', 'Nominal']],
     body: [
       ['Penjualan kotor pabrik', formatRupiah(factoryDistribution.gross)],
       ['Pemakaian utama', `- ${formatRupiah(factoryDistribution.primaryUse)}`],
       ['Dasar upah (hasil - pemakaian utama)', formatRupiah(factoryDistribution.wageBase)],
       ['Upah pengurus · no name (10%)', `- ${formatRupiah(factoryDistribution.managerWage)}`],
       ['Total pemakaian (utama + tambahan)', `- ${formatRupiah(factoryDistribution.expenseTotal)}`],
+      ['Hasil akhir getah', formatRupiah(totalFactoryNet)],
     ],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.4, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
     columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 153, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
@@ -281,8 +284,15 @@ function exportPdf(records, factorySales, date, palmReport) {
   pdf.setFontSize(11)
   pdf.setTextColor(22, 48, 42)
   pdf.text('PEMBAGIAN HASIL BERSIH GETAH', 14, nextY)
+  pdf.setFillColor(235, 241, 237)
+  pdf.roundedRect(12, nextY + 5, width - 24, 14, 2, 2, 'F')
+  pdf.setTextColor(45, 62, 53)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.text('TOTAL BERSIH PEMBAGIAN GETAH', 17, nextY + 14)
+  pdf.text(formatRupiah(totalFactoryNet), width - 17, nextY + 14, { align: 'right' })
   autoTable(pdf, {
-    startY: nextY + 4,
+    startY: nextY + 24,
     head: [['Penerima', 'Pembagian', 'Nominal']],
     body: distribution.map((item) => [item.name, item.basis, formatRupiah(item.amount)]),
     theme: 'grid',

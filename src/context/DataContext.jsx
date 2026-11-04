@@ -18,6 +18,24 @@ const ADMIN_REFRESH_COLLECTIONS = [...OWNER_REFRESH_COLLECTIONS]
 const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
 const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
+const CLOUD_PAGE_SIZE = 500
+
+async function fetchAllCloudRecords() {
+  const rows = []
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await supabase.from('app_records')
+      .select('collection, record_id, data')
+      .order('collection', { ascending: true })
+      .order('record_id', { ascending: true })
+      .range(offset, offset + CLOUD_PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...(data || []))
+    if (!data || data.length < CLOUD_PAGE_SIZE) return rows
+    offset += CLOUD_PAGE_SIZE
+  }
+}
 
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
@@ -155,10 +173,9 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     cloudSyncErrors.current = {}
 
     async function hydrateCloudData() {
-      const { data, error } = await supabase.from('app_records').select('collection, record_id, data')
-      if (error) throw error
       const grouped = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, []]))
-      for (const row of data || []) if (grouped[row.collection]) grouped[row.collection].push(row.data)
+      const data = await fetchAllCloudRecords()
+      for (const row of data) if (grouped[row.collection]) grouped[row.collection].push(row.data)
       // Keep the fetched cloud snapshot separate from local migration records.
       // Otherwise a failed migration is mistaken for data already in the cloud.
       const rawCloudData = Object.fromEntries(COLLECTION_NAMES.map((name) => [name, [...grouped[name]]]))

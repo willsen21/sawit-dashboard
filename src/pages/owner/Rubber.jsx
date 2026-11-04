@@ -351,29 +351,30 @@ function exportPalmPdf(date, palmReport) {
     columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
-  nextY = pdf.lastAutoTable.finalY + 10
-  if (nextY > pdf.internal.pageSize.getHeight() - 48) { pdf.addPage(); nextY = 18 }
+  pdf.addPage()
+  nextY = 18
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(10)
   pdf.setTextColor(22, 48, 42)
   pdf.text('PERHITUNGAN UPAH PENGURUS SAWIT', 14, nextY)
   autoTable(pdf, {
     startY: nextY + 4,
+    head: [['Rincian perhitungan', 'Nominal']],
     body: [
       ['Total hasil sawit', formatRupiah(palm.gross)],
       ['Pemakaian utama', `− ${formatRupiah(palm.primaryUse)}`],
       ['Dasar upah (hasil − pemakaian utama)', formatRupiah(palm.wageBase)],
       ['Upah pengurus · no name (10%)', `− ${formatRupiah(palm.managerWage)}`],
       ['Total pemakaian (utama + tambahan)', `− ${formatRupiah(palm.expenseTotal)}`],
+      ['Hasil akhir sawit', formatRupiah(palm.net)],
     ],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.4, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
     columnStyles: { 0: { cellWidth: 115 }, 1: { halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
   nextY = pdf.lastAutoTable.finalY + 10
-  pdf.addPage()
-  nextY = 18
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
   pdf.setTextColor(22, 48, 42)

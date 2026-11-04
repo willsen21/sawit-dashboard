@@ -138,15 +138,13 @@ function exportPdf(records, factorySales, date, palmReport) {
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(9)
   pdf.setTextColor(220, 233, 225)
-  pdf.text(`LAPORAN GETAH DAN SAWIT  ·  ${formatShortDate(date)}  ·  47,92 hektar`, 21, 33)
+  pdf.text(`LAPORAN GETAH  ·  ${formatShortDate(date)}  ·  47,92 hektar`, 21, 33)
   autoTable(pdf, {
     startY: 54,
     body: [
       ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
       ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Luas lahan', '47,92 hektar'],
       ['Berat kotor - bersih', `${kg(totalWeight)} - ${kg(totalNetWeight)}`, 'Total bersih pembagian getah', formatRupiah(totalFactoryNet)],
-      ['Hasil sawit', formatRupiah(palm.gross), 'Pengeluaran sawit', `- ${formatRupiah(palm.expenseTotal)}`],
-      ['Hasil bersih sawit', formatRupiah(palm.net), 'Pembelian getah', formatRupiah(totalPurchases)],
     ],
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 2.6, textColor: [31, 42, 36], lineColor: [218, 225, 220], lineWidth: 0.2, fillColor: [251, 248, 242] },
@@ -229,53 +227,16 @@ function exportPdf(records, factorySales, date, palmReport) {
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
   pdf.setTextColor(22, 48, 42)
-  pdf.text('HASIL SAWIT · KEBUN PAL 6', 14, nextY)
-  autoTable(pdf, {
-    startY: nextY + 4,
-    head: [['Jenis hasil', 'Berat (kg)', 'Harga/kg', 'Jumlah hasil']],
-    body: palm.yields.map((item) => [item.name, kg(item.quantity), formatRupiah(item.pricePerKg), formatRupiah(item.total)]),
-    foot: [['TOTAL HASIL SAWIT', '', '', formatRupiah(palm.gross)]],
-    theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2, valign: 'middle' },
-    headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
-    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineColor: [205, 214, 208], lineWidth: 0.25 },
-    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
-    margin: { left: 12, right: 12 },
-  })
-  nextY = pdf.lastAutoTable.finalY + 10
-  if (nextY > pdf.internal.pageSize.getHeight() - 48) { pdf.addPage(); nextY = 18 }
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(11)
-  pdf.setTextColor(22, 48, 42)
-  pdf.text('PENGELUARAN SAWIT', 14, nextY)
-  const palmExpenseRows = palm.expenses.length
-    ? palm.expenses.map((item) => [item.description || '—', formatRupiah(item.amount)])
-    : [['Tidak ada pengeluaran', formatRupiah(0)]]
-  autoTable(pdf, {
-    startY: nextY + 4,
-    head: [['Keperluan', 'Nominal']],
-    body: palmExpenseRows,
-    foot: [['TOTAL PENGELUARAN SAWIT', formatRupiah(palm.expenseTotal)]],
-    theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
-    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
-    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineColor: [205, 214, 208], lineWidth: 0.25 },
-    columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
-    margin: { left: 12, right: 12 },
-  })
-  nextY = pdf.lastAutoTable.finalY + 10
-  if (nextY > pdf.internal.pageSize.getHeight() - 48) { pdf.addPage(); nextY = 18 }
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(11)
-  pdf.setTextColor(22, 48, 42)
   pdf.text('PEMBAGIAN HASIL BERSIH GETAH', 14, nextY)
   autoTable(pdf, {
     startY: nextY + 4,
     head: [['Penerima', 'Pembagian', 'Nominal']],
-    body: distribution.map((item) => [item.name, '50% dari hasil bersih', formatRupiah(item.amount)]),
+    body: distribution.map((item) => [item.name, '50% dari hasil bersih getah', formatRupiah(item.amount)]),
+    foot: [['TOTAL BERSIH PEMBAGIAN GETAH', '', formatRupiah(totalFactoryNet)]],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2, valign: 'middle' },
     headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
+    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineColor: [205, 214, 208], lineWidth: 0.25 },
     alternateRowStyles: { fillColor: [249, 247, 241] },
     columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 143 }, 2: { cellWidth: 70, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
@@ -286,10 +247,86 @@ function exportPdf(records, factorySales, date, palmReport) {
     pdf.setFont('helvetica', 'normal')
     pdf.setFontSize(8)
     pdf.setTextColor(115, 128, 119)
-    pdf.text('Kebun Pal 6 · Laporan Getah dan Sawit', 12, pdf.internal.pageSize.getHeight() - 7)
+    pdf.text('Kebun Pal 6 · Laporan Getah', 12, pdf.internal.pageSize.getHeight() - 7)
     pdf.text(`${page} / ${pages}`, width - 12, pdf.internal.pageSize.getHeight() - 7, { align: 'right' })
   }
-  pdf.save(`laporan-kebun-pal-6-${date}.pdf`)
+  pdf.save(`laporan-getah-kebun-pal-6-${date}.pdf`)
+}
+
+function exportPalmPdf(date, palmReport) {
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const palm = calculatePalmReport(palmReport)
+  const distribution = incomeDistribution(palm.net)
+  const width = pdf.internal.pageSize.getWidth()
+  pdf.setFillColor(22, 48, 42)
+  pdf.roundedRect(12, 11, width - 24, 38, 4, 4, 'F')
+  pdf.setFillColor(227, 177, 85)
+  pdf.roundedRect(12, 11, 3, 38, 1.5, 1.5, 'F')
+  pdf.setTextColor(255, 255, 255)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(17)
+  pdf.text('KEBUN PAL 6', 21, 23)
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(220, 233, 225)
+  pdf.text(`LAPORAN SAWIT  ·  ${formatShortDate(date)}  ·  47,92 hektar`, 21, 33)
+  autoTable(pdf, {
+    startY: 56,
+    head: [['Jenis hasil', 'Berat (kg)', 'Harga/kg', 'Jumlah hasil']],
+    body: palm.yields.map((item) => [item.name, kg(item.quantity), formatRupiah(item.pricePerKg), formatRupiah(item.total)]),
+    foot: [['TOTAL HASIL SAWIT', '', '', formatRupiah(palm.gross)]],
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 3, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
+    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineWidth: 0.25 },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+    margin: { left: 12, right: 12 },
+  })
+  let nextY = pdf.lastAutoTable.finalY + 10
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(11)
+  pdf.setTextColor(22, 48, 42)
+  pdf.text('PENGELUARAN SAWIT', 14, nextY)
+  autoTable(pdf, {
+    startY: nextY + 4,
+    head: [['Keperluan', 'Nominal']],
+    body: palm.expenses.length ? palm.expenses.map((item) => [item.description || '—', formatRupiah(item.amount)]) : [['Tidak ada pengeluaran', formatRupiah(0)]],
+    foot: [['TOTAL PENGELUARAN SAWIT', formatRupiah(palm.expenseTotal)]],
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 3, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
+    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineWidth: 0.25 },
+    columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+    margin: { left: 12, right: 12 },
+  })
+  nextY = pdf.lastAutoTable.finalY + 10
+  if (nextY > pdf.internal.pageSize.getHeight() - 48) { pdf.addPage(); nextY = 18 }
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(11)
+  pdf.setTextColor(22, 48, 42)
+  pdf.text('PEMBAGIAN HASIL BERSIH SAWIT', 14, nextY)
+  autoTable(pdf, {
+    startY: nextY + 4,
+    head: [['Penerima', 'Pembagian', 'Nominal']],
+    body: distribution.map((item) => [item.name, '50% dari hasil bersih sawit', formatRupiah(item.amount)]),
+    foot: [['TOTAL BERSIH PEMBAGIAN SAWIT', '', formatRupiah(palm.net)]],
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 3, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
+    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineWidth: 0.25 },
+    columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 143 }, 2: { cellWidth: 70, halign: 'right', fontStyle: 'bold' } },
+    margin: { left: 12, right: 12 },
+  })
+  const pages = pdf.getNumberOfPages()
+  for (let page = 1; page <= pages; page += 1) {
+    pdf.setPage(page)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(8)
+    pdf.setTextColor(115, 128, 119)
+    pdf.text('Kebun Pal 6 · Laporan Sawit', 12, pdf.internal.pageSize.getHeight() - 7)
+    pdf.text(`${page} / ${pages}`, width - 12, pdf.internal.pageSize.getHeight() - 7, { align: 'right' })
+  }
+  pdf.save(`laporan-sawit-kebun-pal-6-${date}.pdf`)
 }
 
 export default function Rubber() {
@@ -309,6 +346,8 @@ export default function Rubber() {
   const [reportDate, setReportDate] = useState(today)
   const [palmReports, setPalmReports] = useState(() => loadItem('palmReports', {}))
   const [palmDrafts, setPalmDrafts] = useState(() => loadItem('palmReportDrafts', {}))
+  const [palmFormOpen, setPalmFormOpen] = useState(true)
+  const [palmViewDate, setPalmViewDate] = useState(null)
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
   const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
@@ -336,6 +375,7 @@ export default function Rubber() {
   const palmExpenseInputs = palmReport.expenses || []
   const palm = calculatePalmReport(palmReport)
   const savedPalmDates = Object.keys(palmReports).filter((date) => date && palmReports[date]).sort((a, b) => b.localeCompare(a))
+  const palmViewed = palmViewDate ? calculatePalmReport(palmReports[palmViewDate]) : null
   const palmHasData = [palmReport.fruitKg, palmReport.fruitPricePerKg, palmReport.brondolanKg, palmReport.brondolanPricePerKg, palmReport.ketekKg, palmReport.ketekPricePerKg].some((value) => String(value || '').trim()) || palmExpenseInputs.some((item) => item.description || item.amount)
   const distribution = incomeDistribution(exportFactoryNet)
   const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0 || palmHasData
@@ -359,6 +399,7 @@ export default function Rubber() {
     saveItem('palmReports', updatedReports)
     setPalmDrafts(updatedDrafts)
     saveItem('palmReportDrafts', updatedDrafts)
+    setPalmFormOpen(false)
     setNotice(`Laporan sawit ${formatShortDate(reportDate)} berhasil disimpan.`)
   }
 
@@ -494,10 +535,11 @@ export default function Rubber() {
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total pembelian</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchaseTotal)}</p></div>
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total bersih pembagian getah</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportFactoryNet)}</p></div>
           </div>
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, reportDate, palmReport)}><FileSpreadsheet size={16} /> CSV tanggal ini</button><button type="button" disabled={!exportAvailable} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, reportDate, palmReport)}><FileText size={16} /> Unduh PDF tanggal ini</button></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, reportDate, palmReport)}><FileSpreadsheet size={16} /> CSV gabungan</button><button type="button" disabled={!exportRecords.length && !exportFactorySales.length} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, reportDate, palmReport)}><FileText size={16} /> PDF Getah</button><button type="button" disabled={!palmReports[reportDate] && !palmHasData} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPalmPdf(reportDate, palmReport)}><FileText size={16} /> PDF Sawit</button></div>
         </div>
       </div>
-      <div className="border-y border-ink-900/8 bg-paper-50/50 px-5 py-5 sm:px-6">
+      {!palmFormOpen && <div className="px-5 pt-5 sm:px-6"><button type="button" className="btn-primary" onClick={() => setPalmFormOpen(true)}><Plus size={16} /> Input laporan sawit</button></div>}
+      {palmFormOpen && <div className="border-y border-ink-900/8 bg-paper-50/50 px-5 py-5 sm:px-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-display text-lg text-plantation-950">Hasil sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Masukkan berat bersih dan harga per kg. Hasil tiap jenis dihitung otomatis untuk tanggal laporan.</p></div><span className="text-[11px] text-ink-400">{palmReports[reportDate] ? 'Laporan tanggal ini sudah tersimpan' : 'Perubahan belum disimpan'}</span></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[720px]"><thead><tr><th className="table-head">Jenis hasil</th><th className="table-head text-right">Berat (kg)</th><th className="table-head text-right">Harga/kg (Rp)</th><th className="table-head text-right">Jumlah hasil (Rp)</th></tr></thead><tbody>
           {[
@@ -513,11 +555,11 @@ export default function Rubber() {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-plantation-950 px-4 py-3 text-white"><span className="text-sm text-white/75">Hasil bersih sawit · hasil dikurangi pengeluaran</span><strong className="font-display text-xl">{formatRupiah(palm.net)}</strong></div>
         <div className="mt-4 flex justify-end"><button type="button" className="btn-primary" onClick={savePalmReport}><Check size={16} /> Simpan laporan sawit</button></div>
-      </div>
+      </div>}
       <div className="border-t border-ink-900/8 px-5 py-5 sm:px-6">
         <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Riwayat sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Pilih tanggal untuk membuka laporan, atau unduh PDF per tanggal.</p></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[760px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Hasil kotor</th><th className="table-head text-right">Pengeluaran</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>
-          {savedPalmDates.length ? savedPalmDates.map((date) => { const item = calculatePalmReport(palmReports[date]); return <tr key={date}><td className="table-cell font-medium">{formatShortDate(date)}</td><td className="table-cell text-right">{formatRupiah(item.gross)}</td><td className="table-cell text-right">{formatRupiah(item.expenseTotal)}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.net)}</td><td className="table-cell"><div className="flex gap-2"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => setReportDate(date)}><Eye size={14} /> Lihat</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => exportPdf(records.filter((record) => record.date === date), rubberFactorySales.filter((sale) => factorySaleDate(sale) === date), date, palmReports[date])}><FileText size={14} /> PDF</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs text-red-700 hover:bg-red-50" onClick={() => deletePalmReport(date)} aria-label={`Hapus laporan sawit ${formatShortDate(date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr> }) : <tr><td colSpan={5} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada laporan sawit tersimpan.</td></tr>}
+          {savedPalmDates.length ? savedPalmDates.map((date) => { const item = calculatePalmReport(palmReports[date]); return <tr key={date}><td className="table-cell font-medium">{formatShortDate(date)}</td><td className="table-cell text-right">{formatRupiah(item.gross)}</td><td className="table-cell text-right">{formatRupiah(item.expenseTotal)}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.net)}</td><td className="table-cell"><div className="flex gap-2"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => setPalmViewDate(date)}><Eye size={14} /> Lihat</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => exportPalmPdf(date, palmReports[date])}><FileText size={14} /> PDF</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs text-red-700 hover:bg-red-50" onClick={() => deletePalmReport(date)} aria-label={`Hapus laporan sawit ${formatShortDate(date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr> }) : <tr><td colSpan={5} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada laporan sawit tersimpan.</td></tr>}
         </tbody></table></div>
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">
@@ -525,6 +567,7 @@ export default function Rubber() {
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
           {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
         </tbody></table></div>
+        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net).map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">50% dari hasil bersih sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody><tfoot><tr className="bg-paper-100/70"><td colSpan={2} className="table-cell font-semibold">Total bersih pembagian sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(palm.net)}</td></tr></tfoot></table></div></div>
       </div>
     </section>
 
@@ -606,6 +649,13 @@ export default function Rubber() {
         <div className="rounded-xl border border-ink-900/10 p-4"><h3 className="mb-3 text-sm font-semibold text-plantation-950">Rincian berat karung</h3><div className="space-y-2">{viewRecord.bags.map((weight, index) => <CalcLine key={index} label={`Karung ${index + 1}`} value={kg(weight)} dark />)}</div><div className="mt-3 border-t border-ink-900/8 pt-3"><CalcLine label="Jumlah berat" value={kg(viewRecord.totalWeightKg)} dark strong /></div></div>
         <div className="rounded-xl bg-paper-100 p-4"><div className="space-y-2"><CalcLine label="Potongan 10% · hasil pembulatan" value={`− ${kg(viewRecord.deductionKg)}`} dark /><CalcLine label="Berat yang dibayar" value={kg(viewRecord.payableWeightKg)} dark /><CalcLine label={`Harga × ${kg(viewRecord.payableWeightKg)}`} value={`${formatRupiah(viewRecord.pricePerKg)}/kg`} dark /><CalcLine label="Total hasil" value={formatRupiah(viewRecord.totalAmount)} dark strong /><div className="mt-3 border-t border-ink-900/10 pt-3"><CalcLine label="Hasil dibagi dua" value={formatRupiah(viewRecord.splitAmount)} dark strong /></div></div></div>
         <div className="flex justify-end"><button type="button" className="btn-primary" onClick={() => { const record = viewRecord; setViewRecord(null); openEdit(record) }}><Pencil size={15} /> Edit catatan</button></div>
+      </div>}
+    </Modal>
+    <Modal open={Boolean(palmViewDate)} onClose={() => setPalmViewDate(null)} title={`Detail laporan sawit${palmViewDate ? ` · ${formatShortDate(palmViewDate)}` : ''}`}>
+      {palmViewDate && palmViewed && <div className="space-y-4">
+        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[480px]"><thead><tr><th className="table-head">Jenis hasil</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Jumlah</th></tr></thead><tbody>{palmViewed.yields.map((item) => <tr key={item.key}><td className="table-cell">{item.name}</td><td className="table-cell text-right">{kg(item.quantity)}</td><td className="table-cell text-right">{formatRupiah(item.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(item.total)}</td></tr>)}</tbody><tfoot><tr><td colSpan={3} className="table-cell font-semibold">Total hasil sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(palmViewed.gross)}</td></tr></tfoot></table></div>
+        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[360px]"><thead><tr><th className="table-head">Pengeluaran</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{palmViewed.expenses.length ? palmViewed.expenses.map((item, index) => <tr key={index}><td className="table-cell">{item.description || '—'}</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>) : <tr><td colSpan={2} className="table-cell text-center text-ink-500">Tidak ada pengeluaran.</td></tr>}</tbody><tfoot><tr><td className="table-cell font-semibold">Hasil bersih sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(palmViewed.net)}</td></tr></tfoot></table></div>
+        <div className="flex justify-end"><button type="button" className="btn-primary" onClick={() => { setReportDate(palmViewDate); setPalmViewDate(null); setPalmFormOpen(true) }}><Pencil size={15} /> Edit laporan</button></div>
       </div>}
     </Modal>
   </div>

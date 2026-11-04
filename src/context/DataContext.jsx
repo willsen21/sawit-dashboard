@@ -561,16 +561,15 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     return { ok: true }
   }
 
-  function addStoneStock({ date, type, quantityKg, capitalCost, note = '', ownerId }) {
+  function addStoneStock({ date, type, quantityKg, note = '', ownerId }) {
     if (currentUser?.role !== 'owner') return { ok: false, message: 'Hanya owner yang dapat menambahkan stok batu.' }
     const quantity = parseKgInput(quantityKg)
-    const cost = Number(String(capitalCost ?? '').replaceAll('.', '')) || 0
-    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost) || cost <= 0) {
-      return { ok: false, message: 'Jenis, tanggal, jumlah stok, dan modal pembelian harus diisi dengan benar.' }
+    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0) {
+      return { ok: false, message: 'Jenis, tanggal, dan jumlah stok harus diisi dengan benar.' }
     }
-    const entry = { id: `stone-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, capitalCost: cost, note: note.trim(), ownerId, createdAt: new Date().toISOString() }
+    const entry = { id: `stone-stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, note: note.trim(), ownerId, createdAt: new Date().toISOString() }
     setStoneStock((prev) => [entry, ...prev])
-    addAuditLog({ action: 'Menambah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg · modal Rp${cost.toLocaleString('id-ID')}` })
+    addAuditLog({ action: 'Menambah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg` })
     return { ok: true, entry }
   }
 
@@ -594,7 +593,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     }
     const updated = { ...existing, ...patch, date, type, quantityKg: quantity, capitalCost: cost, note: String(patch.note ?? existing.note ?? '').trim(), updatedAt: new Date().toISOString() }
     setStoneStock((prev) => prev.map((item) => item.id === id ? updated : item))
-    addAuditLog({ action: 'Mengubah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg · modal Rp${cost.toLocaleString('id-ID')}` })
+    addAuditLog({ action: 'Mengubah stok batu', actorId: ownerId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg` })
     return { ok: true, entry: updated }
   }
 
@@ -606,7 +605,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     const totalSold = stoneSales.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(existing.type)).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
     if (remainingStock < totalSold) return { ok: false, message: `Stok tidak bisa dihapus karena ${totalSold.toLocaleString('id-ID')} kg ${canonicalStoneType(existing.type)} sudah tercatat terjual.` }
     setStoneStock((prev) => prev.filter((item) => item.id !== id))
-    addAuditLog({ action: 'Menghapus stok batu', actorId: ownerId, detail: `${canonicalStoneType(existing.type)}: ${Number(existing.quantityKg).toLocaleString('id-ID')} kg · modal Rp${Number(existing.capitalCost || 0).toLocaleString('id-ID')}` })
+    addAuditLog({ action: 'Menghapus stok batu', actorId: ownerId, detail: `${canonicalStoneType(existing.type)}: ${Number(existing.quantityKg).toLocaleString('id-ID')} kg` })
     return { ok: true }
   }
 

@@ -265,14 +265,14 @@ function exportPdf(records, factorySales, date, palmReport) {
     startY: nextY + 4,
     body: [
       ['Penjualan kotor pabrik', formatRupiah(factoryDistribution.gross)],
-      ['Pemakaian utama', `− ${formatRupiah(factoryDistribution.primaryUse)}`],
-      ['Dasar upah (hasil − pemakaian utama)', formatRupiah(factoryDistribution.wageBase)],
-      ['Upah pengurus · no name (10%)', `− ${formatRupiah(factoryDistribution.managerWage)}`],
-      ['Total pemakaian (utama + tambahan)', `− ${formatRupiah(factoryDistribution.expenseTotal)}`],
+      ['Pemakaian utama', `- ${formatRupiah(factoryDistribution.primaryUse)}`],
+      ['Dasar upah (hasil - pemakaian utama)', formatRupiah(factoryDistribution.wageBase)],
+      ['Upah pengurus · no name (10%)', `- ${formatRupiah(factoryDistribution.managerWage)}`],
+      ['Total pemakaian (utama + tambahan)', `- ${formatRupiah(factoryDistribution.expenseTotal)}`],
     ],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.4, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
-    columnStyles: { 0: { cellWidth: 115 }, 1: { halign: 'right', fontStyle: 'bold' } },
+    columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 153, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
   nextY = pdf.lastAutoTable.finalY + 12
@@ -362,16 +362,16 @@ function exportPalmPdf(date, palmReport) {
     head: [['Rincian perhitungan', 'Nominal']],
     body: [
       ['Total hasil sawit', formatRupiah(palm.gross)],
-      ['Pemakaian utama', `− ${formatRupiah(palm.primaryUse)}`],
-      ['Dasar upah (hasil − pemakaian utama)', formatRupiah(palm.wageBase)],
-      ['Upah pengurus · no name (10%)', `− ${formatRupiah(palm.managerWage)}`],
-      ['Total pemakaian (utama + tambahan)', `− ${formatRupiah(palm.expenseTotal)}`],
+      ['Pemakaian utama', `- ${formatRupiah(palm.primaryUse)}`],
+      ['Dasar upah (hasil - pemakaian utama)', formatRupiah(palm.wageBase)],
+      ['Upah pengurus · no name (10%)', `- ${formatRupiah(palm.managerWage)}`],
+      ['Total pemakaian (utama + tambahan)', `- ${formatRupiah(palm.expenseTotal)}`],
       ['Hasil akhir sawit', formatRupiah(palm.net)],
     ],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.4, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
     headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
-    columnStyles: { 0: { cellWidth: 115 }, 1: { halign: 'right', fontStyle: 'bold' } },
+    columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 153, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
   nextY = pdf.lastAutoTable.finalY + 10

@@ -232,7 +232,6 @@ function exportPdf(records, factorySales, date, palmReport) {
     startY: nextY + 4,
     head: [['Penerima', 'Pembagian', 'Nominal']],
     body: distribution.map((item) => [item.name, '50% dari hasil bersih getah', formatRupiah(item.amount)]),
-    foot: [['TOTAL BERSIH PEMBAGIAN GETAH', '', formatRupiah(totalFactoryNet)]],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2, valign: 'middle' },
     headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
@@ -270,8 +269,15 @@ function exportPalmPdf(date, palmReport) {
   pdf.setFontSize(9)
   pdf.setTextColor(220, 233, 225)
   pdf.text(`LAPORAN SAWIT  ·  ${formatShortDate(date)}  ·  47,92 hektar`, 21, 33)
+  pdf.setFillColor(235, 241, 237)
+  pdf.roundedRect(12, 55, width - 24, 14, 2, 2, 'F')
+  pdf.setTextColor(45, 62, 53)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.text('TOTAL BERSIH PEMBAGIAN SAWIT', 17, 64)
+  pdf.text(formatRupiah(palm.net), width - 17, 64, { align: 'right' })
   autoTable(pdf, {
-    startY: 56,
+    startY: 76,
     head: [['Jenis hasil', 'Berat (kg)', 'Harga/kg', 'Jumlah hasil']],
     body: palm.yields.map((item) => [item.name, kg(item.quantity), formatRupiah(item.pricePerKg), formatRupiah(item.total)]),
     foot: [['TOTAL HASIL SAWIT', '', '', formatRupiah(palm.gross)]],
@@ -300,7 +306,8 @@ function exportPalmPdf(date, palmReport) {
     margin: { left: 12, right: 12 },
   })
   nextY = pdf.lastAutoTable.finalY + 10
-  if (nextY > pdf.internal.pageSize.getHeight() - 48) { pdf.addPage(); nextY = 18 }
+  pdf.addPage()
+  nextY = 18
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(11)
   pdf.setTextColor(22, 48, 42)
@@ -309,7 +316,6 @@ function exportPalmPdf(date, palmReport) {
     startY: nextY + 4,
     head: [['Penerima', 'Pembagian', 'Nominal']],
     body: distribution.map((item) => [item.name, '50% dari hasil bersih sawit', formatRupiah(item.amount)]),
-    foot: [['TOTAL BERSIH PEMBAGIAN SAWIT', '', formatRupiah(palm.net)]],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 9, cellPadding: 3, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
     headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineWidth: 0.2 },
@@ -567,7 +573,7 @@ export default function Rubber() {
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
           {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
         </tbody></table></div>
-        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net).map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">50% dari hasil bersih sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody><tfoot><tr className="bg-paper-100/70"><td colSpan={2} className="table-cell font-semibold">Total bersih pembagian sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(palm.net)}</td></tr></tfoot></table></div></div>
+        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="mb-3 flex items-center justify-between rounded-xl bg-plantation-700/8 px-4 py-3 font-semibold text-plantation-950"><span>Total bersih pembagian sawit</span><span>{formatRupiah(palm.net)}</span></div><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net).map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">50% dari hasil bersih sawit</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody></table></div></div>
       </div>
     </section>
 

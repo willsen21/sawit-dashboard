@@ -132,7 +132,7 @@ function exportPdf(records, factorySales, date) {
     body: [
       ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
       ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Hasil bersih dibagikan', formatRupiah(totalFactoryNet)],
-      ['Berat kotor · bersih', `${kg(totalWeight)} · ${kg(totalNetWeight)}`, 'Bagian ½', formatRupiah(totalHalf)],
+      ['Berat kotor - bersih', `${kg(totalWeight)} - ${kg(totalNetWeight)}`, 'Bagian 1/2', formatRupiah(totalHalf)],
     ],
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 2.6, textColor: [31, 42, 36], lineColor: [225, 228, 222], fillColor: [251, 248, 242] },
@@ -146,7 +146,7 @@ function exportPdf(records, factorySales, date) {
   pdf.text('PEMBELIAN GETAH', 14, sectionY)
   autoTable(pdf, {
     startY: sectionY + 4,
-    head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan 10%', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian ½']],
+    head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan 10%', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian 1/2']],
     body: records.length ? records.map((record) => [
       formatShortDate(record.date),
       record.name,
@@ -220,16 +220,25 @@ function exportPdf(records, factorySales, date) {
     startY: nextY + 4,
     head: [['Kelompok', 'Penerima', 'Dasar pembagian', 'Nominal']],
     body: [
-      ['—', 'Total bersih setelah seluruh pengeluaran', 'Penjualan pabrik − pengeluaran', formatRupiah(totalFactoryNet)],
-      ['A', 'Total bagian A', '½ hasil bersih', formatRupiah(shareA)],
-      ...distribution.filter((item) => item.group === 'A').map((item) => ['A', item.name, '½ bagian A', formatRupiah(item.amount)]),
-      ['B', 'Total bagian B', 'Sisa ½ hasil bersih', formatRupiah(shareB)],
-      ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, '⅓ bagian B', formatRupiah(item.amount)]),
+      ['A', 'Total bagian A', '50% dari hasil bersih', formatRupiah(shareA)],
+      ...distribution.filter((item) => item.group === 'A').map((item) => ['A', item.name, 'Bagian A dibagi 2', formatRupiah(item.amount)]),
+      ['B', 'Total bagian B', 'Sisa 50% dari hasil bersih', formatRupiah(shareB)],
+      ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, 'Bagian B dibagi 3', formatRupiah(item.amount)]),
     ],
+    foot: [['TOTAL BERSIH DIBAGIKAN', '', 'Hasil bersih setelah pengeluaran', formatRupiah(totalFactoryNet)]],
     theme: 'grid',
-    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [31, 42, 36], lineColor: [225, 228, 222] },
-    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [251, 248, 242] },
+    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [175, 187, 179], lineWidth: 0.35, valign: 'middle' },
+    headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [22, 48, 42], lineWidth: 0.5 },
+    footStyles: { fillColor: [232, 220, 190], textColor: [22, 48, 42], fontStyle: 'bold', lineColor: [151, 119, 61], lineWidth: 0.6 },
+    alternateRowStyles: { fillColor: [249, 247, 241] },
+    columnStyles: { 0: { cellWidth: 39, halign: 'center' }, 1: { cellWidth: 61 }, 2: { cellWidth: 119 }, 3: { cellWidth: 48, halign: 'right', fontStyle: 'bold' } },
+    didParseCell: ({ section, row, cell }) => {
+      if (section === 'body' && (row.index === 0 || row.index === 3)) {
+        cell.styles.fillColor = [230, 239, 233]
+        cell.styles.fontStyle = 'bold'
+        cell.styles.lineWidth = 0.5
+      }
+    },
     margin: { left: 12, right: 12 },
   })
   const pages = pdf.getNumberOfPages()
@@ -414,11 +423,11 @@ export default function Rubber() {
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">
         <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Pendapatan bersih dihitung dari penjualan pabrik dikurangi seluruh pengeluaran pada tanggal terpilih.</p></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[520px]"><thead><tr><th className="table-head">Kelompok</th><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
-          <tr className="bg-paper-50"><td className="table-cell font-semibold">Total</td><td className="table-cell font-semibold">Hasil bersih dibagikan</td><td className="table-cell">Penjualan pabrik − pengeluaran</td><td className="table-cell text-right font-semibold">{formatRupiah(exportFactoryNet)}</td></tr>
-          <tr><td className="table-cell font-semibold">A</td><td className="table-cell">Total bagian A</td><td className="table-cell">½ dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareA)}</td></tr>
-          {distribution.filter((item) => item.group === 'A').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">A</td><td className="table-cell">{item.name}</td><td className="table-cell">½ bagian A</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
-          <tr><td className="table-cell font-semibold">B</td><td className="table-cell">Total bagian B</td><td className="table-cell">Sisa ½ dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareB)}</td></tr>
-          {distribution.filter((item) => item.group === 'B').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">B</td><td className="table-cell">{item.name}</td><td className="table-cell">⅓ bagian B</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
+          <tr className="bg-paper-50"><td className="table-cell font-semibold">Total</td><td className="table-cell font-semibold">Hasil bersih dibagikan</td><td className="table-cell">Penjualan pabrik - pengeluaran</td><td className="table-cell text-right font-semibold">{formatRupiah(exportFactoryNet)}</td></tr>
+          <tr><td className="table-cell font-semibold">A</td><td className="table-cell">Total bagian A</td><td className="table-cell">50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareA)}</td></tr>
+          {distribution.filter((item) => item.group === 'A').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">A</td><td className="table-cell">{item.name}</td><td className="table-cell">Bagian A dibagi 2</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
+          <tr><td className="table-cell font-semibold">B</td><td className="table-cell">Total bagian B</td><td className="table-cell">Sisa 50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareB)}</td></tr>
+          {distribution.filter((item) => item.group === 'B').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">B</td><td className="table-cell">{item.name}</td><td className="table-cell">Bagian B dibagi 3</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
         </tbody></table></div>
       </div>
     </section>

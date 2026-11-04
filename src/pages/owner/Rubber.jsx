@@ -51,12 +51,7 @@ function splitAmong(total, names) {
 
 function incomeDistribution(netIncome) {
   const roundedNetIncome = Math.round(Number(netIncome) || 0)
-  const shareA = Math.trunc(roundedNetIncome / 2)
-  const shareB = roundedNetIncome - shareA
-  return [
-    ...splitAmong(shareA, ['Feri', 'Fendi']).map(([name, amount]) => ({ group: 'A', name, amount })),
-    ...splitAmong(shareB, ['Andi', 'Ani', 'Willsen']).map(([name, amount]) => ({ group: 'B', name, amount })),
-  ]
+  return splitAmong(roundedNetIncome, ['Andi', 'Pendi']).map(([name, amount]) => ({ name, amount }))
 }
 
 function exportCsv(records, factorySales, date) {
@@ -72,8 +67,6 @@ function exportCsv(records, factorySales, date) {
   const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
   const totalNet = factorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const distribution = incomeDistribution(totalNet)
-  const shareA = distribution.filter((item) => item.group === 'A').reduce((sum, item) => sum + item.amount, 0)
-  const shareB = distribution.filter((item) => item.group === 'B').reduce((sum, item) => sum + item.amount, 0)
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const csvRows = [
     ['LAPORAN GETAH', formatShortDate(date)], ['Luas lahan', '47,92 hektar'],
@@ -88,10 +81,8 @@ function exportCsv(records, factorySales, date) {
     ['TOTAL PENJUALAN PABRIK', '', '', totalGross, '', totalExpenses, totalNet],
     [], ['RINCIAN PENGELUARAN PABRIK'], expenseHeaders, ...expenseRows,
     ['TOTAL PENGELUARAN', '', '', totalExpenses],
-    [], ['PEMBAGIAN HASIL BERSIH'], ['Kelompok', 'Nama', 'Nominal (Rp)'],
-    ['A', 'Total bagian A', shareA], ...distribution.filter((item) => item.group === 'A').map((item) => ['A', item.name, item.amount]),
-    ['B', 'Total bagian B', shareB], ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, item.amount]),
-    ['TOTAL BERSIH DIBAGIKAN', '', shareA + shareB],
+    [], ['PEMBAGIAN HASIL BERSIH'], ['Penerima', 'Bagian', 'Nominal (Rp)'],
+    ...distribution.map((item) => [item.name, '50% dari hasil bersih', item.amount]),
   ]
   const contents = '\uFEFF' + csvRows.map((row) => row.map(quote).join(';')).join('\r\n')
   const link = document.createElement('a')
@@ -112,8 +103,6 @@ function exportPdf(records, factorySales, date) {
   const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
   const totalFactoryNet = factorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const distribution = incomeDistribution(totalFactoryNet)
-  const shareA = distribution.filter((item) => item.group === 'A').reduce((sum, item) => sum + item.amount, 0)
-  const shareB = distribution.filter((item) => item.group === 'B').reduce((sum, item) => sum + item.amount, 0)
   const width = pdf.internal.pageSize.getWidth()
   pdf.setFillColor(22, 48, 42)
   pdf.roundedRect(12, 11, width - 24, 38, 4, 4, 'F')
@@ -218,26 +207,13 @@ function exportPdf(records, factorySales, date) {
   pdf.text('PEMBAGIAN HASIL BERSIH', 14, nextY)
   autoTable(pdf, {
     startY: nextY + 4,
-    head: [['Kelompok', 'Penerima', 'Dasar pembagian', 'Nominal']],
-    body: [
-      ['A', 'Total bagian A', '50% dari hasil bersih', formatRupiah(shareA)],
-      ...distribution.filter((item) => item.group === 'A').map((item) => ['A', item.name, 'Bagian A dibagi 2', formatRupiah(item.amount)]),
-      ['B', 'Total bagian B', 'Sisa 50% dari hasil bersih', formatRupiah(shareB)],
-      ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, 'Bagian B dibagi 3', formatRupiah(item.amount)]),
-    ],
+    head: [['Penerima', 'Pembagian', 'Nominal']],
+    body: distribution.map((item) => [item.name, '50% dari hasil bersih', formatRupiah(item.amount)]),
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2, valign: 'middle' },
     headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
     alternateRowStyles: { fillColor: [249, 247, 241] },
-    columnStyles: { 0: { cellWidth: 39, halign: 'center' }, 1: { cellWidth: 61 }, 2: { cellWidth: 119 }, 3: { cellWidth: 48, halign: 'right', fontStyle: 'bold' } },
-    didParseCell: ({ section, row, cell }) => {
-      if (section === 'body' && (row.index === 0 || row.index === 3)) {
-        cell.styles.fillColor = [236, 242, 238]
-        cell.styles.fontStyle = 'bold'
-        cell.styles.lineColor = [211, 219, 214]
-        cell.styles.lineWidth = 0.2
-      }
-    },
+    columnStyles: { 0: { cellWidth: 68 }, 1: { cellWidth: 170 }, 2: { cellWidth: 68, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
   const pages = pdf.getNumberOfPages()
@@ -291,8 +267,6 @@ export default function Rubber() {
   const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
   const exportFactoryNet = exportFactorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
   const distribution = incomeDistribution(exportFactoryNet)
-  const exportShareA = distribution.filter((item) => item.group === 'A').reduce((sum, item) => sum + item.amount, 0)
-  const exportShareB = distribution.filter((item) => item.group === 'B').reduce((sum, item) => sum + item.amount, 0)
   const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0
   const factoryGross = parseKgInput(factoryForm.weightKg) * parseRupiahInput(factoryForm.pricePerKg)
   const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
@@ -420,13 +394,9 @@ export default function Rubber() {
         </div>
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-        <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Pendapatan bersih dihitung dari penjualan pabrik dikurangi seluruh pengeluaran pada tanggal terpilih.</p></div>
-        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[520px]"><thead><tr><th className="table-head">Kelompok</th><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
-          <tr className="bg-paper-50"><td className="table-cell font-semibold">Total</td><td className="table-cell font-semibold">Hasil bersih dibagikan</td><td className="table-cell">Penjualan pabrik - pengeluaran</td><td className="table-cell text-right font-semibold">{formatRupiah(exportFactoryNet)}</td></tr>
-          <tr><td className="table-cell font-semibold">A</td><td className="table-cell">Total bagian A</td><td className="table-cell">50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareA)}</td></tr>
-          {distribution.filter((item) => item.group === 'A').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">A</td><td className="table-cell">{item.name}</td><td className="table-cell">Bagian A dibagi 2</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
-          <tr><td className="table-cell font-semibold">B</td><td className="table-cell">Total bagian B</td><td className="table-cell">Sisa 50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(exportShareB)}</td></tr>
-          {distribution.filter((item) => item.group === 'B').map((item) => <tr key={item.name}><td className="table-cell text-ink-400">B</td><td className="table-cell">{item.name}</td><td className="table-cell">Bagian B dibagi 3</td><td className="table-cell text-right">{formatRupiah(item.amount)}</td></tr>)}
+        <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Hasil bersih setelah seluruh pengeluaran dibagi rata untuk Andi dan Pendi.</p></div>
+        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
+          {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">50% dari hasil bersih</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
         </tbody></table></div>
       </div>
     </section>

@@ -308,6 +308,7 @@ export default function Rubber() {
   const [selectedFactoryDate, setSelectedFactoryDate] = useState(today)
   const [reportDate, setReportDate] = useState(today)
   const [palmReports, setPalmReports] = useState(() => loadItem('palmReports', {}))
+  const [palmDrafts, setPalmDrafts] = useState(() => loadItem('palmReportDrafts', {}))
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
   const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
@@ -331,9 +332,10 @@ export default function Rubber() {
   const exportFactorySales = rubberFactorySales.filter((sale) => factorySaleDate(sale) === reportDate)
   const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
   const exportFactoryNet = exportFactorySales.reduce((sum, sale) => sum + saleNetAmount(sale), 0)
-  const palmReport = palmReports[reportDate] || blankPalmReport()
+  const palmReport = palmDrafts[reportDate] || palmReports[reportDate] || blankPalmReport()
   const palmExpenseInputs = palmReport.expenses || []
   const palm = calculatePalmReport(palmReport)
+  const savedPalmDates = Object.keys(palmReports).filter((date) => date && palmReports[date]).sort((a, b) => b.localeCompare(a))
   const palmHasData = [palmReport.fruitKg, palmReport.fruitPricePerKg, palmReport.brondolanKg, palmReport.brondolanPricePerKg, palmReport.ketekKg, palmReport.ketekPricePerKg].some((value) => String(value || '').trim()) || palmExpenseInputs.some((item) => item.description || item.amount)
   const distribution = incomeDistribution(exportFactoryNet)
   const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0 || palmHasData
@@ -341,11 +343,23 @@ export default function Rubber() {
   const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
 
   function updatePalmReport(nextReport) {
-    setPalmReports((previous) => {
-      const updated = { ...previous, [reportDate]: { ...(previous[reportDate] || blankPalmReport()), ...nextReport } }
-      saveItem('palmReports', updated)
+    setPalmDrafts((previous) => {
+      const updated = { ...previous, [reportDate]: { ...(previous[reportDate] || palmReports[reportDate] || blankPalmReport()), ...nextReport } }
+      saveItem('palmReportDrafts', updated)
       return updated
     })
+  }
+
+  function savePalmReport() {
+    const report = { ...palmReport, savedAt: new Date().toISOString() }
+    const updatedReports = { ...palmReports, [reportDate]: report }
+    const updatedDrafts = { ...palmDrafts }
+    delete updatedDrafts[reportDate]
+    setPalmReports(updatedReports)
+    saveItem('palmReports', updatedReports)
+    setPalmDrafts(updatedDrafts)
+    saveItem('palmReportDrafts', updatedDrafts)
+    setNotice(`Laporan sawit ${formatShortDate(reportDate)} berhasil disimpan.`)
   }
 
   function saveFactorySale(event) {
@@ -461,7 +475,7 @@ export default function Rubber() {
     <section className="card mb-6 overflow-hidden">
       <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap Getah dan Sawit · Kebun Pal 6</h2><p className="mt-1 text-xs text-ink-500">Pilih satu tanggal untuk melihat hasil getah, hasil buah sawit, pengeluaran, dan pembagiannya dalam laporan PDF.</p></div></div></div>
       <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
-        <Field label="Tanggal laporan"><input type="date" className="input" value={reportDate} max={today} onChange={(event) => event.target.value && setReportDate(event.target.value)} /></Field>
+        <div><Field label="Tanggal laporan"><input type="date" className="input" value={reportDate} onChange={(event) => event.target.value && setReportDate(event.target.value)} /></Field><div className="mt-2"><DateNavigator date={reportDate} today={today} onChange={setReportDate} allowFuture /></div></div>
         <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
           <div className="grid gap-2 text-left sm:grid-cols-2 lg:min-w-[26rem]">
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total pembelian</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchaseTotal)}</p></div>
@@ -471,7 +485,7 @@ export default function Rubber() {
         </div>
       </div>
       <div className="border-y border-ink-900/8 bg-paper-50/50 px-5 py-5 sm:px-6">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-display text-lg text-plantation-950">Hasil sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Masukkan berat bersih dan harga per kg. Hasil tiap jenis dihitung otomatis untuk tanggal laporan.</p></div><span className="text-[11px] text-ink-400">Tersimpan di browser untuk tanggal ini</span></div>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-display text-lg text-plantation-950">Hasil sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Masukkan berat bersih dan harga per kg. Hasil tiap jenis dihitung otomatis untuk tanggal laporan.</p></div><span className="text-[11px] text-ink-400">{palmReports[reportDate] ? 'Laporan tanggal ini sudah tersimpan' : 'Perubahan belum disimpan'}</span></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[720px]"><thead><tr><th className="table-head">Jenis hasil</th><th className="table-head text-right">Berat (kg)</th><th className="table-head text-right">Harga/kg (Rp)</th><th className="table-head text-right">Jumlah hasil (Rp)</th></tr></thead><tbody>
           {[
             { name: 'Buah', kgKey: 'fruitKg', priceKey: 'fruitPricePerKg', item: palm.yields[0] },
@@ -485,6 +499,13 @@ export default function Rubber() {
           </tbody><tfoot><tr className="bg-paper-100/70"><td className="table-cell font-semibold">Total pengeluaran</td><td className="table-cell text-right font-semibold">{formatRupiah(palm.expenseTotal)}</td><td /></tr></tfoot></table></div>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-plantation-950 px-4 py-3 text-white"><span className="text-sm text-white/75">Hasil bersih sawit · hasil dikurangi pengeluaran</span><strong className="font-display text-xl">{formatRupiah(palm.net)}</strong></div>
+        <div className="mt-4 flex justify-end"><button type="button" className="btn-primary" onClick={savePalmReport}><Check size={16} /> Simpan laporan sawit</button></div>
+      </div>
+      <div className="border-t border-ink-900/8 px-5 py-5 sm:px-6">
+        <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Riwayat sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Pilih tanggal untuk membuka laporan, atau unduh PDF per tanggal.</p></div>
+        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[760px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Hasil kotor</th><th className="table-head text-right">Pengeluaran</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>
+          {savedPalmDates.length ? savedPalmDates.map((date) => { const item = calculatePalmReport(palmReports[date]); return <tr key={date}><td className="table-cell font-medium">{formatShortDate(date)}</td><td className="table-cell text-right">{formatRupiah(item.gross)}</td><td className="table-cell text-right">{formatRupiah(item.expenseTotal)}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.net)}</td><td className="table-cell"><div className="flex gap-2"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => setReportDate(date)}><Eye size={14} /> Lihat</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => exportPdf(records.filter((record) => record.date === date), rubberFactorySales.filter((sale) => factorySaleDate(sale) === date), date, palmReports[date])}><FileText size={14} /> PDF</button></div></td></tr> }) : <tr><td colSpan={5} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada laporan sawit tersimpan.</td></tr>}
+        </tbody></table></div>
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">
         <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih getah · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Hasil bersih penjualan getah setelah pengeluaran pabrik dibagi rata untuk Andi dan Pendi.</p></div>
@@ -581,12 +602,12 @@ function SummaryCard({ icon, label, value, detail, accent = false }) {
   return <article className="card relative overflow-hidden p-4 sm:p-5"><span className={`absolute inset-x-0 top-0 h-1 ${accent ? 'bg-gold-500' : 'bg-plantation-700'}`} /><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-plantation-700/8 text-plantation-800">{icon}</span><div className="min-w-0"><p className="text-xs text-ink-500">{label}</p><p className="mt-1 truncate font-display text-xl text-plantation-950">{value}</p><p className="mt-1 text-[11px] text-ink-400">{detail}</p></div></div></article>
 }
 
-function DateNavigator({ date, today, onChange }) {
+function DateNavigator({ date, today, onChange, allowFuture = false }) {
   return <div className="flex flex-wrap items-center gap-2">
     <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs" onClick={() => onChange(shiftDate(date, -1))} aria-label="Tanggal sebelumnya"><ChevronLeft size={16} /><span className="hidden sm:inline">Sebelumnya</span></button>
-    <label className="relative"><span className="sr-only">Pilih tanggal</span><input type="date" className="input !min-h-9 !w-auto !rounded-full !px-3 !py-1.5 text-xs" value={date} max={today} onChange={(event) => event.target.value && onChange(event.target.value)} /></label>
+    <label className="relative"><span className="sr-only">Pilih tanggal</span><input type="date" className="input !min-h-9 !w-auto !rounded-full !px-3 !py-1.5 text-xs" value={date} max={allowFuture ? undefined : today} onChange={(event) => event.target.value && onChange(event.target.value)} /></label>
     <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs" onClick={() => onChange(today)} disabled={date === today}>Hari ini</button>
-    <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40" onClick={() => onChange(shiftDate(date, 1))} disabled={date >= today} aria-label="Tanggal berikutnya"><span className="hidden sm:inline">Berikutnya</span><ChevronRight size={16} /></button>
+    <button type="button" className="btn-ghost !min-h-9 !rounded-full !px-3 !py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40" onClick={() => onChange(shiftDate(date, 1))} disabled={!allowFuture && date >= today} aria-label="Tanggal berikutnya"><span className="hidden sm:inline">Berikutnya</span><ChevronRight size={16} /></button>
   </div>
 }
 

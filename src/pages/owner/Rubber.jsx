@@ -120,7 +120,7 @@ function exportPdf(records, factorySales, date) {
     startY: 54,
     body: [
       ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
-      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'TOTAL BERSIH DIBAGIKAN', formatRupiah(totalFactoryNet)],
+      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Luas lahan', '47,92 hektar'],
       ['Berat kotor - bersih', `${kg(totalWeight)} - ${kg(totalNetWeight)}`, 'Bagian 1/2', formatRupiah(totalHalf)],
     ],
     theme: 'grid',
@@ -205,15 +205,25 @@ function exportPdf(records, factorySales, date) {
   pdf.setFontSize(11)
   pdf.setTextColor(22, 48, 42)
   pdf.text('PEMBAGIAN HASIL BERSIH', 14, nextY)
+  pdf.setFillColor(236, 242, 238)
+  pdf.setDrawColor(211, 219, 214)
+  pdf.setLineWidth(0.2)
+  pdf.roundedRect(12, nextY + 4, width - 24, 12, 2, 2, 'FD')
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(9)
+  pdf.setTextColor(45, 62, 53)
+  pdf.text('TOTAL BERSIH DIBAGIKAN', 17, nextY + 11.5)
+  pdf.setTextColor(22, 48, 42)
+  pdf.text(formatRupiah(totalFactoryNet), width - 17, nextY + 11.5, { align: 'right' })
   autoTable(pdf, {
-    startY: nextY + 4,
+    startY: nextY + 19,
     head: [['Penerima', 'Pembagian', 'Nominal']],
     body: distribution.map((item) => [item.name, '50% dari hasil bersih', formatRupiah(item.amount)]),
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2, valign: 'middle' },
     headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
     alternateRowStyles: { fillColor: [249, 247, 241] },
-    columnStyles: { 0: { cellWidth: 68 }, 1: { cellWidth: 170 }, 2: { cellWidth: 68, halign: 'right', fontStyle: 'bold' } },
+    columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 143 }, 2: { cellWidth: 70, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
   const pages = pdf.getNumberOfPages()

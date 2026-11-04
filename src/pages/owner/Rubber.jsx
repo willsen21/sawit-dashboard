@@ -362,6 +362,19 @@ export default function Rubber() {
     setNotice(`Laporan sawit ${formatShortDate(reportDate)} berhasil disimpan.`)
   }
 
+  function deletePalmReport(date) {
+    if (!window.confirm(`Hapus laporan sawit tanggal ${formatShortDate(date)}?`)) return
+    const updatedReports = { ...palmReports }
+    delete updatedReports[date]
+    const updatedDrafts = { ...palmDrafts }
+    delete updatedDrafts[date]
+    setPalmReports(updatedReports)
+    saveItem('palmReports', updatedReports)
+    setPalmDrafts(updatedDrafts)
+    saveItem('palmReportDrafts', updatedDrafts)
+    setNotice(`Laporan sawit ${formatShortDate(date)} berhasil dihapus.`)
+  }
+
   function saveFactorySale(event) {
     event.preventDefault()
     const result = editingFactorySaleId
@@ -504,7 +517,7 @@ export default function Rubber() {
       <div className="border-t border-ink-900/8 px-5 py-5 sm:px-6">
         <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Riwayat sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Pilih tanggal untuk membuka laporan, atau unduh PDF per tanggal.</p></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[760px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Hasil kotor</th><th className="table-head text-right">Pengeluaran</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>
-          {savedPalmDates.length ? savedPalmDates.map((date) => { const item = calculatePalmReport(palmReports[date]); return <tr key={date}><td className="table-cell font-medium">{formatShortDate(date)}</td><td className="table-cell text-right">{formatRupiah(item.gross)}</td><td className="table-cell text-right">{formatRupiah(item.expenseTotal)}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.net)}</td><td className="table-cell"><div className="flex gap-2"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => setReportDate(date)}><Eye size={14} /> Lihat</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => exportPdf(records.filter((record) => record.date === date), rubberFactorySales.filter((sale) => factorySaleDate(sale) === date), date, palmReports[date])}><FileText size={14} /> PDF</button></div></td></tr> }) : <tr><td colSpan={5} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada laporan sawit tersimpan.</td></tr>}
+          {savedPalmDates.length ? savedPalmDates.map((date) => { const item = calculatePalmReport(palmReports[date]); return <tr key={date}><td className="table-cell font-medium">{formatShortDate(date)}</td><td className="table-cell text-right">{formatRupiah(item.gross)}</td><td className="table-cell text-right">{formatRupiah(item.expenseTotal)}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.net)}</td><td className="table-cell"><div className="flex gap-2"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => setReportDate(date)}><Eye size={14} /> Lihat</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => exportPdf(records.filter((record) => record.date === date), rubberFactorySales.filter((sale) => factorySaleDate(sale) === date), date, palmReports[date])}><FileText size={14} /> PDF</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs text-red-700 hover:bg-red-50" onClick={() => deletePalmReport(date)} aria-label={`Hapus laporan sawit ${formatShortDate(date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr> }) : <tr><td colSpan={5} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada laporan sawit tersimpan.</td></tr>}
         </tbody></table></div>
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">

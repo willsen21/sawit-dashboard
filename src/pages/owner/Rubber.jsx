@@ -131,11 +131,11 @@ function exportPdf(records, factorySales, date) {
     startY: 54,
     body: [
       ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
-      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Hasil bersih dibagikan', formatRupiah(totalFactoryNet)],
+      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'TOTAL BERSIH DIBAGIKAN', formatRupiah(totalFactoryNet)],
       ['Berat kotor - bersih', `${kg(totalWeight)} - ${kg(totalNetWeight)}`, 'Bagian 1/2', formatRupiah(totalHalf)],
     ],
     theme: 'grid',
-    styles: { fontSize: 8.5, cellPadding: 2.6, textColor: [31, 42, 36], lineColor: [225, 228, 222], fillColor: [251, 248, 242] },
+    styles: { fontSize: 8.5, cellPadding: 2.6, textColor: [31, 42, 36], lineColor: [218, 225, 220], lineWidth: 0.2, fillColor: [251, 248, 242] },
     columnStyles: { 0: { cellWidth: 44, fontStyle: 'normal', textColor: [100, 112, 104] }, 1: { cellWidth: 88, fontStyle: 'bold' }, 2: { cellWidth: 44, fontStyle: 'normal', textColor: [100, 112, 104] }, 3: { cellWidth: 85, fontStyle: 'bold' } },
     margin: { left: 12, right: 12 },
   })
@@ -160,9 +160,9 @@ function exportPdf(records, factorySales, date) {
     ]) : [['—', 'Tidak ada pembelian getah pada tanggal ini', '—', '—', '—', '—', '—', '—', '—']],
     foot: [['TOTAL', `${records.length} catatan`, '', kg(totalWeight), '', kg(totalNetWeight), '', '', formatRupiah(totalHalf)]],
     theme: 'grid',
-    styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
-    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [245, 239, 227], textColor: [22, 48, 42], fontStyle: 'bold' },
+    styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
+    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineColor: [205, 214, 208], lineWidth: 0.25 },
     alternateRowStyles: { fillColor: [251, 248, 242] },
     columnStyles: { 2: { cellWidth: 47 }, 1: { cellWidth: 28 } },
     margin: { left: 12, right: 12 },
@@ -181,11 +181,11 @@ function exportPdf(records, factorySales, date) {
       (sale.expenses || []).map((item) => `${item.description}: ${formatRupiah(item.amount)}`).join(' · ') || '—',
       formatRupiah(saleExpenseAmount(sale)), formatRupiah(saleNetAmount(sale)),
     ]) : [['—', '—', '—', '—', 'Tidak ada penjualan pabrik pada tanggal ini', '—', '—']],
-    foot: [['TOTAL', `${factorySales.length} catatan`, '', formatRupiah(totalGross), '', formatRupiah(totalExpenses), formatRupiah(totalFactoryNet)]],
+    foot: [['TOTAL', `${factorySales.length} catatan`, '', formatRupiah(totalGross), '', formatRupiah(totalExpenses), '']],
     theme: 'grid',
-    styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [225, 228, 222] },
-    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [245, 239, 227], textColor: [22, 48, 42], fontStyle: 'bold' },
+    styles: { fontSize: 7.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+    headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
+    footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineColor: [205, 214, 208], lineWidth: 0.25 },
     alternateRowStyles: { fillColor: [251, 248, 242] },
     columnStyles: { 4: { cellWidth: 58 } },
     margin: { left: 12, right: 12 },
@@ -204,9 +204,9 @@ function exportPdf(records, factorySales, date) {
       body: expenseRows,
       foot: [['TOTAL PENGELUARAN', '', formatRupiah(totalExpenses)]],
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 2.2, textColor: [31, 42, 36], lineColor: [225, 228, 222] },
-      headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold' },
-      footStyles: { fillColor: [245, 239, 227], textColor: [22, 48, 42], fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 2.2, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2 },
+      headStyles: { fillColor: [42, 82, 69], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
+      footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold', lineColor: [205, 214, 208], lineWidth: 0.25 },
       margin: { left: 12, right: 12 },
     })
   }
@@ -225,18 +225,17 @@ function exportPdf(records, factorySales, date) {
       ['B', 'Total bagian B', 'Sisa 50% dari hasil bersih', formatRupiah(shareB)],
       ...distribution.filter((item) => item.group === 'B').map((item) => ['B', item.name, 'Bagian B dibagi 3', formatRupiah(item.amount)]),
     ],
-    foot: [['TOTAL BERSIH DIBAGIKAN', '', 'Hasil bersih setelah pengeluaran', formatRupiah(totalFactoryNet)]],
     theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [175, 187, 179], lineWidth: 0.35, valign: 'middle' },
-    headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [22, 48, 42], lineWidth: 0.5 },
-    footStyles: { fillColor: [232, 220, 190], textColor: [22, 48, 42], fontStyle: 'bold', lineColor: [151, 119, 61], lineWidth: 0.6 },
+    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.8, textColor: [31, 42, 36], lineColor: [211, 219, 214], lineWidth: 0.2, valign: 'middle' },
+    headStyles: { fillColor: [22, 48, 42], textColor: 255, fontStyle: 'bold', lineColor: [211, 219, 214], lineWidth: 0.2 },
     alternateRowStyles: { fillColor: [249, 247, 241] },
     columnStyles: { 0: { cellWidth: 39, halign: 'center' }, 1: { cellWidth: 61 }, 2: { cellWidth: 119 }, 3: { cellWidth: 48, halign: 'right', fontStyle: 'bold' } },
     didParseCell: ({ section, row, cell }) => {
       if (section === 'body' && (row.index === 0 || row.index === 3)) {
-        cell.styles.fillColor = [230, 239, 233]
+        cell.styles.fillColor = [236, 242, 238]
         cell.styles.fontStyle = 'bold'
-        cell.styles.lineWidth = 0.5
+        cell.styles.lineColor = [211, 219, 214]
+        cell.styles.lineWidth = 0.2
       }
     },
     margin: { left: 12, right: 12 },

@@ -269,15 +269,8 @@ function exportPalmPdf(date, palmReport) {
   pdf.setFontSize(9)
   pdf.setTextColor(220, 233, 225)
   pdf.text(`LAPORAN SAWIT  ·  ${formatShortDate(date)}  ·  47,92 hektar`, 21, 33)
-  pdf.setFillColor(235, 241, 237)
-  pdf.roundedRect(12, 55, width - 24, 14, 2, 2, 'F')
-  pdf.setTextColor(45, 62, 53)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  pdf.text('TOTAL BERSIH PEMBAGIAN SAWIT', 17, 64)
-  pdf.text(formatRupiah(palm.net), width - 17, 64, { align: 'right' })
   autoTable(pdf, {
-    startY: 76,
+    startY: 56,
     head: [['Jenis hasil', 'Berat (kg)', 'Harga/kg', 'Jumlah hasil']],
     body: palm.yields.map((item) => [item.name, kg(item.quantity), formatRupiah(item.pricePerKg), formatRupiah(item.total)]),
     foot: [['TOTAL HASIL SAWIT', '', '', formatRupiah(palm.gross)]],
@@ -312,8 +305,15 @@ function exportPalmPdf(date, palmReport) {
   pdf.setFontSize(11)
   pdf.setTextColor(22, 48, 42)
   pdf.text('PEMBAGIAN HASIL BERSIH SAWIT', 14, nextY)
+  pdf.setFillColor(235, 241, 237)
+  pdf.roundedRect(12, nextY + 5, width - 24, 14, 2, 2, 'F')
+  pdf.setTextColor(45, 62, 53)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.text('TOTAL BERSIH PEMBAGIAN SAWIT', 17, nextY + 14)
+  pdf.text(formatRupiah(palm.net), width - 17, nextY + 14, { align: 'right' })
   autoTable(pdf, {
-    startY: nextY + 4,
+    startY: nextY + 24,
     head: [['Penerima', 'Pembagian', 'Nominal']],
     body: distribution.map((item) => [item.name, '50% dari hasil bersih sawit', formatRupiah(item.amount)]),
     theme: 'grid',

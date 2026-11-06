@@ -103,7 +103,7 @@ function factoryNetAcrossDates(factorySales, rubberRecords) {
   }, 0)
 }
 
-function exportCsv(records, factorySales, date, palmReport) {
+function exportCsv(records, factorySales, date) {
   const bagCount = Math.max(0, ...records.map((record) => record.bags.length))
   const purchaseHeaders = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total pembelian (Rp)', 'Bagian setengah (Rp)']
   const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, paidRubberPurchase(record)])
@@ -118,10 +118,9 @@ function exportCsv(records, factorySales, date, palmReport) {
   const factoryDistribution = calculateFactoryDistribution(factorySales, totalPurchasePaid)
   const totalNet = factoryDistribution.net
   const distribution = incomeDistribution(totalNet, factoryDistribution.managerWage, 'hasil bersih getah')
-  const palm = calculatePalmReport(palmReport)
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const csvRows = [
-    ['KEBUN PAL 6 · LAPORAN GETAH DAN SAWIT', formatShortDate(date)], ['Luas lahan', '47,92 hektar'],
+    ['KEBUN PAL 6 · LAPORAN GETAH', formatShortDate(date)], ['Luas lahan', '47,92 hektar'],
     [], ['RINGKASAN'],
     ['Pembelian getah', totalPurchases],
     ['Penjualan pabrik kotor', totalGross],
@@ -136,30 +135,45 @@ function exportCsv(records, factorySales, date, palmReport) {
     ['TOTAL PENJUALAN PABRIK', '', '', totalGross, '', totalExpenses, ''],
     [], ['RINCIAN PENGELUARAN PABRIK'], expenseHeaders, ...expenseRows,
     ['TOTAL PENGELUARAN', '', '', totalExpenses],
-    [], ['HASIL SAWIT · KEBUN PAL 6'], ['Jenis', 'Berat (kg)', 'Harga/kg (Rp)', 'Jumlah (Rp)'],
+    [], ['PEMBAGIAN HASIL BERSIH GETAH'], ['Penerima', 'Bagian', 'Nominal (Rp)'],
+    ...distribution.map((item) => [item.name, item.basis, item.amount]),
+  ]
+  const contents = '\uFEFF' + csvRows.map((row) => row.map(quote).join(';')).join('\r\n')
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8;' }))
+  link.href = url
+  link.download = `laporan-getah-kebun-pal-6-${date}.csv`
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function exportPalmCsv(date, palmReport) {
+  const palm = calculatePalmReport(palmReport)
+  const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
+  const csvRows = [
+    ['KEBUN PAL 6 · LAPORAN SAWIT', formatShortDate(date)], ['Luas lahan', '47,92 hektar'],
+    [], ['HASIL SAWIT'], ['Jenis hasil', 'Berat (kg)', 'Harga/kg (Rp)', 'Jumlah (Rp)'],
     ...palm.yields.map((item) => [item.name, item.quantity, item.pricePerKg, item.total]),
     ['TOTAL HASIL SAWIT', '', '', palm.gross],
     [], ['PENGELUARAN SAWIT'], ['Keperluan', 'Nominal (Rp)'],
     ...palm.expenses.map((item) => [item.description || '—', item.amount]),
     ['TOTAL PENGELUARAN SAWIT', palm.expenseTotal],
-    ['DASAR UPAH SAWIT', palm.wageBase],
-    ['UPAH PENGURUS SAWIT · NO NAME (10%)', palm.managerWage],
-    ['HASIL BERSIH SAWIT', palm.net],
-    [], ['PEMBAGIAN HASIL BERSIH GETAH'], ['Penerima', 'Bagian', 'Nominal (Rp)'],
-    ...distribution.map((item) => [item.name, item.basis, item.amount]),
-    [], ['PEMBAGIAN HASIL BERSIH SAWIT'], ['Penerima', 'Bagian', 'Nominal (Rp)'],
+    ['Pemakaian utama', palm.primaryUse], ['Dasar upah', palm.wageBase],
+    ['Upah pengurus · no name (10%)', palm.managerWage],
+    ['Pemakaian tambahan', palm.additionalUseTotal], ['Hasil akhir sawit', palm.net],
+    [], ['PEMBAGIAN HASIL BERSIH SAWIT'], ['Penerima', 'Pembagian', 'Nominal (Rp)'],
     ...incomeDistribution(palm.net, palm.managerWage, 'hasil bersih sawit').map((item) => [item.name, item.basis, item.amount]),
   ]
   const contents = '\uFEFF' + csvRows.map((row) => row.map(quote).join(';')).join('\r\n')
   const link = document.createElement('a')
   const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8;' }))
   link.href = url
-  link.download = `laporan-getah-${date}.csv`
+  link.download = `laporan-sawit-kebun-pal-6-${date}.csv`
   link.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function exportPdf(records, factorySales, date, palmReport) {
+function exportPdf(records, factorySales, date) {
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const totalWeight = records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0)
   const totalNetWeight = records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0)
@@ -170,7 +184,6 @@ function exportPdf(records, factorySales, date, palmReport) {
   const factoryDistribution = calculateFactoryDistribution(factorySales, totalHalf)
   const totalFactoryNet = factoryDistribution.net
   const distribution = incomeDistribution(totalFactoryNet, factoryDistribution.managerWage, 'hasil bersih getah')
-  const palm = calculatePalmReport(palmReport)
   const width = pdf.internal.pageSize.getWidth()
   pdf.setFillColor(22, 48, 42)
   pdf.roundedRect(12, 11, width - 24, 38, 4, 4, 'F')
@@ -454,6 +467,7 @@ export default function Rubber() {
   const [palmFormOpen, setPalmFormOpen] = useState(true)
   const [palmViewDate, setPalmViewDate] = useState(null)
   const [activeSection, setActiveSection] = useState('rubber')
+  const [activeRubberSection, setActiveRubberSection] = useState('records')
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
   const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
@@ -487,7 +501,7 @@ export default function Rubber() {
   const palmViewed = palmViewDate ? calculatePalmReport(palmReports[palmViewDate]) : null
   const palmHasData = [palmReport.fruitKg, palmReport.fruitPricePerKg, palmReport.brondolanKg, palmReport.brondolanPricePerKg, palmReport.ketekKg, palmReport.ketekPricePerKg].some((value) => String(value || '').trim()) || palmExpenseInputs.some((item) => item.description || item.amount)
   const distribution = incomeDistribution(exportFactoryNet, exportFactoryDistribution.managerWage, 'hasil bersih getah')
-  const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0 || palmHasData
+  const exportAvailable = exportRecords.length > 0 || exportFactorySales.length > 0
   const factoryGross = parseKgInput(factoryForm.weightKg) * parseRupiahInput(factoryForm.pricePerKg)
   const factoryExpenseTotal = factoryForm.expenses.reduce((sum, item) => sum + parseRupiahInput(item.amount), 0)
 
@@ -539,7 +553,8 @@ export default function Rubber() {
   }
 
   function editFactorySale(sale) {
-    setActiveSection('factory')
+    setActiveSection('rubber')
+    setActiveRubberSection('factory')
     setEditingFactorySaleId(sale.id)
     setFactoryForm({
       date: factorySaleDate(sale),
@@ -560,6 +575,7 @@ export default function Rubber() {
 
   function openCreate() {
     setActiveSection('rubber')
+    setActiveRubberSection('records')
     setEditingId(null)
     setForm(blankForm())
     setFormError('')
@@ -569,6 +585,7 @@ export default function Rubber() {
 
   function openEdit(record) {
     setActiveSection('rubber')
+    setActiveRubberSection('records')
     setEditingId(record.id)
     setForm({ name: record.name, date: record.date, bags: record.bags.map((value) => formatKgInput(String(value).replace('.', ','))), pricePerKg: formatRupiahInput(record.pricePerKg) })
     setFormError('')
@@ -604,31 +621,38 @@ export default function Rubber() {
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-600">Owner workspace</p>
-        <h1 className="mt-1 font-display text-3xl text-plantation-950">Getah</h1>
-        <p className="mt-2 max-w-2xl text-sm text-ink-500">Catat berat tiap karung, potongan 10%, harga, dan pembagian hasil dengan hitungan otomatis.</p>
+        <h1 className="mt-1 font-display text-3xl text-plantation-950">{activeSection === 'rubber' ? 'Getah' : 'Sawit'}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-ink-500">{activeSection === 'rubber' ? 'Catat berat tiap karung, penjualan pabrik, dan pembagian hasil getah.' : 'Catat hasil buah sawit, pengeluaran, upah pengurus, dan pembagian hasil sawit.'}</p>
       </div>
-      {!formOpen && <button type="button" className="btn-primary" onClick={openCreate}><Plus size={17} /> Catat getah</button>}
+      {activeSection === 'rubber' && !formOpen && <button type="button" className="btn-primary" onClick={openCreate}><Plus size={17} /> Catat getah</button>}
     </header>
 
     {notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-plantation-700/15 bg-plantation-700/5 px-4 py-3 text-sm text-plantation-900"><span className="flex items-center gap-2"><Check size={16} />{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Tutup pemberitahuan"><X size={16} /></button></div>}
 
-    <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    {activeSection === 'rubber' ? <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <SummaryCard icon={<Droplets size={18} />} label="Jumlah catatan" value={records.length.toLocaleString('id-ID')} detail="Semua catatan getah" />
       <SummaryCard icon={<Scale size={18} />} label="Berat total" value={kg(totalWeight)} detail="Akumulasi semua karung" />
       <SummaryCard icon={<Scale size={18} />} label="Berat bersih" value={kg(totalNetWeight)} detail="Sesudah potongan dan pembulatan" />
       <SummaryCard icon={<CalendarDays size={18} />} label="Catatan hari ini" value={todayRecords.length.toLocaleString('id-ID')} detail={kg(todayRecords.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0))} />
       <SummaryCard icon={<CircleDollarSign size={18} />} label="Total bersih pembagian" value={formatRupiah(totalFactoryNetIncome)} detail="Akumulasi penjualan pabrik setelah pengeluaran" accent />
-    </section>
+    </section> : <section className="mb-6 grid gap-3 sm:grid-cols-2"><SummaryCard icon={<Scale size={18} />} label={`Hasil sawit · ${formatShortDate(reportDate)}`} value={formatRupiah(palm.gross)} detail="Buah, brondol, dan ketek" /><SummaryCard icon={<CircleDollarSign size={18} />} label="Hasil akhir sawit" value={formatRupiah(palm.net)} detail={`Setelah pengeluaran dan upah no name ${formatRupiah(palm.managerWage)}`} accent /></section>}
 
-    <nav className="card mb-6 grid grid-cols-1 gap-2 p-2 sm:grid-cols-3" role="tablist" aria-label="Bagian fitur Getah">
+    <nav className="card mb-4 grid grid-cols-2 gap-2 p-2" role="tablist" aria-label="Pilih jenis laporan">
       {[
-        { id: 'rubber', label: 'Catatan getah', detail: `${records.length} catatan`, icon: <Droplets size={17} /> },
-        { id: 'factory', label: 'Penjualan pabrik', detail: `${rubberFactorySales.length} catatan`, icon: <CircleDollarSign size={17} /> },
-        { id: 'report', label: 'Rekap & pembagian', detail: 'Getah dan sawit', icon: <Download size={17} /> },
-      ].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeSection === tab.id} aria-controls={`rubber-panel-${tab.id}`} onClick={() => setActiveSection(tab.id)} className={`flex min-h-14 items-center gap-3 rounded-xl px-4 py-3 text-left transition ${activeSection === tab.id ? 'bg-plantation-950 text-white shadow-sm' : 'text-ink-600 hover:bg-paper-100'}`}><span className={activeSection === tab.id ? 'text-gold-300' : 'text-plantation-700'}>{tab.icon}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{tab.label}</span><span className={`mt-0.5 block text-[11px] ${activeSection === tab.id ? 'text-white/60' : 'text-ink-400'}`}>{tab.detail}</span></span><ChevronRight size={15} className={activeSection === tab.id ? 'text-white/60' : 'text-ink-300'} /></button>)}
+        { id: 'rubber', label: 'Getah', detail: 'Catatan, penjualan, dan laporan', icon: <Droplets size={18} /> },
+        { id: 'palm', label: 'Sawit', detail: 'Hasil, pemakaian, dan pembagian', icon: <Scale size={18} /> },
+      ].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeSection === tab.id} aria-controls={`rubber-panel-${tab.id}`} onClick={() => setActiveSection(tab.id)} className={`flex min-h-[4.25rem] items-center gap-3 rounded-xl px-4 py-3 text-left transition ${activeSection === tab.id ? 'bg-plantation-950 text-white shadow-sm' : 'text-ink-600 hover:bg-paper-100'}`}><span className={activeSection === tab.id ? 'text-gold-300' : 'text-plantation-700'}>{tab.icon}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{tab.label}</span><span className={`mt-0.5 block text-[11px] ${activeSection === tab.id ? 'text-white/60' : 'text-ink-400'}`}>{tab.detail}</span></span></button>)}
     </nav>
 
-    {activeSection === 'factory' && <div id="rubber-panel-factory" role="tabpanel" className="space-y-6">
+    {activeSection === 'rubber' && <nav className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Bagian Getah">
+      {[
+        { id: 'records', label: 'Catatan getah', icon: <Droplets size={15} /> },
+        { id: 'factory', label: 'Penjualan pabrik', icon: <CircleDollarSign size={15} /> },
+        { id: 'report', label: 'Laporan Getah', icon: <Download size={15} /> },
+      ].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeRubberSection === tab.id} onClick={() => setActiveRubberSection(tab.id)} className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${activeRubberSection === tab.id ? 'border-plantation-800 bg-plantation-800 text-white' : 'border-ink-900/10 bg-white text-ink-600 hover:bg-paper-100'}`}>{tab.icon}{tab.label}</button>)}
+    </nav>}
+
+    {activeSection === 'rubber' && activeRubberSection === 'factory' && <div id="rubber-panel-factory" role="tabpanel" className="space-y-6">
     <section className="card mb-6 overflow-hidden">
       <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><CircleDollarSign size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Penjualan getah di pabrik</h2><p className="mt-1 text-xs text-ink-500">Masukkan berat dan harga; pengeluaran lain otomatis mengurangi hasil penjualan.</p></div></div></div>
       <form onSubmit={saveFactorySale} className="space-y-4 p-5 sm:p-6">
@@ -648,9 +672,9 @@ export default function Rubber() {
     </section>
     </div>}
 
-    {activeSection === 'report' && <div id="rubber-panel-report" role="tabpanel" className="space-y-6">
+    {activeSection === 'rubber' && activeRubberSection === 'report' && <div id="rubber-panel-report" role="tabpanel" className="space-y-6">
     <section className="card mb-6 overflow-hidden">
-      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap Getah dan Sawit · Kebun Pal 6</h2><p className="mt-1 text-xs text-ink-500">Pilih satu tanggal untuk melihat hasil getah, hasil buah sawit, pengeluaran, dan pembagiannya dalam laporan PDF.</p></div></div></div>
+      <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Laporan Getah · Kebun Pal 6</h2><p className="mt-1 text-xs text-ink-500">Pilih tanggal untuk melihat pembelian, penjualan pabrik, biaya, upah, pembagian, dan PDF Getah.</p></div></div></div>
       <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
         <div><Field label="Tanggal laporan"><input type="date" className="input" value={reportDate} onChange={(event) => event.target.value && setReportDate(event.target.value)} /></Field><div className="mt-2"><DateNavigator date={reportDate} today={today} onChange={setReportDate} allowFuture /></div></div>
         <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
@@ -658,9 +682,27 @@ export default function Rubber() {
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Pembelian getah dibayar · bagian 1/2</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchasePaid)}</p><p className="text-[10px] text-ink-400">Total kotor {formatRupiah(exportPurchaseTotal)}</p></div>
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total bersih pembagian getah</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportFactoryNet)}</p></div>
           </div>
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, reportDate, palmReport)}><FileSpreadsheet size={16} /> CSV gabungan</button><button type="button" disabled={!exportRecords.length && !exportFactorySales.length} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, reportDate, palmReport)}><FileText size={16} /> PDF Getah</button><button type="button" disabled={!palmReports[reportDate] && !palmHasData} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPalmPdf(reportDate, palmReport)}><FileText size={16} /> PDF Sawit</button></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, reportDate)}><FileSpreadsheet size={16} /> CSV Getah</button><button type="button" disabled={!exportRecords.length && !exportFactorySales.length} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, reportDate)}><FileText size={16} /> Unduh PDF Getah</button></div>
         </div>
       </div>
+      <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+        <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih getah · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Upah pengurus no name 10% dihitung dari hasil pabrik setelah pemakaian utama. Sisa hasil akhir dibagi rata untuk Andi dan Pendi.</p></div>
+        <div className="mb-4 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Penjualan kotor pabrik" value={formatRupiah(exportFactoryDistribution.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(exportFactoryDistribution.primaryUse)}`} dark /><CalcLine label="Pembelian getah hari ini · bagian 1/2 yang dibayar" value={`− ${formatRupiah(exportFactoryDistribution.purchaseTotal)}`} dark /><CalcLine label="Dasar upah (hasil - pemakaian utama - pembayaran getah)" value={formatRupiah(exportFactoryDistribution.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(exportFactoryDistribution.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={exportFactoryDistribution.additionalUseTotal > 0 ? `− ${formatRupiah(exportFactoryDistribution.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir getah" value={formatRupiah(exportFactoryNet)} dark strong /></div></div></div>
+        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
+          {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
+        </tbody></table></div>
+
+      </div>
+    </section>
+    </div>}
+
+    {activeSection === 'palm' && <div id="rubber-panel-palm" role="tabpanel" className="space-y-6">
+      <section className="card mb-6 overflow-hidden">
+        <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-plantation-700/10 text-plantation-800"><Scale size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Sawit · Kebun Pal 6</h2><p className="mt-1 text-xs text-ink-500">Catat hasil, pengeluaran, upah pengurus, pembagian, dan unduh PDF sawit saja.</p></div></div></div>
+        <div className="grid gap-4 border-b border-ink-900/8 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div><Field label="Tanggal laporan sawit"><input type="date" className="input" value={reportDate} onChange={(event) => event.target.value && setReportDate(event.target.value)} /></Field><div className="mt-2"><DateNavigator date={reportDate} today={today} onChange={setReportDate} allowFuture /></div></div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={!palmReports[reportDate] && !palmHasData} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPalmCsv(reportDate, palmReport)}><FileSpreadsheet size={16} /> CSV Sawit</button><button type="button" disabled={!palmReports[reportDate] && !palmHasData} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPalmPdf(reportDate, palmReport)}><FileText size={16} /> Unduh PDF Sawit</button></div>
+        </div>
       {!palmFormOpen && <div className="px-5 pt-5 sm:px-6"><button type="button" className="btn-primary" onClick={() => setPalmFormOpen(true)}><Plus size={16} /> Input laporan sawit</button></div>}
       {palmFormOpen && <div className="border-y border-ink-900/8 bg-paper-50/50 px-5 py-5 sm:px-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-display text-lg text-plantation-950">Hasil sawit · Kebun Pal 6</h3><p className="mt-1 text-xs text-ink-500">Masukkan berat bersih dan harga per kg. Hasil tiap jenis dihitung otomatis untuk tanggal laporan.</p></div><span className="text-[11px] text-ink-400">{palmReports[reportDate] ? 'Laporan tanggal ini sudah tersimpan' : 'Perubahan belum disimpan'}</span></div>
@@ -685,18 +727,10 @@ export default function Rubber() {
           {savedPalmDates.length ? savedPalmDates.map((date) => { const item = calculatePalmReport(palmReports[date]); return <tr key={date}><td className="table-cell font-medium">{formatShortDate(date)}</td><td className="table-cell text-right">{formatRupiah(item.gross)}</td><td className="table-cell text-right">{formatRupiah(item.expenseTotal)}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.net)}</td><td className="table-cell"><div className="flex gap-2"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => setPalmViewDate(date)}><Eye size={14} /> Lihat</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => exportPalmPdf(date, palmReports[date])}><FileText size={14} /> PDF</button><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs text-red-700 hover:bg-red-50" onClick={() => deletePalmReport(date)} aria-label={`Hapus laporan sawit ${formatShortDate(date)}`}><Trash2 size={14} /> Hapus</button></div></td></tr> }) : <tr><td colSpan={5} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada laporan sawit tersimpan.</td></tr>}
         </tbody></table></div>
       </div>
-      <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-        <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih getah · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Upah pengurus no name 10% dihitung dari hasil pabrik setelah pemakaian utama. Sisa hasil akhir dibagi rata untuk Andi dan Pendi.</p></div>
-        <div className="mb-4 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Penjualan kotor pabrik" value={formatRupiah(exportFactoryDistribution.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(exportFactoryDistribution.primaryUse)}`} dark /><CalcLine label="Pembelian getah hari ini · bagian 1/2 yang dibayar" value={`− ${formatRupiah(exportFactoryDistribution.purchaseTotal)}`} dark /><CalcLine label="Dasar upah (hasil - pemakaian utama - pembayaran getah)" value={formatRupiah(exportFactoryDistribution.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(exportFactoryDistribution.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={exportFactoryDistribution.additionalUseTotal > 0 ? `− ${formatRupiah(exportFactoryDistribution.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir getah" value={formatRupiah(exportFactoryNet)} dark strong /></div></div></div>
-        <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
-          {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
-        </tbody></table></div>
-        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="mb-3 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Total hasil sawit" value={formatRupiah(palm.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(palm.primaryUse)}`} dark /><CalcLine label="Dasar upah" value={formatRupiah(palm.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(palm.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={palm.additionalUseTotal > 0 ? `− ${formatRupiah(palm.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir sawit" value={formatRupiah(palm.net)} dark strong /></div></div></div><div className="mb-3 flex items-center justify-between rounded-xl bg-plantation-700/8 px-4 py-3 font-semibold text-plantation-950"><span>Total bersih pembagian sawit</span><span>{formatRupiah(palm.net)}</span></div><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net, palm.managerWage, 'hasil bersih sawit').map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody></table></div></div>
-      </div>
-    </section>
+        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="mb-3 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Total hasil sawit" value={formatRupiah(palm.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(palm.primaryUse)}`} dark /><CalcLine label="Dasar upah" value={formatRupiah(palm.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(palm.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={palm.additionalUseTotal > 0 ? `− ${formatRupiah(palm.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir sawit" value={formatRupiah(palm.net)} dark strong /></div></div></div><div className="mb-3 flex items-center justify-between rounded-xl bg-plantation-700/8 px-4 py-3 font-semibold text-plantation-950"><span>Total bersih pembagian sawit</span><span>{formatRupiah(palm.net)}</span></div><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net, palm.managerWage, 'hasil bersih sawit').map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody></table></div></div>      </section>
     </div>}
 
-    {activeSection === 'rubber' && <div id="rubber-panel-rubber" role="tabpanel" className="space-y-6">
+    {activeSection === 'rubber' && activeRubberSection === 'records' && <div id="rubber-panel-rubber" role="tabpanel" className="space-y-6">
     {formOpen && <section className="card mb-6 overflow-hidden">
       <div className="flex items-start justify-between gap-4 border-b border-ink-900/8 px-5 py-4 sm:px-6">
         <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-600">{editingId ? 'Perbarui catatan' : 'Catatan baru'}</p><h2 className="mt-1 font-display text-xl text-plantation-950">Data getah</h2></div>

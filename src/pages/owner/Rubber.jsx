@@ -59,7 +59,7 @@ function calculatePalmReport(report = blankPalmReport()) {
     uses: expenses.map((item) => ({ purpose: item.description, amount: item.amount })),
     manager: 'no name',
   })
-  return { yields, expenses, gross, expenseTotal: totals.useTotal, primaryUse: totals.primaryUse, wageBase: totals.wageBase, managerWage: totals.managerWage, net: totals.finalTotal }
+  return { yields, expenses, gross, expenseTotal: totals.useTotal, primaryUse: totals.primaryUse, additionalUseTotal: totals.additionalUseTotal, wageBase: totals.wageBase, managerWage: totals.managerWage, net: totals.finalTotal }
 }
 
 function splitAmong(total, names) {
@@ -88,7 +88,7 @@ function calculateFactoryDistribution(factorySales, purchaseTotal = 0) {
   const purchases = Number(purchaseTotal) || 0
   const wageBase = Math.max(0, gross - primaryUse - purchases)
   const managerWage = Math.round(wageBase * 0.1)
-  return { gross, expenses, expenseTotal, primaryUse, purchaseTotal: purchases, wageBase, managerWage, net: gross - expenseTotal - purchases - managerWage }
+  return { gross, expenses, expenseTotal, primaryUse, additionalUseTotal: Math.max(0, expenseTotal - primaryUse), purchaseTotal: purchases, wageBase, managerWage, net: gross - expenseTotal - purchases - managerWage }
 }
 
 function factoryNetAcrossDates(factorySales, rubberRecords) {
@@ -284,7 +284,7 @@ function exportPdf(records, factorySales, date, palmReport) {
       ['Pembelian getah hari ini (bagian 1/2 yang dibayar)', `- ${formatRupiah(factoryDistribution.purchaseTotal)}`],
       ['Dasar upah (hasil - pemakaian utama - pembayaran getah)', formatRupiah(factoryDistribution.wageBase)],
       ['Upah pengurus · no name (10%)', `- ${formatRupiah(factoryDistribution.managerWage)}`],
-      ['Total pemakaian (utama + tambahan)', `- ${formatRupiah(factoryDistribution.expenseTotal)}`],
+      ['Pemakaian tambahan', factoryDistribution.additionalUseTotal > 0 ? `- ${formatRupiah(factoryDistribution.additionalUseTotal)}` : formatRupiah(0)],
       ['Hasil akhir getah', formatRupiah(totalFactoryNet)],
     ],
     theme: 'grid',
@@ -390,7 +390,7 @@ function exportPalmPdf(date, palmReport) {
       ['Pemakaian utama', `- ${formatRupiah(palm.primaryUse)}`],
       ['Dasar upah (hasil - pemakaian utama)', formatRupiah(palm.wageBase)],
       ['Upah pengurus · no name (10%)', `- ${formatRupiah(palm.managerWage)}`],
-      ['Total pemakaian (utama + tambahan)', `- ${formatRupiah(palm.expenseTotal)}`],
+      ['Pemakaian tambahan', palm.additionalUseTotal > 0 ? `- ${formatRupiah(palm.additionalUseTotal)}` : formatRupiah(0)],
       ['Hasil akhir sawit', formatRupiah(palm.net)],
     ],
     theme: 'grid',
@@ -672,11 +672,11 @@ export default function Rubber() {
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">
         <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih getah · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Upah pengurus no name 10% dihitung dari hasil pabrik setelah pemakaian utama. Sisa hasil akhir dibagi rata untuk Andi dan Pendi.</p></div>
-        <div className="mb-4 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Penjualan kotor pabrik" value={formatRupiah(exportFactoryDistribution.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(exportFactoryDistribution.primaryUse)}`} dark /><CalcLine label="Pembelian getah hari ini · bagian 1/2 yang dibayar" value={`− ${formatRupiah(exportFactoryDistribution.purchaseTotal)}`} dark /><CalcLine label="Dasar upah (hasil - pemakaian utama - pembayaran getah)" value={formatRupiah(exportFactoryDistribution.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(exportFactoryDistribution.managerWage)}`} dark /><CalcLine label="Total pemakaian" value={`− ${formatRupiah(exportFactoryDistribution.expenseTotal)}`} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir getah" value={formatRupiah(exportFactoryNet)} dark strong /></div></div></div>
+        <div className="mb-4 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Penjualan kotor pabrik" value={formatRupiah(exportFactoryDistribution.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(exportFactoryDistribution.primaryUse)}`} dark /><CalcLine label="Pembelian getah hari ini · bagian 1/2 yang dibayar" value={`− ${formatRupiah(exportFactoryDistribution.purchaseTotal)}`} dark /><CalcLine label="Dasar upah (hasil - pemakaian utama - pembayaran getah)" value={formatRupiah(exportFactoryDistribution.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(exportFactoryDistribution.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={exportFactoryDistribution.additionalUseTotal > 0 ? `− ${formatRupiah(exportFactoryDistribution.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir getah" value={formatRupiah(exportFactoryNet)} dark strong /></div></div></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
           {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
         </tbody></table></div>
-        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="mb-3 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Total hasil sawit" value={formatRupiah(palm.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(palm.primaryUse)}`} dark /><CalcLine label="Dasar upah" value={formatRupiah(palm.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(palm.managerWage)}`} dark /><CalcLine label="Total pemakaian" value={`− ${formatRupiah(palm.expenseTotal)}`} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir sawit" value={formatRupiah(palm.net)} dark strong /></div></div></div><div className="mb-3 flex items-center justify-between rounded-xl bg-plantation-700/8 px-4 py-3 font-semibold text-plantation-950"><span>Total bersih pembagian sawit</span><span>{formatRupiah(palm.net)}</span></div><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net, palm.managerWage, 'hasil bersih sawit').map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody></table></div></div>
+        <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="mb-3 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Total hasil sawit" value={formatRupiah(palm.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(palm.primaryUse)}`} dark /><CalcLine label="Dasar upah" value={formatRupiah(palm.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(palm.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={palm.additionalUseTotal > 0 ? `− ${formatRupiah(palm.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir sawit" value={formatRupiah(palm.net)} dark strong /></div></div></div><div className="mb-3 flex items-center justify-between rounded-xl bg-plantation-700/8 px-4 py-3 font-semibold text-plantation-950"><span>Total bersih pembagian sawit</span><span>{formatRupiah(palm.net)}</span></div><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net, palm.managerWage, 'hasil bersih sawit').map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody></table></div></div>
       </div>
     </section>
 

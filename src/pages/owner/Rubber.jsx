@@ -453,6 +453,7 @@ export default function Rubber() {
   const [palmDrafts, setPalmDrafts] = useState(() => loadItem('palmReportDrafts', {}))
   const [palmFormOpen, setPalmFormOpen] = useState(true)
   const [palmViewDate, setPalmViewDate] = useState(null)
+  const [activeSection, setActiveSection] = useState('rubber')
 
   const records = useMemo(() => [...rubberRecords].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))), [rubberRecords])
   const totalWeight = records.reduce((sum, item) => sum + Number(item.totalWeightKg || 0), 0)
@@ -538,6 +539,7 @@ export default function Rubber() {
   }
 
   function editFactorySale(sale) {
+    setActiveSection('factory')
     setEditingFactorySaleId(sale.id)
     setFactoryForm({
       date: factorySaleDate(sale),
@@ -557,6 +559,7 @@ export default function Rubber() {
   }
 
   function openCreate() {
+    setActiveSection('rubber')
     setEditingId(null)
     setForm(blankForm())
     setFormError('')
@@ -565,6 +568,7 @@ export default function Rubber() {
   }
 
   function openEdit(record) {
+    setActiveSection('rubber')
     setEditingId(record.id)
     setForm({ name: record.name, date: record.date, bags: record.bags.map((value) => formatKgInput(String(value).replace('.', ','))), pricePerKg: formatRupiahInput(record.pricePerKg) })
     setFormError('')
@@ -616,6 +620,15 @@ export default function Rubber() {
       <SummaryCard icon={<CircleDollarSign size={18} />} label="Total bersih pembagian" value={formatRupiah(totalFactoryNetIncome)} detail="Akumulasi penjualan pabrik setelah pengeluaran" accent />
     </section>
 
+    <nav className="card mb-6 grid grid-cols-1 gap-2 p-2 sm:grid-cols-3" role="tablist" aria-label="Bagian fitur Getah">
+      {[
+        { id: 'rubber', label: 'Catatan getah', detail: `${records.length} catatan`, icon: <Droplets size={17} /> },
+        { id: 'factory', label: 'Penjualan pabrik', detail: `${rubberFactorySales.length} catatan`, icon: <CircleDollarSign size={17} /> },
+        { id: 'report', label: 'Rekap & pembagian', detail: 'Getah dan sawit', icon: <Download size={17} /> },
+      ].map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeSection === tab.id} aria-controls={`rubber-panel-${tab.id}`} onClick={() => setActiveSection(tab.id)} className={`flex min-h-14 items-center gap-3 rounded-xl px-4 py-3 text-left transition ${activeSection === tab.id ? 'bg-plantation-950 text-white shadow-sm' : 'text-ink-600 hover:bg-paper-100'}`}><span className={activeSection === tab.id ? 'text-gold-300' : 'text-plantation-700'}>{tab.icon}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{tab.label}</span><span className={`mt-0.5 block text-[11px] ${activeSection === tab.id ? 'text-white/60' : 'text-ink-400'}`}>{tab.detail}</span></span><ChevronRight size={15} className={activeSection === tab.id ? 'text-white/60' : 'text-ink-300'} /></button>)}
+    </nav>
+
+    {activeSection === 'factory' && <div id="rubber-panel-factory" role="tabpanel" className="space-y-6">
     <section className="card mb-6 overflow-hidden">
       <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><CircleDollarSign size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Penjualan getah di pabrik</h2><p className="mt-1 text-xs text-ink-500">Masukkan berat dan harga; pengeluaran lain otomatis mengurangi hasil penjualan.</p></div></div></div>
       <form onSubmit={saveFactorySale} className="space-y-4 p-5 sm:p-6">
@@ -633,7 +646,9 @@ export default function Rubber() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-y border-ink-900/8 bg-paper-50/70 px-5 py-3 sm:px-6"><div><p className="text-xs font-medium text-ink-500">Riwayat penjualan pada</p><p className="mt-0.5 text-sm font-semibold text-plantation-950">{formatShortDate(selectedFactoryDate)} <span className="font-normal text-ink-500">· {dailyFactorySales.length} catatan</span></p><p className="mt-1 text-[11px] text-ink-400">Semua riwayat: {rubberFactorySales.length} catatan pada {factorySaleDates.length} tanggal</p></div><div className="flex flex-wrap items-center gap-2">{factorySaleDates.length > 0 && <label className="text-xs text-ink-500">Tanggal berisi data <select className="input mt-1 !min-h-9 !w-auto py-1.5 text-xs" value={factorySaleDates.includes(selectedFactoryDate) ? selectedFactoryDate : ''} onChange={(event) => event.target.value && setSelectedFactoryDate(event.target.value)}><option value="">Pilih tanggal</option>{factorySaleDates.map((date) => <option key={date} value={date}>{formatShortDate(date)}</option>)}</select></label>}<DateNavigator date={selectedFactoryDate} today={today} onChange={setSelectedFactoryDate} /></div></div>
       <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[900px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Berat</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Penjualan</th><th className="table-head">Pengeluaran / pemakaian</th><th className="table-head text-right">Hasil bersih</th><th className="table-head">Aksi</th></tr></thead><tbody>{dailyFactorySales.map((sale) => <tr key={sale.id}><td className="table-cell">{formatShortDate(factorySaleDate(sale))}</td><td className="table-cell text-right">{kg(sale.weightKg)}</td><td className="table-cell text-right">{formatRupiah(sale.pricePerKg)}</td><td className="table-cell text-right">{formatRupiah(saleGrossAmount(sale))}</td><td className="table-cell text-xs">{sale.expenses?.length ? sale.expenses.map((x) => `${x.description}: ${formatRupiah(x.amount)}`).join(' · ') : '—'}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(saleNetAmount(sale))}</td><td className="table-cell"><div className="flex items-center gap-1"><button type="button" className="rounded-lg p-2 text-plantation-800 hover:bg-plantation-50" aria-label="Edit riwayat pemakaian getah" title="Edit penjualan dan pemakaian" onClick={() => editFactorySale(sale)}><Pencil size={16} /></button><button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-700" aria-label="Hapus penjualan pabrik ini" onClick={() => { if (window.confirm('Hapus catatan penjualan pabrik ini?')) deleteRubberFactorySale(sale.id) }}><Trash2 size={16} /></button></div></td></tr>)}</tbody>{dailyFactorySales.length > 0 && <tfoot><tr className="bg-paper-100/80"><td colSpan={3} className="table-cell font-semibold">Total tanggal ini · {dailyFactorySales.length} catatan</td><td className="table-cell text-right font-semibold">{formatRupiah(factoryDayGross)}</td><td className="table-cell text-right font-semibold">− {formatRupiah(factoryDayExpenses)}</td><td className="table-cell text-right font-semibold text-plantation-900">{formatRupiah(factoryDayNet)}</td><td /></tr></tfoot>}</table>{!dailyFactorySales.length && <p className="px-5 py-8 text-center text-sm text-ink-500">Belum ada penjualan pabrik pada tanggal ini.</p>}</div>
     </section>
+    </div>}
 
+    {activeSection === 'report' && <div id="rubber-panel-report" role="tabpanel" className="space-y-6">
     <section className="card mb-6 overflow-hidden">
       <div className="border-b border-ink-900/8 px-5 py-4 sm:px-6"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-400/15 text-gold-600"><Download size={18} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap Getah dan Sawit · Kebun Pal 6</h2><p className="mt-1 text-xs text-ink-500">Pilih satu tanggal untuk melihat hasil getah, hasil buah sawit, pengeluaran, dan pembagiannya dalam laporan PDF.</p></div></div></div>
       <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -679,7 +694,9 @@ export default function Rubber() {
         <div className="mt-6"><h3 className="mb-3 font-display text-lg text-plantation-950">Pembagian hasil bersih sawit · {formatShortDate(reportDate)}</h3><div className="mb-3 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Total hasil sawit" value={formatRupiah(palm.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(palm.primaryUse)}`} dark /><CalcLine label="Dasar upah" value={formatRupiah(palm.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(palm.managerWage)}`} dark /><CalcLine label="Pemakaian tambahan" value={palm.additionalUseTotal > 0 ? `− ${formatRupiah(palm.additionalUseTotal)}` : formatRupiah(0)} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir sawit" value={formatRupiah(palm.net)} dark strong /></div></div></div><div className="mb-3 flex items-center justify-between rounded-xl bg-plantation-700/8 px-4 py-3 font-semibold text-plantation-950"><span>Total bersih pembagian sawit</span><span>{formatRupiah(palm.net)}</span></div><div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Pembagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>{incomeDistribution(palm.net, palm.managerWage, 'hasil bersih sawit').map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}</tbody></table></div></div>
       </div>
     </section>
+    </div>}
 
+    {activeSection === 'rubber' && <div id="rubber-panel-rubber" role="tabpanel" className="space-y-6">
     {formOpen && <section className="card mb-6 overflow-hidden">
       <div className="flex items-start justify-between gap-4 border-b border-ink-900/8 px-5 py-4 sm:px-6">
         <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-600">{editingId ? 'Perbarui catatan' : 'Catatan baru'}</p><h2 className="mt-1 font-display text-xl text-plantation-950">Data getah</h2></div>
@@ -751,6 +768,7 @@ export default function Rubber() {
       <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-600">Informasi kebun getah</p><h2 className="mt-1 font-display text-xl text-plantation-950">Luas lahan</h2></div>
       <p className="font-display text-3xl font-semibold text-plantation-950">47,92 <span className="text-base font-medium text-ink-500">hektar</span></p>
     </section>
+    </div>}
 
     <Modal open={Boolean(viewRecord)} onClose={() => setViewRecord(null)} title="Detail catatan getah">
       {viewRecord && <div className="space-y-4">

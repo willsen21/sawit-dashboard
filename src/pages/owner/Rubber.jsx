@@ -41,6 +41,10 @@ const saleGrossAmount = (sale) => Number.isFinite(Number(sale.grossAmount))
 const saleNetAmount = (sale) => Number.isFinite(Number(sale.netAmount))
   ? Number(sale.netAmount)
   : saleGrossAmount(sale) - saleExpenseAmount(sale)
+const paidRubberPurchase = (record) => record.splitAmount != null && Number.isFinite(Number(record.splitAmount))
+  ? Number(record.splitAmount)
+  : Math.round(Number(record.totalAmount || 0) / 2)
+const paidRubberPurchases = (records) => records.reduce((sum, record) => sum + paidRubberPurchase(record), 0)
 
 function calculatePalmReport(report = blankPalmReport()) {
   const yields = [
@@ -94,7 +98,7 @@ function factoryNetAcrossDates(factorySales, rubberRecords) {
     return groups
   }, {})
   return Object.entries(byDate).reduce((sum, [date, sales]) => {
-    const purchases = rubberRecords.filter((record) => record.date === date).reduce((total, record) => total + Number(record.totalAmount || 0), 0)
+    const purchases = paidRubberPurchases(rubberRecords.filter((record) => record.date === date))
     return sum + calculateFactoryDistribution(sales, purchases).net
   }, 0)
 }
@@ -102,7 +106,7 @@ function factoryNetAcrossDates(factorySales, rubberRecords) {
 function exportCsv(records, factorySales, date, palmReport) {
   const bagCount = Math.max(0, ...records.map((record) => record.bags.length))
   const purchaseHeaders = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total pembelian (Rp)', 'Bagian setengah (Rp)']
-  const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, record.splitAmount])
+  const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, paidRubberPurchase(record)])
   const saleHeaders = ['Tanggal', 'Berat di pabrik (kg)', 'Harga jual/kg (Rp)', 'Penjualan kotor (Rp)', 'Rincian pengeluaran', 'Total pengeluaran (Rp)', 'Hasil bersih pabrik (Rp)']
   const saleRows = factorySales.map((sale) => [factorySaleDate(sale), sale.weightKg, sale.pricePerKg, saleGrossAmount(sale), (sale.expenses || []).map((item) => `${item.description}: ${formatRupiah(item.amount)}`).join(' | ') || '—', saleExpenseAmount(sale), saleNetAmount(sale)])
   const expenseHeaders = ['Tanggal', 'ID penjualan', 'Nama pengeluaran', 'Nominal (Rp)']
@@ -110,7 +114,8 @@ function exportCsv(records, factorySales, date, palmReport) {
   const totalPurchases = records.reduce((sum, record) => sum + Number(record.totalAmount || 0), 0)
   const totalGross = factorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
   const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
-  const factoryDistribution = calculateFactoryDistribution(factorySales, totalPurchases)
+  const totalPurchasePaid = paidRubberPurchases(records)
+  const factoryDistribution = calculateFactoryDistribution(factorySales, totalPurchasePaid)
   const totalNet = factoryDistribution.net
   const distribution = incomeDistribution(totalNet, factoryDistribution.managerWage, 'hasil bersih getah')
   const palm = calculatePalmReport(palmReport)
@@ -121,12 +126,12 @@ function exportCsv(records, factorySales, date, palmReport) {
     ['Pembelian getah', totalPurchases],
     ['Penjualan pabrik kotor', totalGross],
     ['Total pengeluaran pabrik', totalExpenses],
-    ['Pembelian getah hari ini', totalPurchases],
+    ['Pembelian getah dibayar (bagian 1/2)', totalPurchasePaid],
     ['Dasar upah getah', factoryDistribution.wageBase],
     ['Upah pengurus getah · no name (10%)', factoryDistribution.managerWage],
     ['Total bersih pembagian getah', totalNet],
     [], ['PEMBELIAN GETAH'], purchaseHeaders, ...purchaseRows,
-    ['TOTAL PEMBELIAN', '', ...Array(bagCount).fill(''), '', records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0), '', records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0), '', totalPurchases, records.reduce((sum, record) => sum + Number(record.splitAmount || 0), 0)],
+    ['TOTAL PEMBELIAN', '', ...Array(bagCount).fill(''), '', records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0), '', records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0), '', totalPurchases, totalPurchasePaid],
     [], ['PENJUALAN GETAH DI PABRIK'], saleHeaders, ...saleRows,
     ['TOTAL PENJUALAN PABRIK', '', '', totalGross, '', totalExpenses, ''],
     [], ['RINCIAN PENGELUARAN PABRIK'], expenseHeaders, ...expenseRows,
@@ -158,11 +163,11 @@ function exportPdf(records, factorySales, date, palmReport) {
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const totalWeight = records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0)
   const totalNetWeight = records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0)
-  const totalHalf = records.reduce((sum, record) => sum + Number(record.splitAmount || 0), 0)
+  const totalHalf = paidRubberPurchases(records)
   const totalPurchases = records.reduce((sum, record) => sum + Number(record.totalAmount || 0), 0)
   const totalGross = factorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
   const totalExpenses = factorySales.reduce((sum, sale) => sum + saleExpenseAmount(sale), 0)
-  const factoryDistribution = calculateFactoryDistribution(factorySales, totalPurchases)
+  const factoryDistribution = calculateFactoryDistribution(factorySales, totalHalf)
   const totalFactoryNet = factoryDistribution.net
   const distribution = incomeDistribution(totalFactoryNet, factoryDistribution.managerWage, 'hasil bersih getah')
   const palm = calculatePalmReport(palmReport)
@@ -182,10 +187,11 @@ function exportPdf(records, factorySales, date, palmReport) {
   autoTable(pdf, {
     startY: 54,
     body: [
-      ['Total pembelian', formatRupiah(totalPurchases), 'Penjualan pabrik', formatRupiah(totalGross)],
-      ['Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`, 'Upah pengurus · no name (10%)', formatRupiah(factoryDistribution.managerWage)],
-      ['Dasar upah', formatRupiah(factoryDistribution.wageBase), 'Luas lahan', '47,92 hektar'],
-      ['Berat kotor - bersih', `${kg(totalWeight)} - ${kg(totalNetWeight)}`, 'Total bersih pembagian getah', formatRupiah(totalFactoryNet)],
+      ['Pembelian getah kotor', formatRupiah(totalPurchases), 'Pembelian getah dibayar (bagian 1/2)', formatRupiah(totalHalf)],
+      ['Penjualan pabrik', formatRupiah(totalGross), 'Pengeluaran pabrik', `- ${formatRupiah(totalExpenses)}`],
+      ['Upah pengurus · no name (10%)', formatRupiah(factoryDistribution.managerWage), 'Dasar upah', formatRupiah(factoryDistribution.wageBase)],
+      ['Berat kotor - bersih', `${kg(totalWeight)} - ${kg(totalNetWeight)}`, 'Luas lahan', '47,92 hektar'],
+      ['Total bersih pembagian getah', formatRupiah(totalFactoryNet), '', ''],
     ],
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 2.6, textColor: [31, 42, 36], lineColor: [218, 225, 220], lineWidth: 0.2, fillColor: [251, 248, 242] },
@@ -209,7 +215,7 @@ function exportPdf(records, factorySales, date, palmReport) {
       kg(record.payableWeightKg),
       formatRupiah(record.pricePerKg),
       formatRupiah(record.totalAmount),
-      formatRupiah(record.splitAmount),
+      formatRupiah(paidRubberPurchase(record)),
     ]) : [['—', 'Tidak ada pembelian getah pada tanggal ini', '—', '—', '—', '—', '—', '—', '—']],
     foot: [['TOTAL', `${records.length} catatan`, '', kg(totalWeight), '', kg(totalNetWeight), '', '', formatRupiah(totalHalf)]],
     theme: 'grid',
@@ -275,8 +281,8 @@ function exportPdf(records, factorySales, date, palmReport) {
     body: [
       ['Penjualan kotor pabrik', formatRupiah(factoryDistribution.gross)],
       ['Pemakaian utama', `- ${formatRupiah(factoryDistribution.primaryUse)}`],
-      ['Pembelian getah hari ini', `- ${formatRupiah(factoryDistribution.purchaseTotal)}`],
-      ['Dasar upah (hasil - pemakaian utama - pembelian getah)', formatRupiah(factoryDistribution.wageBase)],
+      ['Pembelian getah hari ini (bagian 1/2 yang dibayar)', `- ${formatRupiah(factoryDistribution.purchaseTotal)}`],
+      ['Dasar upah (hasil - pemakaian utama - pembayaran getah)', formatRupiah(factoryDistribution.wageBase)],
       ['Upah pengurus · no name (10%)', `- ${formatRupiah(factoryDistribution.managerWage)}`],
       ['Total pemakaian (utama + tambahan)', `- ${formatRupiah(factoryDistribution.expenseTotal)}`],
       ['Hasil akhir getah', formatRupiah(totalFactoryNet)],
@@ -463,14 +469,15 @@ export default function Rubber() {
   const dailyHalf = dailyRecords.reduce((sum, item) => sum + Number(item.splitAmount || 0), 0)
   const factoryDayGross = dailyFactorySales.reduce((sum, sale) => sum + saleGrossAmount(sale), 0)
   const factoryDayExpenses = dailyFactorySales.reduce((sum, sale) => sum + Number(sale.expenseTotal || 0), 0)
-  const factoryDayPurchases = rubberRecords.filter((record) => record.date === selectedFactoryDate).reduce((sum, record) => sum + Number(record.totalAmount || 0), 0)
+  const factoryDayPurchases = paidRubberPurchases(rubberRecords.filter((record) => record.date === selectedFactoryDate))
   const factoryDayNet = calculateFactoryDistribution(dailyFactorySales, factoryDayPurchases).net
   const previewWeight = bagWeight(form.bags)
   const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
   const exportRecords = records.filter((record) => record.date === reportDate)
   const exportFactorySales = rubberFactorySales.filter((sale) => factorySaleDate(sale) === reportDate)
   const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
-  const exportFactoryDistribution = calculateFactoryDistribution(exportFactorySales, exportPurchaseTotal)
+  const exportPurchasePaid = paidRubberPurchases(exportRecords)
+  const exportFactoryDistribution = calculateFactoryDistribution(exportFactorySales, exportPurchasePaid)
   const exportFactoryNet = exportFactoryDistribution.net
   const palmReport = palmDrafts[reportDate] || palmReports[reportDate] || blankPalmReport()
   const palmExpenseInputs = palmReport.expenses || []
@@ -633,7 +640,7 @@ export default function Rubber() {
         <div><Field label="Tanggal laporan"><input type="date" className="input" value={reportDate} onChange={(event) => event.target.value && setReportDate(event.target.value)} /></Field><div className="mt-2"><DateNavigator date={reportDate} today={today} onChange={setReportDate} allowFuture /></div></div>
         <div className="flex flex-col gap-3 lg:min-w-64 lg:items-end">
           <div className="grid gap-2 text-left sm:grid-cols-2 lg:min-w-[26rem]">
-            <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total pembelian</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchaseTotal)}</p></div>
+            <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Pembelian getah dibayar · bagian 1/2</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportPurchasePaid)}</p><p className="text-[10px] text-ink-400">Total kotor {formatRupiah(exportPurchaseTotal)}</p></div>
             <div className="rounded-xl bg-paper-50 px-3 py-2.5"><p className="text-[11px] text-ink-500">Total bersih pembagian getah</p><p className="mt-0.5 font-display text-lg text-plantation-950">{formatRupiah(exportFactoryNet)}</p></div>
           </div>
           <div className="flex flex-wrap gap-2"><button type="button" disabled={!exportAvailable} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportCsv(exportRecords, exportFactorySales, reportDate, palmReport)}><FileSpreadsheet size={16} /> CSV gabungan</button><button type="button" disabled={!exportRecords.length && !exportFactorySales.length} className="btn-ghost disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPdf(exportRecords, exportFactorySales, reportDate, palmReport)}><FileText size={16} /> PDF Getah</button><button type="button" disabled={!palmReports[reportDate] && !palmHasData} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => exportPalmPdf(reportDate, palmReport)}><FileText size={16} /> PDF Sawit</button></div>
@@ -665,7 +672,7 @@ export default function Rubber() {
       </div>
       <div className="px-5 pb-5 sm:px-6 sm:pb-6">
         <div className="mb-3"><h3 className="font-display text-lg text-plantation-950">Pembagian hasil bersih getah · {formatShortDate(reportDate)}</h3><p className="mt-1 text-xs text-ink-500">Upah pengurus no name 10% dihitung dari hasil pabrik setelah pemakaian utama. Sisa hasil akhir dibagi rata untuk Andi dan Pendi.</p></div>
-        <div className="mb-4 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Penjualan kotor pabrik" value={formatRupiah(exportFactoryDistribution.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(exportFactoryDistribution.primaryUse)}`} dark /><CalcLine label="Pembelian getah hari ini" value={`− ${formatRupiah(exportFactoryDistribution.purchaseTotal)}`} dark /><CalcLine label="Dasar upah (hasil - pemakaian utama - pembelian getah)" value={formatRupiah(exportFactoryDistribution.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(exportFactoryDistribution.managerWage)}`} dark /><CalcLine label="Total pemakaian" value={`− ${formatRupiah(exportFactoryDistribution.expenseTotal)}`} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir getah" value={formatRupiah(exportFactoryNet)} dark strong /></div></div></div>
+        <div className="mb-4 rounded-xl bg-paper-50 p-4"><div className="space-y-2"><CalcLine label="Penjualan kotor pabrik" value={formatRupiah(exportFactoryDistribution.gross)} dark /><CalcLine label="Pemakaian utama" value={`− ${formatRupiah(exportFactoryDistribution.primaryUse)}`} dark /><CalcLine label="Pembelian getah hari ini · bagian 1/2 yang dibayar" value={`− ${formatRupiah(exportFactoryDistribution.purchaseTotal)}`} dark /><CalcLine label="Dasar upah (hasil - pemakaian utama - pembayaran getah)" value={formatRupiah(exportFactoryDistribution.wageBase)} dark /><CalcLine label="Upah pengurus · no name (10%)" value={`− ${formatRupiah(exportFactoryDistribution.managerWage)}`} dark /><CalcLine label="Total pemakaian" value={`− ${formatRupiah(exportFactoryDistribution.expenseTotal)}`} dark /><div className="border-t border-ink-900/10 pt-2"><CalcLine label="Hasil akhir getah" value={formatRupiah(exportFactoryNet)} dark strong /></div></div></div>
         <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[420px]"><thead><tr><th className="table-head">Penerima</th><th className="table-head">Bagian</th><th className="table-head text-right">Nominal</th></tr></thead><tbody>
           {distribution.map((item) => <tr key={item.name}><td className="table-cell font-medium">{item.name}</td><td className="table-cell">{item.basis}</td><td className="table-cell text-right font-semibold">{formatRupiah(item.amount)}</td></tr>)}
         </tbody></table></div>

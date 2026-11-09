@@ -161,6 +161,23 @@ export default function Reports() {
     return { totalWeight, totalGrossWeight, totalValue, count: filtered.length }
   }, [filtered, reportKind, supplierMap])
 
+  const brondolanProfit = useMemo(() => {
+    if (reportKind !== 'brondolan' || range[0] !== range[1]) return null
+    const rows = transactions
+      .filter((transaction) => transaction.date === range[0] && transaction.status !== 'voided' && (transaction.kind || 'buah') === 'brondolan')
+      .map((record) => {
+        const name = record.name || supplierMap[record.supplierId]?.name || '—'
+        const netKg = Number(record.netKg ?? record.weightKg ?? 0) || 0
+        const isSpecialRate = /\(\s*(?:kojek|armini)\s*\)/i.test(name)
+        const multiplier = isSpecialRate ? 2 : 30
+        return { record, name, netKg, multiplier, amount: Math.round(netKg * multiplier) }
+      })
+    const gross = rows.reduce((sum, row) => sum + row.amount, 0)
+    const deduction = Math.round(gross * 0.1)
+    const afterDeduction = gross - deduction
+    return { rows, gross, deduction, afterDeduction, final: Math.round(afterDeduction / 2) }
+  }, [reportKind, range, transactions, supplierMap])
+
   const dailyClose = useMemo(() => {
     if (reportKind !== 'brondolan' || range[0] !== range[1]) return null
     const date = range[0]
@@ -461,6 +478,29 @@ export default function Reports() {
         <StatCard label="Total berat kotor" value={`${summary.totalGrossWeight.toLocaleString('id-ID')} kg`} delay={300} />
       </div>
 
+      {brondolanProfit && <section className="mb-6 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white shadow-soft">
+        <div className="border-b border-ink-900/8 bg-gradient-to-r from-plantation-50 to-white px-5 py-4">
+          <h2 className="font-display text-lg text-plantation-950">Perhitungan keuntungan brondolan</h2>
+          <p className="mt-1 text-xs text-ink-500">Tanggal {formatShortDate(range[0])} · (Kojek)/(Armini): berat bersih × 2 · lainnya: berat bersih × 30</p>
+        </div>
+        <div className="table-scroll overflow-x-auto">
+          <table className="w-full min-w-[620px]">
+            <thead><tr><th className="table-head">Nama</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Pengali</th><th className="table-head text-right">Hasil hitung</th></tr></thead>
+            <tbody>
+              {brondolanProfit.rows.length ? brondolanProfit.rows.map(({ record, name, netKg, multiplier, amount }) => <tr key={record.id}>
+                <td className="table-cell font-medium">{name}</td><td className="table-cell text-right">{netKg.toLocaleString('id-ID')} kg</td><td className="table-cell text-right">× {multiplier}</td><td className="table-cell text-right font-medium">{formatRupiah(amount)}</td>
+              </tr>) : <tr><td colSpan={4} className="table-cell py-6 text-center text-sm text-ink-500">Belum ada catatan brondolan pada tanggal ini.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-2 bg-paper-50 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <ProfitLine label="Total hasil sebelum potongan" value={formatRupiah(brondolanProfit.gross)} />
+          <ProfitLine label="Potongan 10%" value={`− ${formatRupiah(brondolanProfit.deduction)}`} />
+          <ProfitLine label="Hasil setelah potongan" value={formatRupiah(brondolanProfit.afterDeduction)} />
+          <ProfitLine label="Keuntungan akhir ÷ 2" value={formatRupiah(brondolanProfit.final)} highlight />
+        </div>
+      </section>}
+
       {dailyClose && <section className="mb-6 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-900/8 bg-gradient-to-r from-plantation-50 to-white px-5 py-4">
           <div className="flex items-start gap-3"><span className="cash-summary-icon"><Wallet size={17} /></span><div><h2 className="font-display text-lg text-plantation-950">Rekap harian brondolan</h2><p className="mt-0.5 text-xs text-ink-500">Perhitungan memakai berat bersih × harga/kg pada setiap catatan. Harmini dihitung dengan tambahan Rp10/kg.</p><p className="mt-1 text-[11px] text-ink-500">Pilih kartu untuk melihat catatan pembentuk nilainya di tabel bawah. Harga/kg sama berarti dipakai oleh lebih dari satu catatan.</p></div></div>
@@ -608,6 +648,12 @@ export default function Reports() {
 
 function PaymentBadge({ status, onConfirm }) { return status === 'unpaid' ? <button type="button" onClick={onConfirm} className="rounded-full bg-gold-400/15 px-2 py-1 text-xs font-medium text-gold-600 transition hover:bg-gold-400/30" title="Klik untuk konfirmasi pembayaran">Belum bayar</button> : <span className="rounded-full bg-plantation-700/10 px-2 py-1 text-xs font-medium text-plantation-700">Sudah bayar</span> }
 function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }
+function ProfitLine({ label, value, highlight = false }) {
+  return <div className={`rounded-xl border px-3 py-3 ${highlight ? 'border-plantation-800/15 bg-plantation-950 text-white sm:col-span-2 lg:col-span-1' : 'border-ink-900/8 bg-white text-ink-700'}`}>
+    <span className={`block text-xs ${highlight ? 'text-white/65' : 'text-ink-500'}`}>{label}</span>
+    <strong className="mt-1 block font-display text-lg">{value}</strong>
+  </div>
+}
 function CloseMetric({ label, value, tone = '', hint, active = false, onClick }) {
   const toneClass = tone === 'green' ? 'text-plantation-800' : tone === 'blue' ? 'text-sky-800' : tone === 'gold' ? 'text-gold-700' : 'text-ink-900'
   return <button type="button" onClick={onClick} aria-pressed={active} className={`group min-h-28 bg-white px-5 py-4 text-left transition-colors hover:bg-plantation-50/60 focus-visible:relative focus-visible:z-10 ${active ? 'bg-plantation-50 ring-2 ring-inset ring-plantation-700/30' : ''}`}><span className="block text-xs text-ink-500">{label}</span><span className={`mt-1 block font-display text-xl ${toneClass}`}>{value}</span>{hint && <span className="mt-1.5 block text-[11px] leading-snug text-ink-500 group-hover:text-plantation-800">{hint}</span>}</button>

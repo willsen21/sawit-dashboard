@@ -169,7 +169,7 @@ export default function Reports() {
         const name = record.name || supplierMap[record.supplierId]?.name || '—'
         const netKg = Number(record.netKg ?? record.weightKg ?? 0) || 0
         const isSpecialRate = /\(\s*(?:kojek|armini)\s*\)/i.test(name)
-        const multiplier = isSpecialRate ? 2 : 30
+        const multiplier = isSpecialRate ? 20 : 30
         return { record, name, netKg, multiplier, amount: Math.round(netKg * multiplier) }
       })
     const gross = rows.reduce((sum, row) => sum + row.amount, 0)
@@ -481,7 +481,7 @@ export default function Reports() {
       {brondolanProfit && <section className="mb-6 overflow-hidden rounded-2xl border border-plantation-900/10 bg-white shadow-soft">
         <div className="border-b border-ink-900/8 bg-gradient-to-r from-plantation-50 to-white px-5 py-4">
           <h2 className="font-display text-lg text-plantation-950">Perhitungan keuntungan brondolan</h2>
-          <p className="mt-1 text-xs text-ink-500">Tanggal {formatShortDate(range[0])} · (Kojek)/(Armini): berat bersih × 2 · lainnya: berat bersih × 30</p>
+          <p className="mt-1 text-xs text-ink-500">Tanggal {formatShortDate(range[0])} · (Kojek)/(Armini): berat bersih × 20 · lainnya: berat bersih × 30</p>
         </div>
         <div className="table-scroll overflow-x-auto">
           <table className="w-full min-w-[620px]">

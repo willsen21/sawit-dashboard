@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CheckCircle2, Mountain, PackagePlus, Scale, Pencil, Trash2 } from 'lucide-react'
+import { CheckCircle2, Mountain, PackagePlus, Scale, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { formatShortDate, todayKey } from '../../lib/dateUtils'
@@ -22,6 +22,7 @@ export default function Stones() {
   const [editError, setEditError] = useState('')
   const [saleToEdit, setSaleToEdit] = useState(null)
   const [saleToDelete, setSaleToDelete] = useState(null)
+  const [salesMonth, setSalesMonth] = useState(() => todayKey().slice(0, 7))
   const [saleEditForm, setSaleEditForm] = useState({ date: '', type: STONE_TYPES[0], driverName: '', netKg: '', pricePerKg: '', paymentMethod: 'transfer', note: '' })
   const [saleEditError, setSaleEditError] = useState('')
   const totals = (type) => {
@@ -31,6 +32,25 @@ export default function Stones() {
   }
   const rows = useMemo(() => [...stoneSales].sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))), [stoneSales])
   const stockRows = useMemo(() => [...stoneStock].sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))), [stoneStock])
+  const monthSales = useMemo(() => rows.filter((sale) => sale.date?.slice(0, 7) === salesMonth), [rows, salesMonth])
+  const besscossSummary = useMemo(() => monthSales.reduce((summary, sale) => {
+    if (canonicalStoneType(sale.type) !== STONE_TYPES[0]) return summary
+    const netKg = Number(sale.netKg || 0)
+    const pricePerKg = Number(sale.pricePerKg || 0)
+    summary.netKg += netKg
+    summary.revenue += Number(sale.total || Math.round(netKg * pricePerKg))
+    summary.capital += Math.round(netKg * 110)
+    summary.profit += Math.round(netKg * (pricePerKg - 110))
+    return summary
+  }, { netKg: 0, revenue: 0, capital: 0, profit: 0 }), [monthSales])
+
+  function shiftSalesMonth(amount) {
+    const date = new Date(`${salesMonth}-01T12:00:00`)
+    date.setMonth(date.getMonth() + amount)
+    setSalesMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  const salesMonthLabel = new Date(`${salesMonth}-01T12:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
 
   function submit(event) {
     event.preventDefault()
@@ -100,10 +120,19 @@ export default function Stones() {
       <div className="table-scroll"><table className="compact-table w-full border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head text-right">Stok masuk</th><th className="table-head">Catatan</th><th className="table-head">Aksi</th></tr></thead><tbody>{stockRows.length ? stockRows.map((row) => <tr key={row.id}><td className="table-cell">{formatShortDate(row.date)}</td><td className="table-cell">{canonicalStoneType(row.type)}</td><td className="table-cell text-right font-medium">{number(row.quantityKg)} kg</td><td className="table-cell">{row.note || '—'}</td><td className="table-cell"><div className="flex gap-1"><button type="button" className="btn-ghost !px-2 !py-1.5" disabled={!cloudReady} onClick={() => openStockEdit(row)} title="Edit stok"><Pencil size={15} /></button><button type="button" className="rounded-md p-2 text-red-700 hover:bg-red-50 disabled:opacity-40" disabled={!cloudReady} onClick={() => setStockToDelete(row)} title="Hapus stok"><Trash2 size={15} /></button></div></td></tr>) : <tr><td colSpan="5" className="table-cell py-10 text-center text-ink-500">Belum ada stok batu yang dicatat.</td></tr>}</tbody></table></div>
     </section>
     <section className="card overflow-hidden">
-      <div className="border-b border-ink-900/10 px-5 py-4"><h2 className="font-medium">Batu yang terjual</h2><p className="mt-1 text-xs text-ink-500">Penjualan admin, status pembayarannya, tanggal, dan nama sopir.</p></div>
-      <div className="table-scroll"><table className="compact-table w-full border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head">Nama sopir</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total jual</th><th className="table-head">Pembayaran</th><th className="table-head">Status</th><th className="table-head">Catatan owner</th><th className="table-head">Aksi</th></tr></thead><tbody>{rows.length ? rows.map((row) => {
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-medium">Batu yang terjual</h2><p className="mt-1 text-xs text-ink-500">Riwayat penjualan per bulan, status pembayaran, dan nama sopir.</p><p className="mt-1 text-xs text-ink-500">Khusus Besscoss: modal = berat bersih × Rp110/kg; keuntungan = (harga/kg − Rp110) × berat bersih.</p></div><div className="flex items-center gap-2"><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftSalesMonth(-1)} aria-label="Bulan sebelumnya"><ChevronLeft size={17} /><span className="hidden sm:inline">Bulan sebelumnya</span></button><span className="min-w-36 text-center font-medium capitalize text-plantation-950">{salesMonthLabel}</span><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftSalesMonth(1)} aria-label="Bulan berikutnya"><span className="hidden sm:inline">Bulan berikutnya</span><ChevronRight size={17} /></button></div></div>
+      <div className="grid gap-3 border-b border-ink-900/10 bg-paper-50/50 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StoneMetric label="Total Besscoss terjual" value={`${number(besscossSummary.netKg)} kg`} />
+        <StoneMetric label="Penjualan kotor Besscoss" value={`Rp${besscossSummary.revenue.toLocaleString('id-ID')}`} />
+        <StoneMetric label="Modal Besscoss · Rp110/kg" value={`Rp${besscossSummary.capital.toLocaleString('id-ID')}`} />
+        <StoneMetric label="Keuntungan Besscoss" value={`Rp${besscossSummary.profit.toLocaleString('id-ID')}`} highlight />
+      </div>
+      <div className="table-scroll"><table className="compact-table w-full min-w-[1280px] border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head">Nama sopir</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total jual</th><th className="table-head">Pembayaran</th><th className="table-head">Status</th><th className="table-head text-right">Modal Besscoss</th><th className="table-head text-right">Keuntungan Besscoss</th><th className="table-head">Catatan owner</th><th className="table-head">Aksi</th></tr></thead><tbody>{monthSales.length ? monthSales.map((row) => {
         const isPaid = row.paymentStatus === 'paid' || row.paymentMethod === 'paid'
         const isTransfer = row.paymentMethod === 'transfer'
+        const isBesscoss = canonicalStoneType(row.type) === STONE_TYPES[0]
+        const rowCapital = isBesscoss ? Math.round(Number(row.netKg || 0) * 110) : null
+        const rowProfit = isBesscoss ? Math.round(Number(row.netKg || 0) * (Number(row.pricePerKg || 0) - 110)) : null
         return <tr key={row.id}>
           <td className="table-cell">{formatShortDate(row.date)}</td>
           <td className="table-cell">{canonicalStoneType(row.type)}</td>
@@ -113,10 +142,12 @@ export default function Stones() {
           <td className="table-cell text-right font-medium">Rp{Number(row.total || 0).toLocaleString('id-ID')}</td>
           <td className="table-cell">{isTransfer ? 'Transfer' : row.paymentMethod === 'paid' ? 'Sudah dibayar' : '—'}</td>
           <td className="table-cell">{isPaid ? <span className="rounded-full bg-plantation-700/10 px-2.5 py-1 text-xs font-medium text-plantation-800">Lunas</span> : isTransfer ? <span className="rounded-full bg-gold-400/20 px-2.5 py-1 text-xs font-medium text-gold-700">Menunggu owner</span> : '—'}</td>
+          <td className="table-cell text-right">{isBesscoss ? `Rp${rowCapital.toLocaleString('id-ID')}` : '—'}</td>
+          <td className={`table-cell text-right font-medium ${rowProfit < 0 ? 'text-red-700' : 'text-plantation-800'}`}>{isBesscoss ? `Rp${rowProfit.toLocaleString('id-ID')}` : '—'}</td>
           <td className="table-cell max-w-xs whitespace-pre-wrap">{row.note || '—'}</td>
           <td className="table-cell"><div className="flex flex-wrap items-center gap-1">{isTransfer && !isPaid && <button type="button" className="btn-ghost !px-2 !py-1.5 text-xs" disabled={!cloudReady} onClick={() => setSaleToConfirm(row)}><CheckCircle2 size={14} /> Lunas</button>}{isPaid && <span className="px-1 text-xs text-ink-500">Selesai</span>}<button type="button" className="btn-ghost !px-2 !py-1.5" disabled={!cloudReady} onClick={() => openSaleEdit(row)} title="Edit penjualan"><Pencil size={15} /></button><button type="button" className="rounded-md p-2 text-red-700 hover:bg-red-50 disabled:opacity-40" disabled={!cloudReady} onClick={() => setSaleToDelete(row)} title="Hapus penjualan"><Trash2 size={15} /></button></div></td>
         </tr>
-      }) : <tr><td colSpan="10" className="table-cell py-12 text-center text-ink-500">Belum ada penjualan batu.</td></tr>}</tbody></table></div>
+      }) : <tr><td colSpan="12" className="table-cell py-12 text-center text-ink-500">Belum ada penjualan batu pada bulan {salesMonthLabel}.</td></tr>}</tbody></table></div>
     </section>
     <Modal open={Boolean(saleToConfirm)} onClose={() => setSaleToConfirm(null)} title="Konfirmasi pelunasan">
       {saleToConfirm && <div className="space-y-4"><p className="text-sm text-ink-700">Pastikan transfer untuk catatan berikut sudah diterima sebelum menandai lunas.</p><div className="rounded-lg bg-plantation-50 p-4 text-sm"><p><b>{canonicalStoneType(saleToConfirm.type)}</b> · {saleToConfirm.driverName}</p><p className="mt-1">{formatShortDate(saleToConfirm.date)} · {number(saleToConfirm.netKg)} kg</p></div><div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setSaleToConfirm(null)}>Batal</button><button type="button" className="btn-primary" onClick={confirmPaid}><CheckCircle2 size={16} /> Ya, tandai lunas</button></div></div>}
@@ -151,4 +182,11 @@ export default function Stones() {
       {saleToDelete && <div className="space-y-4"><p className="text-sm text-ink-700">Hapus penjualan {canonicalStoneType(saleToDelete.type)} sebanyak <b>{number(saleToDelete.netKg)} kg</b>? Jumlah tersebut akan kembali ke stok tersedia.</p><div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setSaleToDelete(null)}>Batal</button><button type="button" className="btn-danger" disabled={!cloudReady} onClick={confirmDeleteSale}><Trash2 size={16} /> Hapus penjualan</button></div></div>}
     </Modal>
   </main>
+}
+
+function StoneMetric({ label, value, highlight = false }) {
+  return <article className={`rounded-xl border px-4 py-3 ${highlight ? 'border-plantation-800/15 bg-plantation-950 text-white' : 'border-ink-900/8 bg-white text-ink-700'}`}>
+    <p className={`text-xs ${highlight ? 'text-white/65' : 'text-ink-500'}`}>{label}</p>
+    <p className="mt-1 font-display text-xl">{value}</p>
+  </article>
 }

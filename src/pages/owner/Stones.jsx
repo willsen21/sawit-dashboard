@@ -46,9 +46,11 @@ export default function Stones() {
     const netKg = Number(sale.netKg || 0)
     const pricePerKg = Number(sale.pricePerKg || 0)
     group.netKg += netKg
-    group.revenue += Number(sale.total || Math.round(netKg * pricePerKg))
-    group.capital += Math.round(netKg * capitalPerKg)
-    group.profit += Math.round(netKg * (pricePerKg - capitalPerKg))
+    const revenue = Number(sale.total || Math.round(netKg * pricePerKg))
+    const profit = Math.round(netKg * capitalPerKg)
+    group.revenue += revenue
+    group.profit += profit
+    group.capital += revenue - profit
     return summary
   }, {
     besscoss: { netKg: 0, revenue: 0, capital: 0, profit: 0 },
@@ -131,23 +133,24 @@ export default function Stones() {
       <div className="table-scroll"><table className="compact-table w-full border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head text-right">Stok masuk</th><th className="table-head">Catatan</th><th className="table-head">Aksi</th></tr></thead><tbody>{stockRows.length ? stockRows.map((row) => <tr key={row.id}><td className="table-cell">{formatShortDate(row.date)}</td><td className="table-cell">{canonicalStoneType(row.type)}</td><td className="table-cell text-right font-medium">{number(row.quantityKg)} kg</td><td className="table-cell">{row.note || '—'}</td><td className="table-cell"><div className="flex gap-1"><button type="button" className="btn-ghost !px-2 !py-1.5" disabled={!cloudReady} onClick={() => openStockEdit(row)} title="Edit stok"><Pencil size={15} /></button><button type="button" className="rounded-md p-2 text-red-700 hover:bg-red-50 disabled:opacity-40" disabled={!cloudReady} onClick={() => setStockToDelete(row)} title="Hapus stok"><Trash2 size={15} /></button></div></td></tr>) : <tr><td colSpan="5" className="table-cell py-10 text-center text-ink-500">Belum ada stok batu yang dicatat.</td></tr>}</tbody></table></div>
     </section>
     <section className="card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-medium">Batu yang terjual</h2><p className="mt-1 text-xs text-ink-500">Riwayat penjualan per bulan, status pembayaran, dan nama sopir.</p><p className="mt-1 text-xs text-ink-500">Modal Besscoss Rp110/kg dan semua Batu Split Rp120/kg; keuntungan = (harga/kg − modal/kg) × berat bersih.</p></div><div className="flex items-center gap-2"><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftSalesMonth(-1)} aria-label="Bulan sebelumnya"><ChevronLeft size={17} /><span className="hidden sm:inline">Bulan sebelumnya</span></button><span className="min-w-36 text-center font-medium capitalize text-plantation-950">{salesMonthLabel}</span><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftSalesMonth(1)} aria-label="Bulan berikutnya"><span className="hidden sm:inline">Bulan berikutnya</span><ChevronRight size={17} /></button></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ink-900/10 px-5 py-4"><div><h2 className="font-medium">Batu yang terjual</h2><p className="mt-1 text-xs text-ink-500">Riwayat penjualan per bulan, status pembayaran, dan nama sopir.</p><p className="mt-1 text-xs text-ink-500">Keuntungan Besscoss = berat bersih × Rp110/kg; keuntungan semua Batu Split = berat bersih × Rp120/kg. Modal = total jual − keuntungan.</p></div><div className="flex items-center gap-2"><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftSalesMonth(-1)} aria-label="Bulan sebelumnya"><ChevronLeft size={17} /><span className="hidden sm:inline">Bulan sebelumnya</span></button><span className="min-w-36 text-center font-medium capitalize text-plantation-950">{salesMonthLabel}</span><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftSalesMonth(1)} aria-label="Bulan berikutnya"><span className="hidden sm:inline">Bulan berikutnya</span><ChevronRight size={17} /></button></div></div>
       <div className="grid gap-3 border-b border-ink-900/10 bg-paper-50/50 p-4 sm:grid-cols-2 xl:grid-cols-4">
         <StoneMetric label="Besscoss · berat terjual" value={`${number(stoneProfitSummary.besscoss.netKg)} kg`} />
         <StoneMetric label="Besscoss · penjualan kotor" value={`Rp${stoneProfitSummary.besscoss.revenue.toLocaleString('id-ID')}`} />
-        <StoneMetric label="Besscoss · modal Rp110/kg" value={`Rp${stoneProfitSummary.besscoss.capital.toLocaleString('id-ID')}`} />
-        <StoneMetric label="Besscoss · keuntungan" value={`Rp${stoneProfitSummary.besscoss.profit.toLocaleString('id-ID')}`} highlight />
+        <StoneMetric label="Besscoss · modal (total jual − untung)" value={`Rp${stoneProfitSummary.besscoss.capital.toLocaleString('id-ID')}`} />
+        <StoneMetric label="Besscoss · keuntungan Rp110/kg" value={`Rp${stoneProfitSummary.besscoss.profit.toLocaleString('id-ID')}`} highlight />
         <StoneMetric label="Batu Split · berat terjual" value={`${number(stoneProfitSummary.split.netKg)} kg`} />
         <StoneMetric label="Batu Split · penjualan kotor" value={`Rp${stoneProfitSummary.split.revenue.toLocaleString('id-ID')}`} />
-        <StoneMetric label="Batu Split · modal Rp120/kg" value={`Rp${stoneProfitSummary.split.capital.toLocaleString('id-ID')}`} />
-        <StoneMetric label="Batu Split · keuntungan" value={`Rp${stoneProfitSummary.split.profit.toLocaleString('id-ID')}`} highlight />
+        <StoneMetric label="Batu Split · modal (total jual − untung)" value={`Rp${stoneProfitSummary.split.capital.toLocaleString('id-ID')}`} />
+        <StoneMetric label="Batu Split · keuntungan Rp120/kg" value={`Rp${stoneProfitSummary.split.profit.toLocaleString('id-ID')}`} highlight />
       </div>
       <div className="table-scroll"><table className="compact-table w-full min-w-[1280px] border-collapse"><thead><tr><th className="table-head">Tanggal</th><th className="table-head">Jenis batu</th><th className="table-head">Nama sopir</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total jual</th><th className="table-head">Pembayaran</th><th className="table-head">Status</th><th className="table-head text-right">Modal</th><th className="table-head text-right">Keuntungan</th><th className="table-head">Catatan owner</th><th className="table-head">Aksi</th></tr></thead><tbody>{monthSales.length ? monthSales.map((row) => {
         const isPaid = row.paymentStatus === 'paid' || row.paymentMethod === 'paid'
         const isTransfer = row.paymentMethod === 'transfer'
         const capitalPerKg = stoneCapitalPerKg(row.type)
-        const rowCapital = capitalPerKg === null ? null : Math.round(Number(row.netKg || 0) * capitalPerKg)
-        const rowProfit = capitalPerKg === null ? null : Math.round(Number(row.netKg || 0) * (Number(row.pricePerKg || 0) - capitalPerKg))
+        const rowRevenue = Number(row.total || Math.round(Number(row.netKg || 0) * Number(row.pricePerKg || 0)))
+        const rowProfit = capitalPerKg === null ? null : Math.round(Number(row.netKg || 0) * capitalPerKg)
+        const rowCapital = capitalPerKg === null ? null : rowRevenue - rowProfit
         return <tr key={row.id}>
           <td className="table-cell">{formatShortDate(row.date)}</td>
           <td className="table-cell">{canonicalStoneType(row.type)}</td>

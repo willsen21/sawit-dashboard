@@ -19,6 +19,7 @@ const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
 const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
 const CLOUD_PAGE_SIZE = 500
+const CLOUD_REFRESH_INTERVAL_MS = 60_000
 
 async function fetchAllCloudRecords(collections = null) {
   const rows = []
@@ -306,7 +307,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
       window.addEventListener('focus', refreshOnReturn)
       window.addEventListener('hashchange', refreshOnReturn)
       document.addEventListener('visibilitychange', refreshOnReturn)
-      const sharedCashRefreshTimer = window.setInterval(refreshOnReturn, 10_000)
+      const sharedCashRefreshTimer = window.setInterval(refreshOnReturn, CLOUD_REFRESH_INTERVAL_MS)
       cleanupRefresh = () => {
         window.removeEventListener('focus', refreshOnReturn)
         window.removeEventListener('hashchange', refreshOnReturn)

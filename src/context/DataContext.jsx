@@ -20,13 +20,14 @@ const STONE_CAPITAL_STALE_CLOSE = 17_936_450
 const STONE_CAPITAL_CORRECTED_CLOSE = 17_941_450
 const CLOUD_PAGE_SIZE = 500
 
-async function fetchAllCloudRecords() {
+async function fetchAllCloudRecords(collections = null) {
   const rows = []
   let offset = 0
 
   while (true) {
-    const { data, error } = await supabase.from('app_records')
-      .select('collection, record_id, data')
+    let query = supabase.from('app_records').select('collection, record_id, data')
+    if (collections?.length) query = query.in('collection', collections)
+    const { data, error } = await query
       .order('collection', { ascending: true })
       .order('record_id', { ascending: true })
       .range(offset, offset + CLOUD_PAGE_SIZE - 1)
@@ -258,10 +259,10 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
           ? OWNER_REFRESH_COLLECTIONS
           : ADMIN_REFRESH_COLLECTIONS
         try {
-          const { data: freshRows, error: refreshError } = await supabase.from('app_records')
-            .select('collection, record_id, data')
-            .in('collection', refreshCollections)
-          if (refreshError) {
+          let freshRows
+          try {
+            freshRows = await fetchAllCloudRecords(refreshCollections)
+          } catch (refreshError) {
             console.error('Gagal memperbarui data kas dan persetujuan:', refreshError)
             cloudSyncErrors.current = {
               ...cloudSyncErrors.current,
@@ -277,7 +278,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
             setCloudError(Object.values(remainingErrors).join(' '))
           }
           const freshByCollection = Object.fromEntries(refreshCollections.map((name) => [name, []]))
-          for (const row of freshRows || []) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
+          for (const row of freshRows) if (freshByCollection[row.collection]) freshByCollection[row.collection].push(row.data)
           const nextBaselines = { ...cloudBaseline.current }
           for (const name of refreshCollections) {
             const rawItems = freshByCollection[name]

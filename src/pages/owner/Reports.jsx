@@ -46,7 +46,7 @@ function computeQuickRange(label) {
   }
 }
 
-function downloadCsv(rows, reportKind, range, supplierMap) {
+function downloadCsv(rows, reportKind, range, supplierMap, cashDifferenceDays = []) {
   const isBrondolan = reportKind === 'brondolan'
   const header = ['Tanggal', ...(isBrondolan ? ['Jenis catatan'] : ['CV']), 'Nama', 'Status pembayaran', 'Metode pembayaran', 'Berat kotor (kg)', 'Berat bersih (kg)', 'Harga/kg bersih', 'Total / nominal', 'No. Nota', 'Catatan / alasan']
   const lines = rows.map(({ type = 'purchase', record }) => {
@@ -67,7 +67,15 @@ function downloadCsv(rows, reportKind, range, supplierMap) {
     ]
   })
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
-  const csv = '\uFEFF' + [header, ...lines].map((row) => row.map(quote).join(';')).join('\r\n')
+  const csvRows = [header, ...lines]
+  if (isBrondolan) {
+    const excess = cashDifferenceDays.reduce((total, day) => total + Math.max(0, Number(day.cashDifference) || 0), 0)
+    const shortage = cashDifferenceDays.reduce((total, day) => total + Math.max(0, -(Number(day.cashDifference) || 0)), 0)
+    csvRows.push([], ['REKAP SELISIH KAS ADMIN'], ['Tanggal', 'Sisa menurut sistem (Rp)', 'Uang fisik admin (Rp)', 'Selisih kas (Rp)'])
+    csvRows.push(...cashDifferenceDays.map((day) => [formatCsvDate(day.date), day.systemCashAtClose ?? '', day.countedCash ?? '', day.cashDifference]))
+    csvRows.push(['TOTAL', '', '', excess - shortage], ['Total kelebihan (Rp)', excess], ['Total kekurangan (Rp)', shortage])
+  }
+  const csv = '\uFEFF' + csvRows.map((row) => row.map(quote).join(';')).join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -77,7 +85,7 @@ function downloadCsv(rows, reportKind, range, supplierMap) {
   URL.revokeObjectURL(url)
 }
 
-function downloadPdf(rows, supplierMap, range, reportKind) {
+function downloadPdf(rows, supplierMap, range, reportKind, cashDifferenceDays = []) {
   const isBrondolan = reportKind === 'brondolan'
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const dateRange = `${formatShortDate(range[0])} — ${formatShortDate(range[1])}`
@@ -109,6 +117,27 @@ function downloadPdf(rows, supplierMap, range, reportKind) {
     headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
     margin: { left: 14, right: 14 },
   })
+  if (isBrondolan) {
+    const totalExcess = cashDifferenceDays.reduce((total, day) => total + Math.max(0, Number(day.cashDifference) || 0), 0)
+    const totalShortage = cashDifferenceDays.reduce((total, day) => total + Math.max(0, -(Number(day.cashDifference) || 0)), 0)
+    const nextY = pdf.lastAutoTable.finalY + 10
+    pdf.setFontSize(11)
+    pdf.setFont('helvetica', 'bold')
+    pdf.text('REKAP SELISIH KAS ADMIN', 14, nextY)
+    autoTable(pdf, {
+      startY: nextY + 4,
+      head: [['Tanggal', 'Sisa menurut sistem', 'Uang fisik admin', 'Selisih kas']],
+      body: cashDifferenceDays.length
+        ? cashDifferenceDays.map((day) => [formatShortDate(day.date), formatRupiah(day.systemCashAtClose), formatRupiah(day.countedCash), formatSignedRupiah(day.cashDifference)])
+        : [['—', '—', '—', 'Tidak ada penutupan kas dengan selisih tercatat']],
+      foot: [['TOTAL', `Kelebihan ${formatRupiah(totalExcess)}`, `Kekurangan ${formatRupiah(totalShortage)}`, formatSignedRupiah(totalExcess - totalShortage)]],
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2.2, valign: 'middle' },
+      headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [247, 244, 236], textColor: [45, 62, 53], fontStyle: 'bold' },
+      margin: { left: 14, right: 14 },
+    })
+  }
   pdf.save(`laporan-${reportKind}-${range[0]}_${range[1]}.pdf`)
 }
 
@@ -119,6 +148,8 @@ export default function Reports() {
   const { transactions, cashLoans, dailyCash, supplierMap, updateTransaction, editTransaction, editCashLoan, deleteCashLoan, deleteTransaction, editDailyCashCount } = useData()
   const [range, setRange] = useState(() => computeQuickRange('Hari ini'))
   const [activeQuick, setActiveQuick] = useState('Hari ini')
+  const [brondolanView, setBrondolanView] = useState('daily')
+  const [reportMonth, setReportMonth] = useState(() => todayKey().slice(0, 7))
   const [page, setPage] = useState(1)
   const [paymentStatus, setPaymentStatus] = useState('all')
   const [cvFilter, setCvFilter] = useState('all')
@@ -216,6 +247,32 @@ export default function Reports() {
     const shortage = days.reduce((total, day) => total + Math.max(0, -day.numericDifference), 0)
     return { days, count: days.length, excess, shortage, net: excess - shortage }
   }, [reportKind, dailyCash, range])
+
+  const monthlyRows = useMemo(() => {
+    if (reportKind !== 'brondolan' || brondolanView !== 'monthly') return []
+    const byDate = new Map()
+    transactions
+      .filter((item) => item.status !== 'voided' && (item.kind || 'buah') === 'brondolan' && item.date >= range[0] && item.date <= range[1])
+      .forEach((item) => {
+        const row = byDate.get(item.date) || { date: item.date, count: 0, weight: 0, purchases: 0, loans: 0, cashDifference: null }
+        const weight = Number(item.netKg ?? item.weightKg ?? 0) || 0
+        row.count += 1
+        row.weight += weight
+        row.purchases += reportedTotal(item, supplierMap, reportKind)
+        byDate.set(item.date, row)
+      })
+    cashLoans.filter((item) => item.date >= range[0] && item.date <= range[1]).forEach((item) => {
+      const row = byDate.get(item.date) || { date: item.date, count: 0, weight: 0, purchases: 0, loans: 0, cashDifference: null }
+      row.loans += Number(item.amount || 0)
+      byDate.set(item.date, row)
+    })
+    dailyCash.filter((item) => item.date >= range[0] && item.date <= range[1] && item.status === 'locked' && item.cashDifference !== null && item.cashDifference !== undefined && Number.isFinite(Number(item.cashDifference))).forEach((item) => {
+      const row = byDate.get(item.date) || { date: item.date, count: 0, weight: 0, purchases: 0, loans: 0, cashDifference: null }
+      row.cashDifference = Number(item.cashDifference)
+      byDate.set(item.date, row)
+    })
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+  }, [reportKind, brondolanView, transactions, cashLoans, dailyCash, range, supplierMap])
 
   useEffect(() => {
     setDailyDetailFilter(null)
@@ -351,12 +408,45 @@ export default function Reports() {
       ? cashLoans.filter((loan) => loan.date >= selectedRange[0] && loan.date <= selectedRange[1]).map((record) => ({ type: 'loan', record }))
       : []
     const rows = [...purchaseRows, ...loanRows].sort((a, b) => a.record.date.localeCompare(b.record.date) || String(a.record.createdAt || a.record.time || '').localeCompare(String(b.record.createdAt || b.record.time || '')))
-    if (exportFormat === 'csv') downloadCsv(rows, reportKind, selectedRange, supplierMap)
-    else downloadPdf(rows, supplierMap, selectedRange, reportKind)
+    const cashDifferenceDays = reportKind === 'brondolan' ? dailyCash
+      .filter((item) => item.date >= selectedRange[0] && item.date <= selectedRange[1] && item.status === 'locked' && item.cashDifference !== null && item.cashDifference !== undefined && Number.isFinite(Number(item.cashDifference)))
+      .sort((a, b) => a.date.localeCompare(b.date)) : []
+    if (exportFormat === 'csv') downloadCsv(rows, reportKind, selectedRange, supplierMap, cashDifferenceDays)
+    else downloadPdf(rows, supplierMap, selectedRange, reportKind, cashDifferenceDays)
     setShowExportOptions(false)
   }
 
+  function applyReportMonth(month) {
+    if (!month) return
+    const [year, monthNumber] = month.split('-').map(Number)
+    const start = `${month}-01`
+    const end = toDateKey(new Date(year, monthNumber, 0))
+    setReportMonth(month)
+    setRange([start, end])
+    setActiveQuick(null)
+    setPage(1)
+  }
+
+  function shiftReportMonth(amount) {
+    const [year, month] = reportMonth.split('-').map(Number)
+    const shifted = new Date(year, month - 1 + amount, 1)
+    applyReportMonth(`${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  function selectReportView(view) {
+    setBrondolanView(view)
+    setDailyDetailFilter(null)
+    setPage(1)
+    if (view === 'monthly') applyReportMonth(range[0].slice(0, 7))
+    else {
+      const date = todayKey()
+      setRange([date, date])
+      setActiveQuick('Hari ini')
+    }
+  }
+
   function selectQuickRange(label) {
+    if (reportKind === 'brondolan') setBrondolanView('daily')
     setActiveQuick(label)
     setRange(computeQuickRange(label))
     setPage(1)
@@ -378,6 +468,7 @@ export default function Reports() {
     const current = range[0] === range[1] ? range[0] : range[1]
     const next = toDateKey(addDays(parseDateKey(current), amount))
     setRange([next, next])
+    setBrondolanView('daily')
     setActiveQuick(next === todayKey() ? 'Hari ini' : null)
     setPage(1)
   }
@@ -400,11 +491,19 @@ export default function Reports() {
       </div>
 
       <div className="card p-5 mb-6">
-        {reportKind === 'brondolan' && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-plantation-900/10 bg-plantation-50/60 p-3">
+        {reportKind === 'brondolan' && <div className="mb-4 grid gap-3">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-plantation-900/10 bg-paper-50 p-1" role="tablist" aria-label="Tampilan laporan brondolan">
+            {[['daily', 'Per hari'], ['monthly', 'Per bulan']].map(([view, label]) => <button key={view} type="button" role="tab" aria-selected={brondolanView === view} onClick={() => selectReportView(view)} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${brondolanView === view ? 'bg-plantation-900 text-paper-50 shadow-sm' : 'text-ink-600 hover:bg-white'}`}>{label}</button>)}
+          </div>
+          {brondolanView === 'monthly' ? <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-plantation-900/10 bg-plantation-50/60 p-3">
+            <div className="flex items-end gap-2"><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftReportMonth(-1)} aria-label="Bulan sebelumnya"><ChevronLeft size={18} /></button><label className="block"><span className="label">Bulan laporan</span><input type="month" className="input min-w-44" value={reportMonth} onChange={(event) => applyReportMonth(event.target.value)} /></label><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftReportMonth(1)} aria-label="Bulan berikutnya"><ChevronRight size={18} /></button></div>
+            <p className="text-xs text-ink-500">Rekap harian dalam bulan terpilih</p>
+          </div> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-plantation-900/10 bg-plantation-50/60 p-3">
           <div><p className="text-xs font-medium text-ink-500">Lihat laporan per hari</p><p className="mt-0.5 font-display text-base text-plantation-950">{range[0] === range[1] ? formatShortDate(range[0]) : `${formatShortDate(range[0])} — ${formatShortDate(range[1])}`}</p></div>
           <div className="flex items-center gap-2"><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftReportDay(-1)} aria-label="Hari sebelumnya"><ChevronLeft size={18} /><span className="hidden sm:inline">Hari sebelumnya</span></button><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => selectQuickRange('Hari ini')}>Hari ini</button><button type="button" className="btn-ghost !rounded-full !px-3 !py-2" onClick={() => shiftReportDay(1)} aria-label="Hari berikutnya"><span className="hidden sm:inline">Hari berikutnya</span><ChevronRight size={18} /></button></div>
+          </div>}
         </div>}
-        <div className="mb-4 flex flex-wrap gap-2">
+        {!(reportKind === 'brondolan' && brondolanView === 'monthly') && <div className="mb-4 flex flex-wrap gap-2">
           {(reportKind === 'brondolan' ? ['Hari ini'] : QUICK_RANGES).map((label) => (
             <button
               key={label}
@@ -424,9 +523,9 @@ export default function Reports() {
             disabled={!dailyCash.some((item) => item.status === 'locked' && item.cashDifference !== null && item.cashDifference !== undefined && Number.isFinite(Number(item.cashDifference)))}
             className={`rounded-full px-3.5 py-1.5 text-xs font-medium border transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${activeQuick === 'Penutupan kas' ? 'bg-plantation-900 text-paper-50 border-plantation-900' : 'border-ink-900/15 text-ink-700 hover:bg-paper-100'}`}
           >Semua penutupan kas</button>}
-        </div>
+        </div>}
 
-        <div className={`grid grid-cols-1 items-end gap-3 sm:grid-cols-2 ${reportKind === 'brondolan' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>
+        {!(reportKind === 'brondolan' && brondolanView === 'monthly') && <div className={`grid grid-cols-1 items-end gap-3 sm:grid-cols-2 ${reportKind === 'brondolan' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>
           <div>
             <label className="label">Dari tanggal</label>
             <input
@@ -468,7 +567,7 @@ export default function Reports() {
               }}
             />
           </div>
-        </div>
+        </div>}
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -542,6 +641,7 @@ export default function Reports() {
       </section>}
 
       <div className="card overflow-hidden">
+        {reportKind === 'brondolan' && brondolanView === 'monthly' ? <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[720px]"><thead><tr><th className="table-head">Tanggal</th><th className="table-head text-right">Jumlah catatan</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Total pembelian</th><th className="table-head text-right">Pinjaman kas</th><th className="table-head text-right">Selisih kas</th><th className="table-head">Aksi</th></tr></thead><tbody>{monthlyRows.length ? monthlyRows.map((item) => <tr key={item.date}><td className="table-cell font-medium">{formatShortDate(item.date)}</td><td className="table-cell text-right">{item.count.toLocaleString('id-ID')}</td><td className="table-cell text-right">{item.weight.toLocaleString('id-ID')} kg</td><td className="table-cell text-right">{formatRupiah(item.purchases)}</td><td className="table-cell text-right">{formatRupiah(item.loans)}</td><td className={`table-cell text-right font-semibold ${item.cashDifference < 0 ? 'text-red-700' : item.cashDifference > 0 ? 'text-plantation-700' : 'text-ink-500'}`}>{item.cashDifference === null ? '—' : formatSignedRupiah(item.cashDifference)}</td><td className="table-cell"><button type="button" className="btn-ghost !min-h-8 !px-3 !py-1.5 text-xs" onClick={() => { setBrondolanView('daily'); setRange([item.date, item.date]); setActiveQuick(item.date === todayKey() ? 'Hari ini' : null); setDailyDetailFilter(null); setPage(1) }}>Lihat hari</button></td></tr>) : <tr><td colSpan={7} className="table-cell py-8 text-center text-sm text-ink-500">Belum ada catatan pada bulan ini.</td></tr>}</tbody></table></div> : <>
         {dailyDetailFilter && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/8 bg-plantation-50/70 px-5 py-3"><div><p className="text-sm font-semibold text-plantation-950">{detailFilterLabels[dailyDetailFilter]}</p><p className="mt-0.5 text-xs text-ink-500">{tableRows.length} catatan masuk ke perhitungan kartu ini.</p></div><button type="button" className="btn-ghost !px-3 !py-1.5 text-xs" onClick={() => { setDailyDetailFilter(null); setPage(1) }}>Tampilkan semua</button></div>}
         <div className="table-scroll">
           <table className="w-full">
@@ -590,6 +690,7 @@ export default function Reports() {
           </table>
         </div>
         {tableRows.length > PAGE_SIZE && <Pagination page={page} pages={pageCount} setPage={setPage} />}
+        </>}
       </div>
       <Modal open={!!cashEditTarget} onClose={() => { setCashEditTarget(null); setCashEditValue(''); setCashEditError('') }} title="Koreksi hitungan kas admin">
         {cashEditTarget && <form onSubmit={saveCashCountEdit} className="space-y-4">

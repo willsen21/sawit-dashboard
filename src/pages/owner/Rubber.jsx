@@ -10,12 +10,12 @@ import { loadItem, saveItem } from '../../lib/storage'
 import { calculateFarmHarvest } from '../../lib/farmCalculations'
 import Modal from '../../components/Modal'
 
-const blankForm = () => ({ name: '', date: todayKey(), bags: [''], pricePerKg: '' })
+const blankForm = () => ({ name: '', date: todayKey(), bags: [''], pricePerKg: '', deductionPercent: '10' })
 const blankPalmReport = () => ({ fruitKg: '', fruitPricePerKg: '', brondolanKg: '', brondolanPricePerKg: '', ketekKg: '', ketekPricePerKg: '', expenses: [] })
 const kg = (value) => `${Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })} kg`
 const bagWeight = (bags) => bags.reduce((total, value) => total + parseKgInput(value), 0)
-const calculate = (weight, price) => {
-  const payableWeight = Math.floor(weight * 0.9 + 0.5)
+const calculate = (weight, price, deductionPercent = 10) => {
+  const payableWeight = Math.floor(weight * (1 - deductionPercent / 100) + 0.5)
   const total = payableWeight * price
   return { payableWeight, deduction: weight - payableWeight, total, half: Math.round(total / 2) }
 }
@@ -105,8 +105,8 @@ function factoryNetAcrossDates(factorySales, rubberRecords) {
 
 function exportCsv(records, factorySales, date) {
   const bagCount = Math.max(0, ...records.map((record) => record.bags.length))
-  const purchaseHeaders = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan 10% (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total pembelian (Rp)', 'Bagian setengah (Rp)']
-  const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, paidRubberPurchase(record)])
+  const purchaseHeaders = ['Tanggal', 'Nama', ...Array.from({ length: bagCount }, (_, index) => `Berat karung ${index + 1} (kg)`), 'Jumlah karung', 'Berat total (kg)', 'Potongan (%)', 'Potongan (kg)', 'Berat bersih (kg)', 'Harga per kg (Rp)', 'Total pembelian (Rp)', 'Bagian setengah (Rp)']
+  const purchaseRows = records.map((record) => [record.date, record.name, ...Array.from({ length: bagCount }, (_, index) => record.bags[index] ?? ''), record.bags.length, record.totalWeightKg, record.deductionPercent ?? 10, record.deductionKg, record.payableWeightKg, record.pricePerKg, record.totalAmount, paidRubberPurchase(record)])
   const saleHeaders = ['Tanggal', 'Berat di pabrik (kg)', 'Harga jual/kg (Rp)', 'Penjualan kotor (Rp)', 'Rincian pengeluaran', 'Total pengeluaran (Rp)', 'Hasil bersih pabrik (Rp)']
   const saleRows = factorySales.map((sale) => [factorySaleDate(sale), sale.weightKg, sale.pricePerKg, saleGrossAmount(sale), (sale.expenses || []).map((item) => `${item.description}: ${formatRupiah(item.amount)}`).join(' | ') || '—', saleExpenseAmount(sale), saleNetAmount(sale)])
   const expenseHeaders = ['Tanggal', 'ID penjualan', 'Nama pengeluaran', 'Nominal (Rp)']
@@ -130,7 +130,7 @@ function exportCsv(records, factorySales, date) {
     ['Upah pengurus getah · no name (10%)', factoryDistribution.managerWage],
     ['Total bersih pembagian getah', totalNet],
     [], ['PEMBELIAN GETAH'], purchaseHeaders, ...purchaseRows,
-    ['TOTAL PEMBELIAN', '', ...Array(bagCount).fill(''), '', records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0), '', records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0), '', totalPurchases, totalPurchasePaid],
+    ['TOTAL PEMBELIAN', '', ...Array(bagCount).fill(''), '', records.reduce((sum, record) => sum + Number(record.totalWeightKg || 0), 0), '', records.reduce((sum, record) => sum + Number(record.deductionKg || 0), 0), records.reduce((sum, record) => sum + Number(record.payableWeightKg || 0), 0), '', totalPurchases, totalPurchasePaid],
     [], ['PENJUALAN GETAH DI PABRIK'], saleHeaders, ...saleRows,
     ['TOTAL PENJUALAN PABRIK', '', '', totalGross, '', totalExpenses, ''],
     [], ['RINCIAN PENGELUARAN PABRIK'], expenseHeaders, ...expenseRows,
@@ -218,13 +218,13 @@ function exportPdf(records, factorySales, date) {
   pdf.text('PEMBELIAN GETAH', 14, sectionY)
   autoTable(pdf, {
     startY: sectionY + 4,
-    head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan 10%', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian 1/2']],
+    head: [['Tanggal', 'Nama', 'Rincian berat karung', 'Berat total', 'Potongan (%) / kg', 'Berat bersih', 'Harga/kg', 'Total hasil', 'Bagian 1/2']],
     body: records.length ? records.map((record) => [
       formatShortDate(record.date),
       record.name,
       record.bags.map((weight, index) => `${index + 1}: ${kg(weight)}`).join(' · '),
       kg(record.totalWeightKg),
-      kg(record.deductionKg),
+      `${record.deductionPercent ?? 10}% · ${kg(record.deductionKg)}`,
       kg(record.payableWeightKg),
       formatRupiah(record.pricePerKg),
       formatRupiah(record.totalAmount),
@@ -487,7 +487,8 @@ export default function Rubber() {
   const factoryDayPurchases = paidRubberPurchases(rubberRecords.filter((record) => record.date === selectedFactoryDate))
   const factoryDayNet = calculateFactoryDistribution(dailyFactorySales, factoryDayPurchases).net
   const previewWeight = bagWeight(form.bags)
-  const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg))
+  const previewDeductionPercent = Number(String(form.deductionPercent ?? 10).replace(',', '.'))
+  const preview = calculate(previewWeight, parseRupiahInput(form.pricePerKg), Number.isFinite(previewDeductionPercent) ? previewDeductionPercent : 10)
   const exportRecords = records.filter((record) => record.date === reportDate)
   const exportFactorySales = rubberFactorySales.filter((sale) => factorySaleDate(sale) === reportDate)
   const exportPurchaseTotal = exportRecords.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0)
@@ -587,7 +588,7 @@ export default function Rubber() {
     setActiveSection('rubber')
     setActiveRubberSection('records')
     setEditingId(record.id)
-    setForm({ name: record.name, date: record.date, bags: record.bags.map((value) => formatKgInput(String(value).replace('.', ','))), pricePerKg: formatRupiahInput(record.pricePerKg) })
+    setForm({ name: record.name, date: record.date, bags: record.bags.map((value) => formatKgInput(String(value).replace('.', ','))), pricePerKg: formatRupiahInput(record.pricePerKg), deductionPercent: String(record.deductionPercent ?? 10) })
     setFormError('')
     setNotice('')
     setFormOpen(true)
@@ -756,17 +757,18 @@ export default function Rubber() {
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink-900/8 pt-4 text-sm"><span className="text-ink-500">Jumlah berat semua karung</span><strong className="font-display text-xl text-plantation-950">{kg(previewWeight)}</strong></div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
+        <div className="grid gap-4 lg:grid-cols-[.7fr_.5fr_1.2fr]">
           <Field label="Harga per kg (Rp) *"><input inputMode="numeric" className="input" value={form.pricePerKg} onChange={(event) => setForm({ ...form, pricePerKg: formatRupiahInput(event.target.value) })} placeholder="Contoh: 12.000" required /><p className="mt-1 text-xs text-ink-500">Harga dimasukkan manual untuk catatan ini.</p></Field>
+          <Field label="Potongan berat (%) *"><input type="number" inputMode="decimal" min="0" max="100" step="0.1" className="input" value={form.deductionPercent} onChange={(event) => setForm({ ...form, deductionPercent: event.target.value })} required /><p className="mt-1 text-xs text-ink-500">Default 10%; sesuaikan jika getah basah.</p></Field>
           <div className="rounded-2xl bg-plantation-950 px-4 py-4 text-white sm:px-5">
             <p className="text-xs font-medium text-white/60">Pratinjau perhitungan</p>
             <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-              <CalcLine label="Berat setelah potongan 10%" value={kg(preview.payableWeight)} />
+              <CalcLine label={`Berat setelah potongan ${Number.isFinite(previewDeductionPercent) ? previewDeductionPercent : 0}%`} value={kg(preview.payableWeight)} />
               <CalcLine label="Harga per kg" value={formatRupiah(parseRupiahInput(form.pricePerKg))} />
               <CalcLine label="Total sebelum dibagi" value={formatRupiah(preview.total)} />
               <CalcLine label="Hasil dibagi dua" value={formatRupiah(preview.half)} highlight />
             </div>
-            <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-white/55">Berat gabungan × 90%, dibulatkan ke kg penuh (desimal 0,5 ke atas), lalu dikali harga dan dibagi dua.</p>
+            <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-white/55">Potongan dihitung dari berat gabungan, lalu berat bersih dibulatkan ke kg penuh (desimal 0,5 ke atas), dikali harga, dan dibagi dua.</p>
           </div>
         </div>
 
@@ -782,13 +784,13 @@ export default function Rubber() {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-900/8 bg-paper-50/70 px-5 py-3 sm:px-6"><div><p className="text-xs font-medium text-ink-500">Tanggal yang ditampilkan</p><p className="mt-0.5 text-sm font-semibold text-plantation-950">{formatShortDate(selectedDate)} <span className="font-normal text-ink-500">· {kg(dailyWeight)} kotor · {kg(dailyNetWeight)} bersih</span></p><p className="mt-1 text-[11px] text-ink-400">Semua riwayat: {records.length} catatan pada {recordDates.length} tanggal</p></div><div className="flex flex-wrap items-center gap-2">{recordDates.length > 0 && <label className="text-xs text-ink-500">Tanggal berisi data <select className="input mt-1 !min-h-9 !w-auto py-1.5 text-xs" value={recordDates.includes(selectedDate) ? selectedDate : ''} onChange={(event) => event.target.value && setSelectedDate(event.target.value)}><option value="">Pilih tanggal</option>{recordDates.map((date) => <option key={date} value={date}>{formatShortDate(date)}</option>)}</select></label>}<DateNavigator date={selectedDate} today={today} onChange={setSelectedDate} /></div></div>
       {dailyRecords.length === 0 ? <div className="flex min-h-44 flex-col items-center justify-center px-5 text-center"><span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-plantation-700/8 text-plantation-700"><Droplets size={22} /></span><h3 className="font-display text-lg text-plantation-950">Belum ada catatan pada tanggal ini</h3><p className="mt-1 max-w-sm text-sm text-ink-500">Riwayat tanggal lain tetap tersimpan. Gunakan navigasi tanggal untuk melihat hari lain.</p>{records.length === 0 && <button type="button" className="btn-primary mt-4" onClick={openCreate}><Plus size={16} /> Catat getah pertama</button>}</div> : <div className="table-scroll overflow-x-auto"><table className="w-full min-w-[1060px]">
-        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal / nama</th><th className="table-head">Berat per karung</th><th className="table-head text-right">Berat total</th><th className="table-head text-right">Setelah -10%</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total hasil</th><th className="table-head text-right">Bagian ½</th><th className="table-head">Aksi</th></tr></thead>
+        <thead><tr><th className="table-head">No.</th><th className="table-head">Tanggal / nama</th><th className="table-head">Berat per karung</th><th className="table-head text-right">Berat total</th><th className="table-head text-right">Berat bersih</th><th className="table-head text-right">Harga/kg</th><th className="table-head text-right">Total hasil</th><th className="table-head text-right">Bagian ½</th><th className="table-head">Aksi</th></tr></thead>
         <tbody>{dailyRecords.map((record, index) => <tr key={record.id}>
           <td className="table-cell text-ink-500">{index + 1}</td>
           <td className="table-cell"><p className="font-medium text-ink-800">{record.name}</p><p className="mt-1 text-xs text-ink-500">{formatShortDate(record.date)}</p></td>
           <td className="table-cell text-xs text-ink-600">{record.bags.map((weight, bagIndex) => <span key={bagIndex} className="mr-1.5 inline-block whitespace-nowrap rounded-full bg-paper-100 px-2 py-1">{bagIndex + 1}: {kg(weight)}</span>)}</td>
           <td className="table-cell text-right whitespace-nowrap">{kg(record.totalWeightKg)}</td>
-          <td className="table-cell text-right whitespace-nowrap"><span className="font-medium text-plantation-800">{kg(record.payableWeightKg)}</span><span className="mt-1 block text-[11px] text-ink-400">bersih · potongan {kg(record.deductionKg)}</span></td>
+          <td className="table-cell text-right whitespace-nowrap"><span className="font-medium text-plantation-800">{kg(record.payableWeightKg)}</span><span className="mt-1 block text-[11px] text-ink-400">bersih · potongan {record.deductionPercent ?? 10}% ({kg(record.deductionKg)})</span></td>
           <td className="table-cell text-right whitespace-nowrap">{formatRupiah(record.pricePerKg)}</td>
           <td className="table-cell text-right font-medium whitespace-nowrap">{formatRupiah(record.totalAmount)}</td>
           <td className="table-cell text-right font-semibold text-plantation-900 whitespace-nowrap">{formatRupiah(record.splitAmount)}</td>
@@ -808,7 +810,7 @@ export default function Rubber() {
       {viewRecord && <div className="space-y-4">
         <div className="rounded-2xl bg-plantation-950 p-4 text-white"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-300">{viewRecord.name}</p><p className="mt-1 font-display text-2xl">Getah · {formatShortDate(viewRecord.date)}</p><p className="mt-2 text-sm text-white/65">{viewRecord.bags.length} karung tercatat</p></div>
         <div className="rounded-xl border border-ink-900/10 p-4"><h3 className="mb-3 text-sm font-semibold text-plantation-950">Rincian berat karung</h3><div className="space-y-2">{viewRecord.bags.map((weight, index) => <CalcLine key={index} label={`Karung ${index + 1}`} value={kg(weight)} dark />)}</div><div className="mt-3 border-t border-ink-900/8 pt-3"><CalcLine label="Jumlah berat" value={kg(viewRecord.totalWeightKg)} dark strong /></div></div>
-        <div className="rounded-xl bg-paper-100 p-4"><div className="space-y-2"><CalcLine label="Potongan 10% · hasil pembulatan" value={`− ${kg(viewRecord.deductionKg)}`} dark /><CalcLine label="Berat yang dibayar" value={kg(viewRecord.payableWeightKg)} dark /><CalcLine label={`Harga × ${kg(viewRecord.payableWeightKg)}`} value={`${formatRupiah(viewRecord.pricePerKg)}/kg`} dark /><CalcLine label="Total hasil" value={formatRupiah(viewRecord.totalAmount)} dark strong /><div className="mt-3 border-t border-ink-900/10 pt-3"><CalcLine label="Hasil dibagi dua" value={formatRupiah(viewRecord.splitAmount)} dark strong /></div></div></div>
+        <div className="rounded-xl bg-paper-100 p-4"><div className="space-y-2"><CalcLine label={`Potongan ${viewRecord.deductionPercent ?? 10}% · hasil pembulatan`} value={`− ${kg(viewRecord.deductionKg)}`} dark /><CalcLine label="Berat yang dibayar" value={kg(viewRecord.payableWeightKg)} dark /><CalcLine label={`Harga × ${kg(viewRecord.payableWeightKg)}`} value={`${formatRupiah(viewRecord.pricePerKg)}/kg`} dark /><CalcLine label="Total hasil" value={formatRupiah(viewRecord.totalAmount)} dark strong /><div className="mt-3 border-t border-ink-900/10 pt-3"><CalcLine label="Hasil dibagi dua" value={formatRupiah(viewRecord.splitAmount)} dark strong /></div></div></div>
         <div className="flex justify-end"><button type="button" className="btn-primary" onClick={() => { const record = viewRecord; setViewRecord(null); openEdit(record) }}><Pencil size={15} /> Edit catatan</button></div>
       </div>}
     </Modal>

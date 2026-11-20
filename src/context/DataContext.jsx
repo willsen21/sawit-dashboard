@@ -489,13 +489,15 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     const date = String(recordData.date || '')
     const bags = (Array.isArray(recordData.bags) ? recordData.bags : []).map((weight) => parseKgInput(weight))
     const pricePerKg = parseRupiahInput(recordData.pricePerKg)
-    if (!name || !date || !bags.length || bags.some((weight) => !Number.isFinite(weight) || weight <= 0) || !Number.isFinite(pricePerKg) || pricePerKg <= 0) {
-      return { ok: false, message: 'Nama, tanggal, berat setiap karung, dan harga per kg harus diisi dengan benar.' }
+    const rawDeductionPercent = String(recordData.deductionPercent ?? 10).trim()
+    const deductionPercent = Number(rawDeductionPercent.replace(',', '.'))
+    if (!name || !date || !bags.length || bags.some((weight) => !Number.isFinite(weight) || weight <= 0) || !Number.isFinite(pricePerKg) || pricePerKg <= 0 || !rawDeductionPercent || !Number.isFinite(deductionPercent) || deductionPercent < 0 || deductionPercent > 100) {
+      return { ok: false, message: 'Nama, tanggal, berat setiap karung, harga per kg, dan potongan 0–100% harus diisi dengan benar.' }
     }
     const totalWeightKg = bags.reduce((total, weight) => total + weight, 0)
-    // The 10% deduction is applied to the combined weight. Round to a whole
+    // Apply the selected deduction to the combined weight, then round to a whole
     // payable kilogram; .5 and above rounds up, below .5 rounds down.
-    const payableWeightKg = Math.floor(totalWeightKg * 0.9 + 0.5)
+    const payableWeightKg = Math.floor(totalWeightKg * (1 - deductionPercent / 100) + 0.5)
     const totalAmount = payableWeightKg * pricePerKg
     const splitAmount = Math.round(totalAmount / 2)
     const now = new Date().toISOString()
@@ -504,7 +506,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     const entry = {
       ...existing,
       id: recordId || `rubber-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name, date, bags, totalWeightKg, payableWeightKg,
+      name, date, bags, totalWeightKg, deductionPercent, payableWeightKg,
       deductionKg: totalWeightKg - payableWeightKg,
       pricePerKg, totalAmount, splitAmount,
       createdAt: existing?.createdAt || now,

@@ -166,9 +166,9 @@ function downloadPdf(rows, supplierMap, range, reportKind, cashDifferenceDays = 
       startY: nextY + 4,
       head: [['Tanggal', 'Sisa menurut sistem', 'Uang fisik admin', 'Selisih kas']],
       body: cashDifferenceDays.length
-        ? cashDifferenceDays.map((day) => [formatShortDate(day.date), formatRupiah(day.systemCashAtClose), formatRupiah(day.countedCash), formatSignedRupiah(day.cashDifference)])
+        ? cashDifferenceDays.map((day) => [formatShortDate(day.date), formatRupiah(day.systemCashAtClose), formatRupiah(day.countedCash), formatPdfSignedRupiah(day.cashDifference)])
         : [['—', '—', '—', 'Tidak ada penutupan kas dengan selisih tercatat']],
-      foot: [['TOTAL', `Kelebihan ${formatRupiah(totalExcess)}`, `Kekurangan ${formatRupiah(totalShortage)}`, formatSignedRupiah(totalExcess - totalShortage)]],
+      foot: [['TOTAL', `Kelebihan ${formatRupiah(totalExcess)}`, `Kekurangan ${formatRupiah(totalShortage)}`, formatPdfSignedRupiah(totalExcess - totalShortage)]],
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2.2, valign: 'middle' },
       headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
@@ -809,6 +809,13 @@ function formatSignedRupiah(value) {
   const amount = Number(value) || 0
   if (amount > 0) return `+${formatRupiah(amount)}`
   if (amount < 0) return `−${formatRupiah(Math.abs(amount))}`
+  return formatRupiah(0)
+}
+
+function formatPdfSignedRupiah(value) {
+  const amount = Number(value) || 0
+  if (amount > 0) return `+${formatRupiah(amount)}`
+  if (amount < 0) return `-${formatRupiah(Math.abs(amount))}`
   return formatRupiah(0)
 }
 

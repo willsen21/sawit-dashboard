@@ -89,7 +89,7 @@ function downloadPdf(rows, supplierMap, range, reportKind, cashDifferenceDays = 
   const isBrondolan = reportKind === 'brondolan'
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const dateRange = `${formatShortDate(range[0])} — ${formatShortDate(range[1])}`
-  const body = rows.map(({ type = 'purchase', record: t }, index) => {
+  const toPdfRow = ({ type = 'purchase', record: t }, index) => {
     const isLoan = type === 'loan'
     return [
       index + 1,
@@ -104,23 +104,61 @@ function downloadPdf(rows, supplierMap, range, reportKind, cashDifferenceDays = 
       formatRupiah(isLoan ? t.amount : reportedTotal(t, supplierMap, reportKind)),
       isLoan ? `${t.relatedDate ? `Terkait ${formatShortDate(t.relatedDate)} · ` : ''}${t.reason || '—'}` : t.note || '—',
     ]
-  })
+  }
 
   pdf.setFontSize(11)
   pdf.text(dateRange, 14, 14)
-  autoTable(pdf, {
-    startY: 19,
-    head: [['No.', 'Tanggal', isBrondolan ? 'Jenis catatan' : 'CV', 'Nama', 'Status', 'Metode', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total / nominal', 'Catatan / alasan']],
-    body: body.length ? body : [Array(11).fill('').map((value, index) => index === 3 ? 'Tidak ada transaksi pada rentang ini.' : value)],
+  const tableHead = ['No.', 'Tanggal', isBrondolan ? 'Jenis catatan' : 'CV', 'Nama', 'Status', 'Metode', 'Berat kotor', 'Berat bersih', 'Harga/kg', 'Total / nominal', 'Catatan / alasan']
+  const tableOptions = (startY, body) => ({
+    startY,
+    head: [tableHead],
+    body,
     theme: 'grid',
     styles: { fontSize: 7.5, cellPadding: 2, valign: 'middle' },
     headStyles: { fillColor: [58, 107, 88], textColor: 255, fontStyle: 'bold' },
     margin: { left: 14, right: 14 },
   })
   if (isBrondolan) {
+    const groups = rows.reduce((byDate, row) => {
+      const date = row.record.date || '—'
+      byDate.set(date, [...(byDate.get(date) || []), row])
+      return byDate
+    }, new Map())
+    if (!groups.size) {
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(10)
+      pdf.text('TIDAK ADA TRANSAKSI PADA RENTANG INI', 14, 27)
+      autoTable(pdf, tableOptions(31, [Array(11).fill('').map((value, index) => index === 3 ? 'Tidak ada transaksi pada rentang ini.' : value)]))
+    } else {
+      let lastY = 19
+      for (const [date, dateRows] of groups) {
+        let headingY = lastY + 9
+        if (headingY > pdf.internal.pageSize.getHeight() - 32) {
+          pdf.addPage()
+          headingY = 17
+        }
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(10)
+        pdf.setTextColor(36, 77, 62)
+        pdf.text(`TANGGAL ${formatShortDate(date)} · ${dateRows.length} CATATAN`, 14, headingY)
+        autoTable(pdf, tableOptions(headingY + 3, dateRows.map((row, index) => toPdfRow(row, index))))
+        lastY = pdf.lastAutoTable.finalY
+      }
+      pdf.setTextColor(0, 0, 0)
+    }
+  } else {
+    autoTable(pdf, tableOptions(19, rows.length
+      ? rows.map((row, index) => toPdfRow(row, index))
+      : [Array(11).fill('').map((value, index) => index === 3 ? 'Tidak ada transaksi pada rentang ini.' : value)]))
+  }
+  if (isBrondolan) {
     const totalExcess = cashDifferenceDays.reduce((total, day) => total + Math.max(0, Number(day.cashDifference) || 0), 0)
     const totalShortage = cashDifferenceDays.reduce((total, day) => total + Math.max(0, -(Number(day.cashDifference) || 0)), 0)
-    const nextY = pdf.lastAutoTable.finalY + 10
+    let nextY = pdf.lastAutoTable.finalY + 10
+    if (nextY > pdf.internal.pageSize.getHeight() - 35) {
+      pdf.addPage()
+      nextY = 18
+    }
     pdf.setFontSize(11)
     pdf.setFont('helvetica', 'bold')
     pdf.text('REKAP SELISIH KAS ADMIN', 14, nextY)

@@ -11,9 +11,9 @@ import { calculateFarmHarvest } from '../lib/farmCalculations'
 const DataContext = createContext(null)
 
 const DEFAULT_INITIAL_CASH = 0
-const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales']
+const COLLECTION_NAMES = ['suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules', 'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales', 'stoneStock', 'stoneSales', 'stoneUses', 'pineappleStock', 'pineappleSales']
 const CLOUD_DATA_CUTOFF = '2026-10-10'
-const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales']
+const OWNER_REFRESH_COLLECTIONS = ['transactions', 'cashLoans', 'topups', 'dailyCash', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales', 'stoneUses', 'pineappleStock', 'pineappleSales']
 const ADMIN_REFRESH_COLLECTIONS = [...OWNER_REFRESH_COLLECTIONS]
 const STONE_CAPITAL_CORRECTION_DATE = '2026-10-26'
 const STONE_CAPITAL_STALE_CLOSE = 17_936_450
@@ -42,7 +42,7 @@ async function fetchAllCloudRecords(collections = null) {
 function keepCloudRecord(collection, item) {
   if (!item || typeof item !== 'object') return false
   // Keep full histories for inventory and rubber records, including older dates.
-  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'rubberRecords' || collection === 'rubberFactorySales' || collection === 'pineappleStock' || collection === 'pineappleSales') return item
+  if (collection === 'stoneStock' || collection === 'stoneSales' || collection === 'stoneUses' || collection === 'rubberRecords' || collection === 'rubberFactorySales' || collection === 'pineappleStock' || collection === 'pineappleSales') return item
   if (collection === 'privateFarms') {
     return {
       ...item,
@@ -84,6 +84,7 @@ export function DataProvider({ children }) {
   const [rubberFactorySales, setRubberFactorySales] = useState(() => loadItem('rubberFactorySales', []))
   const [stoneStock, setStoneStock] = useState(() => loadItem('stoneStock', []))
   const [stoneSales, setStoneSales] = useState(() => loadItem('stoneSales', []))
+  const [stoneUses, setStoneUses] = useState(() => loadItem('stoneUses', []))
   const [pineappleStock, setPineappleStock] = useState(() => loadItem('pineappleStock', []))
   const [pineappleSales, setPineappleSales] = useState(() => loadItem('pineappleSales', []))
   const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured)
@@ -97,9 +98,9 @@ export function DataProvider({ children }) {
     topups: setTopups, cashLoans: setCashLoans, auditLogs: setAuditLogs,
     cancellationRequests: setCancellationRequests, cashUnlockRequests: setCashUnlockRequests,
     harvestSchedules: setHarvestSchedules, operationalExpenses: setOperationalExpenses,
-    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, rubberFactorySales: setRubberFactorySales, stoneStock: setStoneStock, stoneSales: setStoneSales, pineappleStock: setPineappleStock, pineappleSales: setPineappleSales,
+    payrolls: setPayrolls, privateFarms: setPrivateFarms, rubberRecords: setRubberRecords, rubberFactorySales: setRubberFactorySales, stoneStock: setStoneStock, stoneSales: setStoneSales, stoneUses: setStoneUses, pineappleStock: setPineappleStock, pineappleSales: setPineappleSales,
   }
-  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, rubberFactorySales, stoneStock, stoneSales, pineappleStock, pineappleSales }
+  const collectionValues = { suppliers, transactions, dailyCash, topups, cashLoans, auditLogs, cancellationRequests, cashUnlockRequests, harvestSchedules, operationalExpenses, payrolls, privateFarms, rubberRecords, rubberFactorySales, stoneStock, stoneSales, stoneUses, pineappleStock, pineappleSales }
   const collectionValuesRef = useRef(collectionValues)
   collectionValuesRef.current = collectionValues
 
@@ -143,6 +144,7 @@ useLayoutEffect(() => { saveItem('rubberRecords', rubberRecords) }, [rubberRecor
 useLayoutEffect(() => { saveItem('rubberFactorySales', rubberFactorySales) }, [rubberFactorySales])
 useLayoutEffect(() => { saveItem('stoneStock', stoneStock) }, [stoneStock])
 useLayoutEffect(() => { saveItem('stoneSales', stoneSales) }, [stoneSales])
+useLayoutEffect(() => { saveItem('stoneUses', stoneUses) }, [stoneUses])
 useLayoutEffect(() => { saveItem('pineappleStock', pineappleStock) }, [pineappleStock])
 useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineappleSales])
 
@@ -191,7 +193,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
         for (const name of COLLECTION_NAMES) {
           // Keep the legacy migration one-time for general records, but retry
           // historical inventory and rubber records until they reach the cloud.
-          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'rubberRecords' && name !== 'rubberFactorySales' && name !== 'pineappleStock' && name !== 'pineappleSales') continue
+          if (localMigrationDone && name !== 'stoneStock' && name !== 'stoneSales' && name !== 'stoneUses' && name !== 'rubberRecords' && name !== 'rubberFactorySales' && name !== 'pineappleStock' && name !== 'pineappleSales') continue
           const knownIds = new Set(grouped[name].map((item) => String(item.id)))
           const localItems = (collectionValuesRef.current[name] || []).map((item) => keepCloudRecord(name, item)).filter(Boolean)
           const missing = localItems.filter((item) => item?.id && !knownIds.has(String(item.id)))
@@ -207,7 +209,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
           if (!migrateError) continue
           console.error(`Gagal memindahkan data lokal ${name} ke Supabase:`, migrateError)
           migrationWarnings.push(`${name}: ${migrateError.message}${migrateError.code ? ` (kode ${migrateError.code})` : ''}`)
-          if (!['stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'].includes(name)) legacyMigrationFailed = true
+          if (!['stoneStock', 'stoneSales', 'stoneUses', 'pineappleStock', 'pineappleSales'].includes(name)) legacyMigrationFailed = true
         }
         if (!localMigrationDone && !legacyMigrationFailed) window.localStorage.setItem('kebunkas_cloud_migration_done', 'true')
       } else if (currentUser.role === 'admin') {
@@ -371,7 +373,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     const previous = cloudBaseline.current[collection] || new Map()
     const next = new Map(items.filter((item) => item?.id).map((item) => [String(item.id), item]))
     const changed = [...next.entries()].filter(([id, item]) => JSON.stringify(previous.get(id)) !== JSON.stringify(item))
-    const adminInsertOnlyCollections = ['topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'pineappleSales']
+    const adminInsertOnlyCollections = ['topups', 'cashLoans', 'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'stoneUses', 'pineappleSales']
     const adminInsertOnly = currentUser.role === 'admin' && adminInsertOnlyCollections.includes(collection)
     // RLS permits admins to create these records, while updates/deletes remain owner-managed.
     // Never send a DELETE for admin collections: local filtering or a stale cache must not
@@ -399,14 +401,14 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
         console.error(`Gagal menyimpan ${collection} ke Supabase:`, failure)
         cloudBaseline.current = { ...cloudBaseline.current, [collection]: previous }
         const detail = [failure.message, failure.code && `kode ${failure.code}`].filter(Boolean).join(' · ')
-        const hint = collection === 'stoneStock' || collection === 'stoneSales'
+        const hint = collection === 'stoneStock' || collection === 'stoneSales' || collection === 'stoneUses'
           ? 'Pastikan supabase/stone-feature.sql sudah dijalankan di Supabase.'
           : collection === 'pineappleStock' || collection === 'pineappleSales'
             ? 'Pastikan supabase/pineapple-feature.sql sudah dijalankan di Supabase.'
           : collection === 'rubberRecords'
             ? 'Pastikan supabase/getah-feature.sql sudah dijalankan di Supabase SQL Editor.'
             : 'Periksa koneksi dan aturan akses database Supabase.'
-        const collectionLabel = collection === 'rubberRecords' ? 'catatan Getah' : collection === 'stoneStock' ? 'stok batu' : collection === 'stoneSales' ? 'penjualan batu' : collection === 'pineappleStock' ? 'stok nanas' : collection === 'pineappleSales' ? 'penjualan nanas' : collection
+        const collectionLabel = collection === 'rubberRecords' ? 'catatan Getah' : collection === 'stoneStock' ? 'stok batu' : collection === 'stoneSales' ? 'penjualan batu' : collection === 'stoneUses' ? 'pemakaian batu' : collection === 'pineappleStock' ? 'stok nanas' : collection === 'pineappleSales' ? 'penjualan nanas' : collection
         cloudSyncErrors.current = { ...cloudSyncErrors.current, [collection]: `Gagal menyimpan ${collectionLabel} ke cloud. ${hint}${detail ? ` Detail: ${detail}` : ''}` }
         setCloudError(Object.values(cloudSyncErrors.current).join(' '))
         if ((cloudRetryAttempts.current[collection] || 0) < 3 && !cloudRetryTimers.current[collection]) {
@@ -443,6 +445,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
   useEffect(() => { syncCollectionToCloud('rubberFactorySales', rubberFactorySales) }, [rubberFactorySales, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneStock', stoneStock) }, [stoneStock, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('stoneSales', stoneSales) }, [stoneSales, cloudReady, currentUser?.id])
+  useEffect(() => { syncCollectionToCloud('stoneUses', stoneUses) }, [stoneUses, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('pineappleStock', pineappleStock) }, [pineappleStock, cloudReady, currentUser?.id])
   useEffect(() => { syncCollectionToCloud('pineappleSales', pineappleSales) }, [pineappleSales, cloudReady, currentUser?.id])
 
@@ -593,7 +596,8 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
       const totalStock = stoneStock.filter((item) => canonicalStoneType(item.type) === affectedType && item.id !== id).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
         + (canonicalStoneType(type) === affectedType ? quantity : 0)
       const totalSold = stoneSales.filter((item) => canonicalStoneType(item.type) === affectedType).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
-      if (totalStock < totalSold) return { ok: false, message: `Jumlah stok ${affectedType} tidak bisa kurang dari total terjual (${totalSold.toLocaleString('id-ID')} kg).` }
+      const totalUsed = stoneUses.filter((item) => canonicalStoneType(item.type) === affectedType).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+      if (totalStock < totalSold + totalUsed) return { ok: false, message: `Jumlah stok ${affectedType} tidak bisa kurang dari total keluar (${(totalSold + totalUsed).toLocaleString('id-ID')} kg).` }
     }
     const updated = { ...existing, ...patch, date, type, quantityKg: quantity, capitalCost: cost, note: String(patch.note ?? existing.note ?? '').trim(), updatedAt: new Date().toISOString() }
     setStoneStock((prev) => prev.map((item) => item.id === id ? updated : item))
@@ -607,7 +611,8 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     if (!existing) return { ok: false, message: 'Catatan stok batu tidak ditemukan.' }
     const remainingStock = stoneStock.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(existing.type) && item.id !== id).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
     const totalSold = stoneSales.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(existing.type)).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
-    if (remainingStock < totalSold) return { ok: false, message: `Stok tidak bisa dihapus karena ${totalSold.toLocaleString('id-ID')} kg ${canonicalStoneType(existing.type)} sudah tercatat terjual.` }
+    const totalUsed = stoneUses.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(existing.type)).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+    if (remainingStock < totalSold + totalUsed) return { ok: false, message: `Stok tidak bisa dihapus karena ${(totalSold + totalUsed).toLocaleString('id-ID')} kg ${canonicalStoneType(existing.type)} sudah keluar untuk penjualan dan pemakaian.` }
     setStoneStock((prev) => prev.filter((item) => item.id !== id))
     addAuditLog({ action: 'Menghapus stok batu', actorId: ownerId, detail: `${canonicalStoneType(existing.type)}: ${Number(existing.quantityKg).toLocaleString('id-ID')} kg` })
     return { ok: true }
@@ -622,11 +627,29 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     }
     const available = stoneStock.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
       - stoneSales.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+      - stoneUses.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
     if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
     const sale = { id: `stone-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, driverName: driverName.trim(), netKg: quantity, pricePerKg: price, total: Math.round(quantity * price), paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', adminId, createdAt: new Date().toISOString() }
     setStoneSales((prev) => [sale, ...prev])
     addAuditLog({ action: 'Mencatat penjualan batu', actorId: adminId, detail: `${type} · ${sale.driverName}: ${quantity.toLocaleString('id-ID')} kg × Rp${price.toLocaleString('id-ID')} = Rp${sale.total.toLocaleString('id-ID')}` })
     return { ok: true, sale }
+  }
+
+  function addStoneUse({ date, type, quantityKg, note, adminId }) {
+    if (currentUser?.role !== 'admin') return { ok: false, message: 'Pencatatan pemakaian batu hanya tersedia untuk admin.' }
+    const quantity = parseKgInput(quantityKg)
+    const cleanNote = String(note || '').trim()
+    if (!STONE_TYPES.includes(type) || !date || !Number.isFinite(quantity) || quantity <= 0 || !cleanNote) {
+      return { ok: false, message: 'Tanggal, jenis batu, jumlah kg, dan catatan pemakaian wajib diisi.' }
+    }
+    const available = stoneStock.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+      - stoneSales.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+      - stoneUses.filter((item) => canonicalStoneType(item.type) === type).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
+    if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
+    const use = { id: `stone-use-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, type, quantityKg: quantity, note: cleanNote, adminId, createdAt: new Date().toISOString() }
+    setStoneUses((prev) => [use, ...prev])
+    addAuditLog({ action: 'Mencatat pemakaian batu kantor', actorId: adminId, detail: `${type}: ${quantity.toLocaleString('id-ID')} kg · ${cleanNote}` })
+    return { ok: true, use }
   }
 
   function updateStoneSale(id, patch, ownerId) {
@@ -644,6 +667,7 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     }
     const available = stoneStock.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(type)).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
       - stoneSales.filter((item) => item.id !== id && canonicalStoneType(item.type) === canonicalStoneType(type)).reduce((sum, item) => sum + Number(item.netKg || 0), 0)
+      - stoneUses.filter((item) => canonicalStoneType(item.type) === canonicalStoneType(type)).reduce((sum, item) => sum + Number(item.quantityKg || 0), 0)
     if (quantity > available) return { ok: false, message: `Stok ${type} tidak cukup. Tersedia ${available.toLocaleString('id-ID')} kg.` }
     const total = Math.round(quantity * price)
     const updated = { ...existing, ...patch, date, type, driverName, netKg: quantity, pricePerKg: price, total, paymentMethod, paymentStatus: paymentMethod === 'paid' ? 'paid' : 'pending', note: String(patch.note ?? existing.note ?? '').trim(), updatedAt: new Date().toISOString() }
@@ -1241,10 +1265,12 @@ useLayoutEffect(() => { saveItem('pineappleSales', pineappleSales) }, [pineapple
     deleteRubberRecord,
     stoneStock,
     stoneSales,
+    stoneUses,
     addStoneStock,
     updateStoneStock,
     deleteStoneStock,
     addStoneSale,
+    addStoneUse,
     updateStoneSale,
     deleteStoneSale,
     markStoneSalePaid,

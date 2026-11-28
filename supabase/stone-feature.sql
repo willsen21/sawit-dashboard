@@ -11,7 +11,7 @@ alter table public.app_records
     'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
     'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
     'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales',
-    'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'
+    'stoneStock', 'stoneSales', 'stoneUses', 'pineappleStock', 'pineappleSales'
   ));
 
 drop policy if exists "active members read app records" on public.app_records;
@@ -23,7 +23,7 @@ using (
     (select public.current_kebunkas_role()) = 'admin'
     and collection in (
       'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans',
-      'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales',
+      'auditLogs', 'cancellationRequests', 'cashUnlockRequests', 'stoneStock', 'stoneSales', 'stoneUses',
       'pineappleStock', 'pineappleSales'
     )
   )
@@ -38,7 +38,7 @@ with check (
     (select public.current_kebunkas_role()) = 'admin'
     and collection in (
       'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
-      'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'pineappleSales'
+      'cancellationRequests', 'cashUnlockRequests', 'stoneSales', 'stoneUses', 'pineappleSales'
     )
   )
 );

@@ -47,7 +47,7 @@ Untuk proyek yang sudah menjalankan skema sebelumnya, jalankan `supabase/owner-o
 
 ## 6. Fitur stok dan penjualan batu
 
-Setelah versi aplikasi dengan menu **Stok Batu** dan **Catat Batu** diterbitkan, jalankan `supabase/stone-feature.sql` satu kali di **SQL Editor → New query**. Owner dapat menambah stok Batu A–D. Admin dapat mencatat tanggal, nama sopir, dan berat bersih penjualan. Penjualan mengurangi stok tersedia dan muncul pada tabel di halaman owner serta admin.
+Setelah versi aplikasi dengan menu **Stok Batu** dan **Catat Batu** diterbitkan, jalankan `supabase/stone-feature.sql` satu kali di **SQL Editor → New query**. Owner dapat menambah stok batu. Admin dapat mencatat penjualan dan pemakaian batu untuk kebutuhan kantor, termasuk tanggal, jenis, jumlah, dan catatan. Keduanya mengurangi stok tersedia; riwayat pemakaian terlihat pada halaman admin dan owner.
 
 ## 7. Login menggunakan nama pengguna
 

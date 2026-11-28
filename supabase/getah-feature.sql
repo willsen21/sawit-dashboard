@@ -11,7 +11,7 @@ begin
       'suppliers', 'transactions', 'dailyCash', 'topups', 'cashLoans', 'auditLogs',
       'cancellationRequests', 'cashUnlockRequests', 'harvestSchedules',
       'operationalExpenses', 'payrolls', 'privateFarms', 'rubberRecords', 'rubberFactorySales',
-      'stoneStock', 'stoneSales', 'pineappleStock', 'pineappleSales'
+      'stoneStock', 'stoneSales', 'stoneUses', 'pineappleStock', 'pineappleSales'
     ));
 end;
 $$;
